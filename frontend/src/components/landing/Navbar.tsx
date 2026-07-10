@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Search, 
-  MapPin, 
-  Menu, 
-  X, 
-  ChevronDown, 
-  User, 
+import {
+  Search,
+  MapPin,
+  Menu,
+  X,
+  ChevronDown,
+  User,
   ArrowRight,
   Wallet,
   ArrowDownToLine,
@@ -65,12 +65,12 @@ export default function Navbar({
 
   const categories = ['All Gigs', 'Amazon Gigs', 'Alibaba Gigs', 'Shopify Gigs'];
 
-  const filteredSuggestions = searchQuery.trim() === '' 
-    ? [] 
-    : products.filter(p => 
-        (selectedCategory === 'All Gigs' || `${p.platform} Gigs` === selectedCategory) &&
-        p.title.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 5);
+  const filteredSuggestions = searchQuery.trim() === ''
+    ? []
+    : products.filter(p =>
+      (selectedCategory === 'All Gigs' || `${p.platform} Gigs` === selectedCategory) &&
+      p.title.toLowerCase().includes(searchQuery.toLowerCase())
+    ).slice(0, 5);
 
   const handleLocationSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,14 +100,14 @@ export default function Navbar({
               <div className="absolute -bottom-1.5 left-2 right-2 h-2 text-amazon-gold opacity-90 group-hover:opacity-100 transition">
                 {/* SVG smile shape */}
                 <svg className="w-full h-1.5" viewBox="0 0 100 10" preserveAspectRatio="none">
-                  <path d="M5 2 Q 50 12 95 2" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+                  <path d="M5 2 Q 50 12 95 2" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                   <polygon points="95,2 91,-1 90,4" fill="currentColor" />
                 </svg>
               </div>
             </a>
 
             {/* Delivery address */}
-            <button 
+            <button
               onClick={() => {
                 setTempLocation(userLocation);
                 setIsLocationModalOpen(true);
@@ -126,7 +126,7 @@ export default function Navbar({
           <div className="relative mx-4 flex flex-1 max-w-xl">
             <div className="flex w-full items-center bg-white rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-amazon-gold text-gray-900 shadow-sm">
               <div className="relative inline-block text-left bg-gray-100 border-r border-gray-300 h-10">
-                <select 
+                <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="h-full px-3 text-xs bg-transparent cursor-pointer font-bold text-gray-700 hover:text-black hover:bg-gray-200 outline-none pr-8 appearance-none"
@@ -157,11 +157,11 @@ export default function Navbar({
             <AnimatePresence>
               {showSearchSuggestions && filteredSuggestions.length > 0 && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-10" 
+                  <div
+                    className="fixed inset-0 z-10"
                     onClick={() => setShowSearchSuggestions(false)}
                   />
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -173,9 +173,9 @@ export default function Navbar({
                         onClick={() => handleSuggestionClick(product)}
                         className="w-full flex items-center space-x-3 px-4 py-2.5 hover:bg-gray-100 text-left transition"
                       >
-                        <img 
-                          src={product.image} 
-                          alt={product.title} 
+                        <img
+                          src={product.image}
+                          alt={product.title}
                           className="h-9 w-9 object-cover rounded border border-gray-200 flex-shrink-0"
                           referrerPolicy="no-referrer"
                         />
@@ -194,7 +194,7 @@ export default function Navbar({
           {/* Navigation Items */}
           <div className="hidden lg:flex items-center space-x-6 text-sm font-semibold">
             {/* Login Account Trigger */}
-            <button 
+            <button
               onClick={() => {
                 if (!isLoggedIn) {
                   onOpenLogin();
@@ -226,13 +226,13 @@ export default function Navbar({
             <div className="flex items-center space-x-2">
               {!isLoggedIn ? (
                 <>
-                  <button 
+                  <button
                     onClick={onOpenLogin}
                     className="bg-transparent hover:bg-white/10 text-white border border-gray-400 font-medium text-xs px-3.5 py-1.5 rounded-full transition cursor-pointer"
                   >
                     Login
                   </button>
-                  <button 
+                  <button
                     onClick={onOpenRegister}
                     className="bg-amazon-gold hover:bg-[#f3a847] text-amazon-dark border border-transparent font-semibold text-xs px-4 py-1.5 rounded-full shadow-sm transition cursor-pointer"
                   >
@@ -240,7 +240,7 @@ export default function Navbar({
                   </button>
                 </>
               ) : (
-                <button 
+                <button
                   onClick={onLogout}
                   className="bg-transparent hover:bg-white/10 text-white border border-gray-400 font-medium text-xs px-3.5 py-1.5 rounded-full transition cursor-pointer"
                 >
@@ -251,7 +251,7 @@ export default function Navbar({
 
             {/* ZonWallet Earning Payout Hub Trigger */}
             {isLoggedIn && (
-              <button 
+              <button
                 onClick={() => setIsWalletOpen(true)}
                 className="relative flex items-center space-x-2 py-1.5 px-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg transition cursor-pointer"
               >
@@ -272,7 +272,7 @@ export default function Navbar({
           {/* Mobile elements */}
           <div className="lg:hidden flex items-center space-x-4">
             {isLoggedIn && (
-              <button 
+              <button
                 onClick={() => setIsWalletOpen(true)}
                 className="relative flex items-center space-x-1.5 py-1 px-2.5 bg-white/5 rounded-lg border border-white/15"
               >
@@ -281,7 +281,7 @@ export default function Navbar({
               </button>
             )}
 
-            <button 
+            <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-1 hover:bg-white/10 rounded transition"
             >
@@ -303,7 +303,6 @@ export default function Navbar({
               <a href="#stats" className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Earnings Ledger</a>
               <a href="#testimonials" className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Community Reviews</a>
               <span className="h-3.5 w-px bg-white/20 hidden sm:inline" />
-              <span className="text-amazon-orange font-semibold hidden md:inline flex-shrink-0">⚡ Automated Review Verification & Instant Payouts Active!</span>
             </div>
             <div className="hidden sm:flex items-center space-x-4 font-semibold text-gray-300">
               <a href="#" onClick={onOpenLogin} className="hover:text-white transition">Leaderboard</a>
@@ -318,16 +317,16 @@ export default function Navbar({
         {isWalletOpen && (
           <>
             {/* Backdrop */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsWalletOpen(false)}
               className="fixed inset-0 bg-black z-50"
             />
-            
+
             {/* Drawer */}
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
@@ -340,7 +339,7 @@ export default function Navbar({
                   <Wallet className="h-5 w-5 text-amazon-gold animate-pulse" />
                   <h2 className="text-sm font-extrabold tracking-wide">Amazon E-Commerce Hub</h2>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsWalletOpen(false)}
                   className="p-1 hover:bg-white/15 rounded-full transition text-gray-300 hover:text-white"
                 >
@@ -355,7 +354,7 @@ export default function Navbar({
                   <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-10 text-white pointer-events-none">
                     <Wallet className="h-32 w-32" />
                   </div>
-                  
+
                   <p className="text-xxs uppercase tracking-wider text-gray-400 font-bold">Available Balance</p>
                   <div className="flex items-baseline mt-1 space-x-1.5">
                     <span className="text-3xl font-display font-black text-amazon-gold">${walletBalance.toFixed(2)}</span>
@@ -395,7 +394,7 @@ export default function Navbar({
                   </div>
 
                   {withdrawSuccess ? (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="text-center py-4 space-y-3 bg-white border border-green-200 rounded-xl p-4"
@@ -407,7 +406,7 @@ export default function Navbar({
                         <p className="text-xs font-extrabold text-gray-900">Cashout Submitted!</p>
                         <p className="text-xxs text-gray-500 mt-1">Your funds are being transferred to your {withdrawMethod} account. Transfers usually complete in under 5 minutes.</p>
                       </div>
-                      <button 
+                      <button
                         onClick={() => {
                           setWithdrawSuccess(false);
                           setWithdrawAmount('');
@@ -438,11 +437,10 @@ export default function Navbar({
                                 setWithdrawMethod(method);
                                 setWithdrawError('');
                               }}
-                              className={`py-1.5 text-xxs font-extrabold rounded-lg border text-center transition-all ${
-                                withdrawMethod === method
+                              className={`py-1.5 text-xxs font-extrabold rounded-lg border text-center transition-all ${withdrawMethod === method
                                   ? 'bg-amazon-blue text-white border-transparent shadow-xs'
                                   : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
-                              }`}
+                                }`}
                             >
                               {method}
                             </button>
@@ -454,7 +452,7 @@ export default function Navbar({
                       <div className="space-y-1.5 text-left">
                         <div className="flex justify-between items-baseline">
                           <label className="text-[10px] font-extrabold text-gray-500 uppercase">Amount (Min. $10.00)</label>
-                          <button 
+                          <button
                             onClick={() => {
                               setWithdrawAmount(walletBalance.toFixed(2));
                               setWithdrawError('');
@@ -528,11 +526,10 @@ export default function Navbar({
                         </div>
                         <div className="text-right">
                           <p className="text-xs font-mono font-extrabold text-gray-900">-${historyItem.amount.toFixed(2)}</p>
-                          <span className={`inline-block text-[8px] font-extrabold px-1.5 py-0.5 rounded-full mt-1 ${
-                            historyItem.status === 'Completed' 
-                              ? 'bg-green-50 text-green-700 border border-green-200' 
+                          <span className={`inline-block text-[8px] font-extrabold px-1.5 py-0.5 rounded-full mt-1 ${historyItem.status === 'Completed'
+                              ? 'bg-green-50 text-green-700 border border-green-200'
                               : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
+                            }`}>
                             {historyItem.status}
                           </span>
                         </div>
@@ -558,15 +555,15 @@ export default function Navbar({
       <AnimatePresence>
         {isLocationModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsLocationModalOpen(false)}
               className="fixed inset-0 bg-black"
             />
-            
-            <motion.div 
+
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -574,7 +571,7 @@ export default function Navbar({
             >
               <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200">
                 <h3 className="text-sm font-bold text-gray-900">Choose your location</h3>
-                <button 
+                <button
                   onClick={() => setIsLocationModalOpen(false)}
                   className="p-1 rounded-full hover:bg-gray-200 transition text-gray-500"
                 >
@@ -600,14 +597,14 @@ export default function Navbar({
                 </div>
 
                 <div className="flex space-x-2 pt-2">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsLocationModalOpen(false)}
                     className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg transition"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="flex-1 bg-amazon-orange hover:bg-[#e68a00] text-amazon-dark text-xs font-bold py-2.5 rounded-lg shadow-sm transition"
                   >
@@ -624,14 +621,14 @@ export default function Navbar({
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.4 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
               className="fixed inset-0 bg-black z-45"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -663,7 +660,7 @@ export default function Navbar({
 
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase">Deliver To</h3>
-                  <button 
+                  <button
                     onClick={() => {
                       setIsMobileMenuOpen(false);
                       setIsLocationModalOpen(true);
@@ -679,7 +676,7 @@ export default function Navbar({
                 </div>
 
                 <div className="pt-4">
-                  <button 
+                  <button
                     onClick={() => { setIsMobileMenuOpen(false); onOpenRegister(); }}
                     className="w-full bg-amazon-orange text-amazon-dark font-extrabold text-xs py-3 rounded-xl shadow-md text-center flex items-center justify-center space-x-2"
                   >
