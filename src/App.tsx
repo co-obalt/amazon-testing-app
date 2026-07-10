@@ -1,0 +1,132 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X } from 'lucide-react';
+import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import UnderReviewPage from './pages/UnderReviewPage';
+import DashboardPage from './pages/DashboardPage';
+import { mockProducts } from './data';
+
+export default function App() {
+  const [currentView, setCurrentView] = useState<'landing' | 'register' | 'under-review' | 'login' | 'dashboard'>(() => {
+    const savedView = localStorage.getItem('reviewer_session_view');
+    if (savedView === 'dashboard') {
+      return 'dashboard';
+    }
+    return 'landing';
+  });
+  const [username, setUsername] = useState(() => {
+    return localStorage.getItem('reviewer_session_username') || 'demo_reviewer';
+  });
+  const [email, setEmail] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleRegisterSuccess = (registeredUser: string, registeredEmail: string) => {
+    setUsername(registeredUser);
+    setEmail(registeredEmail);
+    localStorage.setItem('reviewer_session_username', registeredUser);
+    showToast("Registration successful! Transferring profile to the administrator verification queue.");
+    setCurrentView('under-review');
+  };
+
+  const handleAdminApproval = () => {
+    showToast("Success! The administrator panel has authorized your reviewer account. You may now sign in!");
+    setCurrentView('login');
+  };
+
+  const handleLoginSuccess = (loginUser: string) => {
+    const finalUser = loginUser || username;
+    setUsername(finalUser);
+    localStorage.setItem('reviewer_session_view', 'dashboard');
+    localStorage.setItem('reviewer_session_username', finalUser);
+    showToast(`Welcome back, ${finalUser}! Your secure paid reviewer session is active.`);
+    setCurrentView('dashboard');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('reviewer_session_view');
+    localStorage.removeItem('reviewer_session_username');
+    showToast("Successfully signed out of your reviewer workspace.");
+    setCurrentView('landing');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between font-sans relative">
+      
+      {/* Universal Floating Toast Alerts */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -60, x: "-50%", scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -60, x: "-50%", scale: 0.95 }}
+            className="fixed top-6 left-1/2 z-100 max-w-sm w-full bg-[#131921] text-white p-4 rounded-lg shadow-2xl flex items-start space-x-3 border border-amazon-gold/50 text-left"
+          >
+            <div className="p-1 bg-amazon-gold text-amazon-dark rounded-full flex-shrink-0 font-extrabold text-xs mt-0.5">
+              ✓
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold tracking-wide">Panel Notification</p>
+              <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">{toastMessage}</p>
+            </div>
+            <button onClick={() => setToastMessage(null)} className="text-gray-400 hover:text-white transition">
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main View Router */}
+      <div className="flex-1">
+        {currentView === 'landing' && (
+          <LandingPage
+            onNavigateToLogin={() => setCurrentView('login')}
+            onNavigateToRegister={() => setCurrentView('register')}
+            showToast={showToast}
+          />
+        )}
+
+        {currentView === 'register' && (
+          <RegisterPage
+            onRegisterSuccess={handleRegisterSuccess}
+            onNavigateToLogin={() => setCurrentView('login')}
+            onNavigateHome={() => setCurrentView('landing')}
+          />
+        )}
+
+        {currentView === 'under-review' && (
+          <UnderReviewPage
+            username={username}
+            onApproveAndNavigateToLogin={handleAdminApproval}
+            onNavigateHome={() => setCurrentView('landing')}
+          />
+        )}
+
+        {currentView === 'login' && (
+          <LoginPage
+            onLoginSuccess={handleLoginSuccess}
+            onNavigateToRegister={() => setCurrentView('register')}
+            onNavigateHome={() => setCurrentView('landing')}
+            defaultUsername={username}
+          />
+        )}
+
+        {currentView === 'dashboard' && (
+          <DashboardPage
+            username={username}
+            products={mockProducts}
+            onLogout={handleLogout}
+            showToast={showToast}
+          />
+        )}
+      </div>
+
+    </div>
+  );
+}
