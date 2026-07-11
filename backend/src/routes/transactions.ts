@@ -9,7 +9,7 @@ const router = express.Router();
 router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { platform, protocol, amount, txHash, remark } = req.body;
+    const { platform, protocol, amount, txHash, remark, currency, cryptoAmount } = req.body;
 
     if (!platform || !protocol || !amount || !txHash) {
       return res.status(400).json({ error: 'Platform, protocol, amount, and transaction hash are required' });
@@ -20,6 +20,14 @@ router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res
       return res.status(400).json({ error: 'Invalid deposit amount' });
     }
 
+    const normalizedProtocol = protocol === 'ERC-25' ? 'ERC-20' : protocol;
+    const normalizedCurrency = String(currency || (normalizedProtocol === 'BTC' ? 'BTC' : 'USDT')).toUpperCase();
+    const normalizedCryptoAmount = parseFloat(cryptoAmount ?? amount);
+    const minimumDeposit = platform === 'Amazon' ? 20 : platform === 'Alibaba' ? 299 : null;
+    if (minimumDeposit !== null && numericAmount < minimumDeposit) {
+      return res.status(400).json({ error: `${platform} requires a minimum deposit of $${minimumDeposit.toFixed(2)} to unlock.` });
+    }
+
     // Capture requester IP address
     let clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
     if (clientIp.includes(',')) clientIp = clientIp.split(',')[0].trim();
@@ -28,39 +36,93 @@ router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res
     if (userId === 'user-dev-uuid' || userId === 'admin-dev-uuid') {
       return res.status(201).json({
         message: 'Deposit request successfully queued (Sandbox Mode).',
-        deposit: { id: 'deposit-dev-uuid', platform, protocol, amount: numericAmount, tx_hash: txHash, ip_address: clientIp, status: 'Pending' }
+        deposit: {
+          id: 'deposit-dev-uuid',
+          platform,
+          protocol: normalizedProtocol,
+          amount: numericAmount,
+          crypto_amount: isNaN(normalizedCryptoAmount) ? numericAmount : normalizedCryptoAmount,
+          currency: normalizedCurrency,
+          tx_hash: txHash,
+          ip_address: clientIp,
+          status: 'Pending'
+        }
       });
     }
 
-    // Insert deposit request into Supabase with IP logs
-    const { data: newDeposit, error } = await supabase
-      .from('deposits')
-      .insert({
-        user_id: userId,
-        platform,
-        protocol,
-        amount: numericAmount,
-        tx_hash: txHash.trim(),
-        remark: remark || null,
-        ip_address: clientIp,
-        status: 'Pending'
-      })
-      .select()
-      .single();
+    const depositPayload: Record<string, any> = {
+      user_id: userId,
+      platform,
+      protocol: normalizedProtocol,
+      amount: numericAmount,
+      tx_hash: txHash.trim(),
+      remark: remark || null,
+      ip_address: clientIp,
+      status: 'Pending'
+    };
 
-    if (error) {
-      if (error.code === '23505') { // Postgres unique constraint error
-        return res.status(400).json({ error: 'This transaction hash (TxID) has already been submitted.' });
-      }
-      return res.status(500).json({ error: 'Failed to process deposit: ' + error.message });
+    if (!isNaN(normalizedCryptoAmount)) {
+      depositPayload.crypto_amount = normalizedCryptoAmount;
+    }
+    if (normalizedCurrency) {
+      depositPayload.currency = normalizedCurrency;
     }
 
-    // Broadcast to admin panel: new pending deposit
-    broadcastToAdmins('new_order', { type: 'deposit', amount, platform, userId, txHash });
+    let newDeposit: any;
+    let error: any;
+    const insertResult = await supabase
+      .from('deposits')
+      .insert(depositPayload)
+      .select()
+      .single();
+    newDeposit = insertResult.data;
+    error = insertResult.error;
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'This transaction hash (TxID) has already been submitted.' });
+      }
+      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        const fallbackResult = await supabase
+          .from('deposits')
+          .insert({
+            user_id: userId,
+            platform,
+            protocol: normalizedProtocol,
+            amount: numericAmount,
+            tx_hash: txHash.trim(),
+            remark: remark || null,
+            ip_address: clientIp,
+            status: 'Pending'
+          })
+          .select()
+          .single();
+        newDeposit = fallbackResult.data;
+        error = fallbackResult.error;
+      }
+      if (error) {
+        return res.status(500).json({ error: 'Failed to process deposit: ' + error.message });
+      }
+    }
+
+    broadcastToAdmins('new_order', {
+      type: 'deposit',
+      amount: numericAmount,
+      platform,
+      currency: normalizedCurrency,
+      cryptoAmount: isNaN(normalizedCryptoAmount) ? numericAmount : normalizedCryptoAmount,
+      userId,
+      txHash: txHash.trim()
+    });
 
     res.status(201).json({
       message: 'Deposit request successfully queued. Awaiting administrator approval.',
-      deposit: newDeposit
+      deposit: {
+        ...newDeposit,
+        currency: newDeposit?.currency || normalizedCurrency,
+        crypto_amount: newDeposit?.crypto_amount ?? (isNaN(normalizedCryptoAmount) ? numericAmount : normalizedCryptoAmount),
+        protocol: newDeposit?.protocol || normalizedProtocol
+      }
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -182,7 +244,8 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
     const { data: deposits } = await supabase
       .from('deposits')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
     // Fetch user's withdrawals
     const { data: withdrawals } = await supabase
@@ -195,9 +258,15 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
       id: dep.id,
       type: 'Deposit',
       amount: parseFloat(dep.amount),
+      cryptoAmount: parseFloat(dep.crypto_amount ?? dep.amount) || parseFloat(dep.amount),
+      currency: dep.currency || (dep.protocol === 'BTC' ? 'BTC' : 'USDT'),
+      platform: dep.platform,
+      protocol: dep.protocol,
+      txHash: dep.tx_hash,
+      remark: dep.remark,
       status: dep.status,
       date: new Date(dep.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      details: `${dep.protocol} - Hash: ${dep.tx_hash.substring(0, 8)}...`
+      details: `${dep.protocol} ${dep.currency || (dep.protocol === 'BTC' ? 'BTC' : 'USDT')} - Hash: ${dep.tx_hash?.substring(0, 8) || 'N/A'}...`
     }));
 
     const formattedWithdrawals = (withdrawals || []).map((w: any) => ({

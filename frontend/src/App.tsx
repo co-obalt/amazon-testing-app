@@ -36,11 +36,6 @@ export default function App() {
     setCurrentView('under-review');
   };
 
-  const handleAdminApproval = () => {
-    showToast("Success! The administrator panel has authorized your reviewer account. You may now sign in!");
-    setCurrentView('login');
-  };
-
   const handleLoginSuccess = (loginUser: string) => {
     const finalUser = loginUser || username;
     setUsername(finalUser);
@@ -109,7 +104,6 @@ export default function App() {
           {currentView === 'under-review' && (
             <UnderReviewPage
               username={username}
-              onApproveAndNavigateToLogin={handleAdminApproval}
               onNavigateHome={() => setCurrentView('landing')}
             />
           )}

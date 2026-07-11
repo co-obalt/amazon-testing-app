@@ -5,24 +5,31 @@ import { supabase } from '../config/supabase.js';
 import { authenticateToken, requireSuperAdmin } from '../middlewares/auth.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
+// Helper function to resolve geolocation details from a client IP
+async function resolveLocation(ip) {
+    const normalizedIp = (ip || '').trim();
+    if (!normalizedIp || normalizedIp === '127.0.0.1' || normalizedIp === 'localhost' || normalizedIp === '::1' || normalizedIp === '::ffff:127.0.0.1') {
+        return { country: 'Unknown', city: 'Unknown' };
+    }
+    try {
+        const geoRes = await axios.get(`http://ip-api.com/json/${normalizedIp}`, { timeout: 3000 });
+        if (geoRes.data && geoRes.data.status === 'success') {
+            return {
+                country: geoRes.data.country || 'Unknown',
+                city: geoRes.data.city || 'Unknown'
+            };
+        }
+    }
+    catch (e) {
+        console.warn('Geo IP lookup failed:', e);
+    }
+    return { country: 'Unknown', city: 'Unknown' };
+}
 // Helper function to log geolocation audit trails in background
 async function logUserIp(userId, ip) {
     if (!userId || userId.includes('dev-uuid'))
         return;
-    let country = 'Unknown';
-    let city = 'Unknown';
-    if (ip !== '127.0.0.1' && ip !== 'localhost') {
-        try {
-            const geoRes = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
-            if (geoRes.data && geoRes.data.status === 'success') {
-                country = geoRes.data.country || 'Unknown';
-                city = geoRes.data.city || 'Unknown';
-            }
-        }
-        catch (e) {
-            console.warn('Geo IP logs lookup failed:', e);
-        }
-    }
+    const { country, city } = await resolveLocation(ip);
     try {
         // 1. Log to history list
         await supabase.from('ip_logs').insert({
@@ -45,9 +52,21 @@ async function logUserIp(userId, ip) {
 // 1. Register Endpoint
 router.post('/register', async (req, res) => {
     try {
-        const { username, password, referredBy } = req.body;
+        const { username, email, password, withdrawalPassword, referredBy } = req.body;
+        const normalizedReferralCode = String(referredBy || '').trim().toUpperCase();
         if (!username || !password) {
             return res.status(400).json({ error: 'Username and password are required' });
+        }
+        if (!normalizedReferralCode) {
+            return res.status(400).json({ error: 'Invalid referral code' });
+        }
+        const { data: referrer, error: referralError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', normalizedReferralCode)
+            .maybeSingle();
+        if (referralError || !referrer) {
+            return res.status(400).json({ error: 'Invalid referral code' });
         }
         // Check if user already exists
         const { data: existingUser } = await supabase
@@ -66,20 +85,7 @@ router.post('/register', async (req, res) => {
         if (clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
             clientIp = '127.0.0.1';
         }
-        let country = 'Unknown';
-        let city = 'Unknown';
-        if (clientIp !== '127.0.0.1' && clientIp !== 'localhost') {
-            try {
-                const geoRes = await axios.get(`http://ip-api.com/json/${clientIp}`, { timeout: 3000 });
-                if (geoRes.data && geoRes.data.status === 'success') {
-                    country = geoRes.data.country || 'Unknown';
-                    city = geoRes.data.city || 'Unknown';
-                }
-            }
-            catch (e) {
-                console.warn('Geo IP API request failed:', e);
-            }
-        }
+        const { country, city } = await resolveLocation(clientIp);
         // Generate referral code
         const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         // All new registrations are always regular users, pending admin approval
@@ -92,19 +98,29 @@ router.post('/register', async (req, res) => {
             .from('profiles')
             .insert({
             username: username.trim(),
+            email: email ? email.trim() : null,
             password: finalPassword,
+            withdrawal_password: withdrawalPassword || null,
             role: finalRole,
             country,
             city,
             ip_address: clientIp,
             status: finalStatus,
             referral_code: referralCode,
-            referred_by: referredBy || null
+            referred_by: normalizedReferralCode
         })
             .select()
             .single();
         if (insertError || !newUser) {
             return res.status(500).json({ error: 'Failed to create profile: ' + insertError?.message });
+        }
+        // Broadcast to connected admins: new registration
+        try {
+            const { broadcastToAdmins } = await import('../services/wsService.js');
+            broadcastToAdmins('new_order', { type: 'signup', username: username.trim(), amount: '0' });
+        }
+        catch (wsErr) {
+            console.warn('WebSocket registration alert dispatch error:', wsErr);
         }
         // Create default platform balances
         const balances = [
@@ -282,28 +298,8 @@ router.post('/bind-usdt', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message || 'Internal server error' });
     }
 });
-// 5. Developer Test Registration Override Approval Endpoint
-router.post('/override-approve', async (req, res) => {
-    try {
-        const { username } = req.body;
-        if (!username) {
-            return res.status(400).json({ error: 'Username is required' });
-        }
-        const { error } = await supabase
-            .from('profiles')
-            .update({ status: 'active' })
-            .eq('username', username.trim());
-        if (error) {
-            return res.status(500).json({ error: 'Failed to override approval: ' + error.message });
-        }
-        res.json({ success: true, message: 'Developer status override: Account activated.' });
-    }
-    catch (error) {
-        res.status(500).json({ error: error.message || 'Internal server error' });
-    }
-});
 // ==========================================
-// 6. Admin Panel Separate Auth endpoints
+// 5. Admin Panel Separate Auth endpoints
 // ==========================================
 // Admin Registration Flow (request sent to super_admin as pending)
 router.post('/admin/register', async (req, res) => {

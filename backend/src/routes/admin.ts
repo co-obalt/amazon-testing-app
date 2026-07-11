@@ -7,6 +7,74 @@ import { clearCache } from '../services/cacheService.js';
 
 const router = express.Router();
 
+async function maybeAwardReferralBonus(referredUserId?: string, platform?: string) {
+  try {
+    if (!platform || !referredUserId) {
+      return;
+    }
+    const { data: referredProfile } = await supabase
+      .from('profiles')
+      .select('referred_by')
+      .eq('id', referredUserId)
+      .maybeSingle();
+
+    if (!referredProfile?.referred_by) {
+      return;
+    }
+
+    const { data: referrerProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('referral_code', referredProfile.referred_by)
+      .maybeSingle();
+
+    if (!referrerProfile) {
+      return;
+    }
+
+    const { data: existingBalance } = await supabase
+      .from('platform_balances')
+      .select('*')
+      .eq('user_id', referrerProfile.id)
+      .eq('platform', platform)
+      .maybeSingle();
+
+    const bonusAmount = 1.50;
+    if (existingBalance) {
+      const updatedBalance = Number((parseFloat(existingBalance.wallet_balance as any) + bonusAmount).toFixed(2));
+      await supabase
+        .from('platform_balances')
+        .update({ wallet_balance: updatedBalance })
+        .eq('user_id', referrerProfile.id)
+        .eq('platform', platform);
+    } else {
+      await supabase
+        .from('platform_balances')
+        .insert({
+          user_id: referrerProfile.id,
+          platform,
+          wallet_balance: bonusAmount,
+          reviews_count: 0,
+          current_position: 0
+        });
+    }
+
+    await supabase.from('deposits').insert({
+      user_id: referrerProfile.id,
+      platform,
+      protocol: 'REFERRAL',
+      amount: bonusAmount,
+      tx_hash: `REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+      remark: 'Referral bonus for 3 completed reviews',
+      status: 'Approved'
+    });
+
+    broadcastToUser(referrerProfile.id, 'balance_update', { type: 'bonus', amount: bonusAmount, platform });
+  } catch (error) {
+    console.warn('Referral bonus processing failed:', error);
+  }
+}
+
 // Apply admin access check middleware to all routes in this file
 router.use(authenticateToken);
 router.use(requireAdmin);
@@ -581,6 +649,16 @@ router.put('/submissions/:id/status', async (req: AuthenticatedRequest, res: Res
         .update(updates)
         .eq('user_id', reviewSub.user_id)
         .eq('platform', platform);
+
+      const { count: completedReviewCount } = await supabase
+        .from('review_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', reviewSub.user_id)
+        .eq('status', 'Completed');
+
+      if ((completedReviewCount || 0) === 3) {
+        await maybeAwardReferralBonus(reviewSub.user_id, platform);
+      }
     }
 
     // Broadcast real-time review completion to the submitting user
@@ -594,7 +672,30 @@ router.put('/submissions/:id/status', async (req: AuthenticatedRequest, res: Res
   }
 });
 
-// 12. Create New Product Pool Campaign
+// 12. Create / List / Edit / Delete Product Pool Campaigns
+router.get('/products', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { platform, search } = req.query;
+
+    let query = supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (platform) {
+      query = query.eq('platform', platform);
+    }
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,category.ilike.%${search}%`);
+    }
+
+    const { data: products, error } = await query;
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json(products || []);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { platform, title, category, imageUrl, payout, difficulty, wordLimit, externalLink } = req.body;
@@ -623,6 +724,56 @@ router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     res.status(201).json({ message: 'Product campaign successfully created', product: newProd });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+router.put('/products/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { platform, title, category, imageUrl, payout, difficulty, wordLimit, externalLink } = req.body;
+
+    if (!platform || !title || !category || !imageUrl || !payout || !difficulty || !externalLink) {
+      return res.status(400).json({ error: 'All fields except wordLimit are required' });
+    }
+
+    const { data: updatedProd, error } = await supabase
+      .from('products')
+      .update({
+        platform,
+        title,
+        category,
+        image_url: imageUrl,
+        payout: parseFloat(payout),
+        difficulty,
+        word_limit: parseInt(wordLimit) || 20,
+        external_link: externalLink
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ message: 'Product campaign successfully updated', product: updatedProd });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+router.delete('/products/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('products').delete().eq('id', id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ message: 'Product campaign successfully removed' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }

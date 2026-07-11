@@ -53,8 +53,9 @@ export default function RegisterPage({
       return;
     }
 
-    if (referralCode.trim().length !== 6) {
-      setErrorMessage('Referral code must be a 6-digit invite code (e.g. 123456).');
+    const normalizedReferralCode = referralCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(normalizedReferralCode)) {
+      setErrorMessage('Referral code must be a 6-character alphanumeric invite code (e.g. XE6G22).');
       return;
     }
 
@@ -67,7 +68,7 @@ export default function RegisterPage({
           email: email.trim(),
           password: loginPassword,
           withdrawalPassword: withdrawalPassword,
-          referredBy: referralCode.trim()
+          referredBy: normalizedReferralCode
         })
       });
       const data = await res.json();
@@ -223,8 +224,8 @@ export default function RegisterPage({
                 type="text"
                 required
                 value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value)}
-                placeholder="Enter 6-digit invite code (e.g. 123456)"
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                placeholder="Enter 6-char invite code (e.g. XE6G22)"
                 className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold focus:border-amazon-gold text-gray-900 font-mono tracking-wider"
               />
             </div>

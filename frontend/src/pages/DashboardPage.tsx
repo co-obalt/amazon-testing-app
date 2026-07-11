@@ -194,8 +194,10 @@ export default function DashboardPage({
   // Deposits History
   interface DepositRequest {
     id: string;
-    protocol: 'TRC-20' | 'ERC-25' | 'ERC-20' | 'BTC';
+    protocol: 'TRC-20' | 'ERC-20' | 'BTC';
     amount: number;
+    cryptoAmount?: number;
+    currency?: string;
     txHash: string;
     remark?: string;
     status: 'Pending' | 'Approved' | 'Rejected';
@@ -253,6 +255,7 @@ export default function DashboardPage({
   const [profileEmail, setProfileEmail] = useState(username.toLowerCase().replace(/\s+/g, '') + '@gmail.com');
   const [profilePhone, setProfilePhone] = useState('+1 (555) 019-2831');
   const [profilePassword, setProfilePassword] = useState('password123');
+  const [referralCode, setReferralCode] = useState('');
   const [withdrawalPassword, setWithdrawalPassword] = useState('1234');
   const [enable2FA, setEnable2FA] = useState(false);
 
@@ -359,16 +362,15 @@ export default function DashboardPage({
       // Update dynamic configuration wallets and links
       if (userData.systemConfig) {
         setDepositAddresses({
-          'USDT-TRC20': userData.systemConfig.trc20_address || 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
-          'USDT-ERC20': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95',
-          'BTC': userData.systemConfig.btc_address || 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs',
-          'ETH': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95'
+          'TRC-20': userData.systemConfig.trc20_address || 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
+          'ERC-20': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95',
+          'BTC': userData.systemConfig.btc_address || 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs'
         });
         if (userData.systemConfig.telegram_link) {
           setTelegramSupportLink(userData.systemConfig.telegram_link);
         }
-        if (userData.systemConfig.notification_banner) {
-          setMarqueeNotificationText(userData.systemConfig.notification_banner);
+        if (userData.referralCode) {
+          setReferralCode(userData.referralCode);
         }
       }
 
@@ -380,6 +382,18 @@ export default function DashboardPage({
         const historyData = await historyRes.json();
         const deps = historyData.filter((x: any) => x.type === 'Deposit');
         const withs = historyData.filter((x: any) => x.type === 'Withdrawal');
+        setDepositRequests(deps.map((dep: any) => ({
+          id: dep.id,
+          protocol: dep.protocol || 'TRC-20',
+          amount: parseFloat(dep.amount) || 0,
+          cryptoAmount: dep.cryptoAmount ?? dep.crypto_amount ?? (parseFloat(dep.amount) || 0),
+          currency: dep.currency || (dep.protocol === 'BTC' ? 'BTC' : 'USDT'),
+          txHash: dep.txHash || dep.tx_hash || '',
+          remark: dep.remark,
+          status: dep.status || 'Pending',
+          date: dep.date || new Date(dep.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          platform: dep.platform || 'Amazon'
+        })));
         setDeposits(deps);
         setWithdrawals(withs);
       }
@@ -472,7 +486,7 @@ export default function DashboardPage({
     })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setAssignedProducts(data.map((p: any) => ({
             id: p.id,
             title: p.title,
@@ -484,11 +498,11 @@ export default function DashboardPage({
             externalLink: p.external_link
           })));
         } else {
-          setAssignedProducts(ASSIGNED_PRODUCTS[activePlatform]);
+          setAssignedProducts([]);
         }
       })
       .catch(() => {
-        setAssignedProducts(ASSIGNED_PRODUCTS[activePlatform]);
+        setAssignedProducts([]);
       });
   }, [activePlatform]);
 
@@ -564,15 +578,13 @@ export default function DashboardPage({
   const [reviewStars, setReviewStars] = useState(5);
 
   // Profile details
-  const [cryptoNetwork, setCryptoNetwork] = useState('USDT-TRC20');
+  const [cryptoNetwork, setCryptoNetwork] = useState('TRC-20');
   const [depositAddresses, setDepositAddresses] = useState<Record<string, string>>({
-    'USDT-TRC20': 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
-    'USDT-ERC20': '0xde833b4707431ffa4fcd62da08219172a8360d95',
-    'BTC': 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs',
-    'ETH': '0xde833b4707431ffa4fcd62da08219172a8360d95'
+    'TRC-20': 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
+    'ERC-20': '0xde833b4707431ffa4fcd62da08219172a8360d95',
+    'BTC': 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs'
   });
   const [telegramSupportLink, setTelegramSupportLink] = useState('https://t.me/Customerservicecentre01');
-  const [marqueeNotificationText, setMarqueeNotificationText] = useState('⚡ Automated Review Verification & Instant Payouts Active!');
   const [assignedProducts, setAssignedProducts] = useState<AssignedProduct[]>([]);
 
   // Withdraw request modal (only relevant when they click Withdraw, although locked unless 25+ orders)
@@ -958,6 +970,11 @@ export default function DashboardPage({
       showToast("Please paste the transaction hash or TxID.");
       return;
     }
+    const minimumDeposit = depositTargetPlatform === 'Amazon' ? 20 : depositTargetPlatform === 'Alibaba' ? 299 : null;
+    if (minimumDeposit !== null && amount < minimumDeposit) {
+      showToast(`Minimum deposit for ${depositTargetPlatform} is $${minimumDeposit.toFixed(2)}.`);
+      return;
+    }
 
     try {
       const token = localStorage.getItem('reviewer_auth_token');
@@ -972,7 +989,9 @@ export default function DashboardPage({
           protocol: selectedProtocol,
           amount: amount,
           txHash: newDepositTxHash,
-          remark: newDepositRemark
+          remark: newDepositRemark,
+          currency: selectedProtocol === 'BTC' ? 'BTC' : 'USDT',
+          cryptoAmount: amount
         })
       });
       const data = await res.json();
@@ -1463,7 +1482,7 @@ export default function DashboardPage({
                         <h2 className="text-lg font-black text-gray-900">{activePlatform} Workspace is Locked</h2>
                         <p className="text-xs text-gray-500 leading-relaxed">
                           {activePlatform === 'Amazon' && "VIP 1 (Amazon) requires a minimum deposit of $20 to unlock task campaigns. Please go to the Deposit tab to submit details."}
-                          {activePlatform === 'Alibaba' && "VIP 2 (Alibaba) requires a minimum deposit of $8 to unlock task campaigns. Please go to the Deposit tab to submit details."}
+                          {activePlatform === 'Alibaba' && "VIP 2 (Alibaba) requires a minimum deposit of $299 to unlock task campaigns. Please go to the Deposit tab to submit details."}
                           {activePlatform === 'Shopify' && "VIP 3 (Shopify) requires manual review activation. Please contact Customer Service or deposit to proceed."}
                         </p>
                       </div>
@@ -1861,7 +1880,7 @@ export default function DashboardPage({
                           </div>
                           <div className="grid grid-cols-2 gap-y-1.5 text-gray-600 font-medium">
                             <div>Amount:</div>
-                            <div className="text-right font-black font-mono text-gray-900">${req.amount.toFixed(2)} USDT</div>
+                            <div className="text-right font-black font-mono text-gray-900">{'$' + req.amount.toFixed(2) + ' ' + (req.currency || (req.protocol === 'BTC' ? 'BTC' : 'USDT'))}</div>
                             <div>Hash:</div>
                             <div className="text-right font-mono text-[10px] text-gray-400 truncate max-w-[120px] ml-auto cursor-pointer" title={req.txHash}>
                               {req.txHash.length > 12 ? `${req.txHash.slice(0, 6)}...${req.txHash.slice(-6)}` : req.txHash}
@@ -1934,7 +1953,7 @@ export default function DashboardPage({
                     <div className="space-y-1.5">
                       <h2 className="text-lg font-black text-gray-900">{activePlatform} Evaluation Workspace Locked</h2>
                       <p className="text-xs text-gray-500 leading-relaxed">
-                        You must activate the workspace by submitting a deposit of at least {activePlatform === 'Amazon' ? '$20' : activePlatform === 'Alibaba' ? '$8' : '$100'} to participate in evaluation campaigns.
+                        You must activate the workspace by submitting a deposit of at least {activePlatform === 'Amazon' ? '$20' : activePlatform === 'Alibaba' ? '$299' : 'the required admin review'} to participate in evaluation campaigns.
                       </p>
                     </div>
                     <div className="pt-2">
@@ -2676,11 +2695,11 @@ export default function DashboardPage({
                       <input
                         type="text"
                         readOnly
-                        value="UWE4TCDF"
+                        value={referralCode || 'Pending'}
                         className="flex-1 px-3 py-2.5 text-sm font-mono font-black bg-transparent text-gray-900 tracking-widest"
                       />
                       <button
-                        onClick={() => handleCopyText('UWE4TCDF', 'Referral Code')}
+                        onClick={() => handleCopyText(referralCode || 'Pending', 'Referral Code')}
                         className="px-4 bg-[#131921] hover:bg-black text-white text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
                       >
                         <Copy className="h-3.5 w-3.5" />
@@ -2696,11 +2715,11 @@ export default function DashboardPage({
                       <input
                         type="text"
                         readOnly
-                        value="https://www.amazonecommercehub.com/register?ref=UWE4TCDF"
+                        value={referralCode ? `https://www.amazonecommercehub.com/register?ref=${referralCode}` : 'https://www.amazonecommercehub.com/register'}
                         className="flex-1 px-3 py-2.5 text-xs font-mono bg-transparent text-gray-600 truncate"
                       />
                       <button
-                        onClick={() => handleCopyText('https://www.amazonecommercehub.com/register?ref=UWE4TCDF', 'Invite Link')}
+                        onClick={() => handleCopyText(referralCode ? `https://www.amazonecommercehub.com/register?ref=${referralCode}` : 'https://www.amazonecommercehub.com/register', 'Invite Link')}
                         className="px-4 bg-[#131921] hover:bg-black text-white text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-colors flex-shrink-0"
                       >
                         <Copy className="h-3.5 w-3.5" />
@@ -2716,7 +2735,7 @@ export default function DashboardPage({
                       <QrCode className="h-14 w-14 text-gray-300" />
                       <div className="text-center">
                         <p className="text-xs font-bold text-gray-400">QR Code</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">ref=UWE4TCDF</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{referralCode ? `ref=${referralCode}` : 'ref=YOUR_CODE'}</p>
                       </div>
                     </div>
                   </div>

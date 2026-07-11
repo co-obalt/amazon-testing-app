@@ -1,31 +1,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Check, Clock, ShieldAlert, ArrowRight } from 'lucide-react';
-import { API_BASE } from '../config';
+import { Check, Clock, ShieldAlert } from 'lucide-react';
 
 interface UnderReviewPageProps {
   username: string;
-  onApproveAndNavigateToLogin: () => void;
   onNavigateHome: () => void;
 }
 
 export default function UnderReviewPage({
   username,
-  onApproveAndNavigateToLogin,
   onNavigateHome,
 }: UnderReviewPageProps) {
-  const handleOverrideApprove = async () => {
-    try {
-      await fetch(`${API_BASE}/auth/override-approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
-      });
-    } catch (e) {
-      console.warn('Developer override approve query failed:', e);
-    }
-    onApproveAndNavigateToLogin();
-  };
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between font-sans">
       {/* Sleek Minimal Header */}
@@ -99,21 +84,12 @@ export default function UnderReviewPage({
             </div>
           </div>
 
-          {/* Interactive Simulation Dashboard Action */}
           <div className="pt-6 border-t border-gray-100 space-y-3">
             <p className="text-[10px] font-mono font-bold text-gray-400 tracking-wider">
-              ADMINISTRATION PREVIEW OVERRIDE
+              ADMINISTRATOR VERIFICATION
             </p>
-            <button
-              onClick={handleOverrideApprove}
-              className="w-full bg-[#131921] hover:bg-black text-white font-extrabold text-xs py-3.5 rounded-lg transition shadow-md flex items-center justify-center space-x-2 cursor-pointer border border-transparent"
-            >
-              <ShieldCheck className="h-4.5 w-4.5 text-green-400" />
-              <span>Approve & Authorize Profile</span>
-              <ArrowRight className="h-4 w-4 text-gray-400" />
-            </button>
             <p className="text-[10px] text-gray-400 leading-normal max-w-xs mx-auto">
-              Click this developer simulation button to authorize the account instantly and proceed to the sign-in screen.
+              Our review team will approve your account after checking the submitted profile and invite details.
             </p>
           </div>
         </motion.div>

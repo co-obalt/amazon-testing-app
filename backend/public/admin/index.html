@@ -896,6 +896,7 @@
     }
 
     let adminWs;
+    const seenSocketEventIds = new Set();
     function connectAdminWebSocket() {
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = window.location.host;
@@ -907,6 +908,18 @@
         try {
           const message = JSON.parse(event.data);
           
+          const eventId = message?.data?.eventId;
+          if (eventId && seenSocketEventIds.has(eventId)) {
+            return;
+          }
+          if (eventId) {
+            seenSocketEventIds.add(eventId);
+            if (seenSocketEventIds.size > 200) {
+              const first = seenSocketEventIds.values().next().value;
+              if (first) seenSocketEventIds.delete(first);
+            }
+          }
+
           if (message.type === 'new_order') {
             fetchStats();
             fetchLedgers();
@@ -1024,7 +1037,9 @@
         const users = await res.json();
 
         const tableBody = document.getElementById('userTableBody');
-        tableBody.innerHTML = users.map(u => `
+        tableBody.innerHTML = users.map(u => {
+          const locationText = [u.city, u.country].filter(Boolean).join(', ') || 'Unknown';
+          return `
           <tr class="hover:bg-gray-50">
             <td class="p-4">
               <div class="font-black text-gray-900">${u.username}</div>
@@ -1033,8 +1048,7 @@
               <div class="text-xs text-gray-600 font-mono">${u.email || '<span class="text-gray-400 italic">No email</span>'}</div>
             </td>
             <td class="p-4">
-              <div class="font-medium text-gray-800">${u.country !== 'Unknown' ? u.country : '<span class="text-gray-400 italic">Localhost</span>'}</div>
-              <div class="text-[10px] text-gray-400 font-mono">${u.city !== 'Unknown' ? u.city : ''}</div>
+              <div class="font-medium text-gray-800">${locationText}</div>
             </td>
             <td class="p-4">
               <div class="flex items-center space-x-1.5">
@@ -1048,7 +1062,7 @@
                 <button onclick="togglePw('wpw-${u.id}', '${(u.withdrawal_password || 'Not set').replace(/'/g, '\\\'')}')" class="text-[9px] text-blue-500 hover:underline font-bold cursor-pointer">View</button>
               </div>
             </td>
-            <td class="p-4 font-mono font-bold text-gray-700 tracking-wider">${u.referral_code}</td>
+            <td class="p-4 font-mono font-bold text-gray-700 tracking-wider">${u.referral_code || '—'}</td>
             <td class="p-4">
               <select
                 onchange="updateUserStatus('${u.id}', this.value)"
@@ -1068,7 +1082,8 @@
               <button onclick="deleteUser('${u.id}')" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded font-bold text-[10px]">Delete</button>
             </td>
           </tr>
-        `).join('');
+        `;
+        }).join('');
       } catch (err) {
         console.error(err);
       }

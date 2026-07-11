@@ -8,23 +8,33 @@ import { authenticateToken, AuthenticatedRequest, requireSuperAdmin } from '../m
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
 
+// Helper function to resolve geolocation details from a client IP
+async function resolveLocation(ip: string) {
+  const normalizedIp = (ip || '').trim();
+  if (!normalizedIp || normalizedIp === '127.0.0.1' || normalizedIp === 'localhost' || normalizedIp === '::1' || normalizedIp === '::ffff:127.0.0.1') {
+    return { country: 'Unknown', city: 'Unknown' };
+  }
+
+  try {
+    const geoRes = await axios.get(`http://ip-api.com/json/${normalizedIp}`, { timeout: 3000 });
+    if (geoRes.data && geoRes.data.status === 'success') {
+      return {
+        country: geoRes.data.country || 'Unknown',
+        city: geoRes.data.city || 'Unknown'
+      };
+    }
+  } catch (e) {
+    console.warn('Geo IP lookup failed:', e);
+  }
+
+  return { country: 'Unknown', city: 'Unknown' };
+}
+
 // Helper function to log geolocation audit trails in background
 async function logUserIp(userId: string, ip: string) {
   if (!userId || userId.includes('dev-uuid')) return;
-  let country = 'Unknown';
-  let city = 'Unknown';
 
-  if (ip !== '127.0.0.1' && ip !== 'localhost') {
-    try {
-      const geoRes = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
-      if (geoRes.data && geoRes.data.status === 'success') {
-        country = geoRes.data.country || 'Unknown';
-        city = geoRes.data.city || 'Unknown';
-      }
-    } catch (e) {
-      console.warn('Geo IP logs lookup failed:', e);
-    }
-  }
+  const { country, city } = await resolveLocation(ip);
 
   try {
     // 1. Log to history list
@@ -49,9 +59,24 @@ async function logUserIp(userId: string, ip: string) {
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const { username, email, password, withdrawalPassword, referredBy } = req.body;
+    const normalizedReferralCode = String(referredBy || '').trim().toUpperCase();
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (!normalizedReferralCode) {
+      return res.status(400).json({ error: 'Invalid referral code' });
+    }
+
+    const { data: referrer, error: referralError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('referral_code', normalizedReferralCode)
+      .maybeSingle();
+
+    if (referralError || !referrer) {
+      return res.status(400).json({ error: 'Invalid referral code' });
     }
 
     // Check if user already exists
@@ -74,24 +99,7 @@ router.post('/register', async (req: Request, res: Response) => {
       clientIp = '127.0.0.1';
     }
 
-    let country = 'Unknown';
-    let city = 'Unknown';
-
-    if (clientIp !== '127.0.0.1' && clientIp !== 'localhost') {
-      try {
-        const geoRes = await axios.get(`http://ip-api.com/json/${clientIp}`, { timeout: 3000 });
-        if (geoRes.data && geoRes.data.status === 'success') {
-          country = geoRes.data.country || 'Unknown';
-          city = geoRes.data.city || 'Unknown';
-        }
-      } catch (e) {
-        console.warn('Geo IP API request failed:', e);
-      }
-    } else {
-      // In production/sandbox test, if clientIp is localhost, simulate production check or fall back to client IP resolved header
-      country = 'Pakistan';
-      city = 'Lahore';
-    }
+    const { country, city } = await resolveLocation(clientIp);
 
     // Generate referral code
     const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -116,7 +124,7 @@ router.post('/register', async (req: Request, res: Response) => {
         ip_address: clientIp,
         status: finalStatus,
         referral_code: referralCode,
-        referred_by: referredBy || null
+        referred_by: normalizedReferralCode
       })
       .select()
       .single();
@@ -343,31 +351,8 @@ router.post('/bind-usdt', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
-// 5. Developer Test Registration Override Approval Endpoint
-router.post('/override-approve', async (req: Request, res: Response) => {
-  try {
-    const { username } = req.body;
-    if (!username) {
-      return res.status(400).json({ error: 'Username is required' });
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ status: 'active' })
-      .eq('username', username.trim());
-
-    if (error) {
-      return res.status(500).json({ error: 'Failed to override approval: ' + error.message });
-    }
-
-    res.json({ success: true, message: 'Developer status override: Account activated.' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Internal server error' });
-  }
-});
-
 // ==========================================
-// 6. Admin Panel Separate Auth endpoints
+// 5. Admin Panel Separate Auth endpoints
 // ==========================================
 
 // Admin Registration Flow (request sent to super_admin as pending)

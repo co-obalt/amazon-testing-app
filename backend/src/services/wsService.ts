@@ -61,7 +61,11 @@ export function initializeWebSocket(server: any) {
 }
 
 export function broadcastToUser(userId: string, event: string, payload: any) {
-  const message = JSON.stringify({ type: event, data: payload });
+  const eventPayload = payload && typeof payload === 'object' ? { ...payload } : { value: payload };
+  if (!eventPayload.eventId) {
+    eventPayload.eventId = `${event}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  const message = JSON.stringify({ type: event, data: eventPayload });
   activeClients.forEach(c => {
     if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) {
       c.ws.send(message);
@@ -70,7 +74,11 @@ export function broadcastToUser(userId: string, event: string, payload: any) {
 }
 
 export function broadcastToAdmins(event: string, payload: any) {
-  const message = JSON.stringify({ type: event, data: payload });
+  const eventPayload = payload && typeof payload === 'object' ? { ...payload } : { value: payload };
+  if (!eventPayload.eventId) {
+    eventPayload.eventId = `${event}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  const message = JSON.stringify({ type: event, data: eventPayload });
   activeClients.forEach(c => {
     if (c.role === 'admin' && c.ws.readyState === WebSocket.OPEN) {
       c.ws.send(message);
@@ -79,7 +87,11 @@ export function broadcastToAdmins(event: string, payload: any) {
 }
 
 export function broadcastAll(event: string, payload: any) {
-  const message = JSON.stringify({ type: event, data: payload });
+  const eventPayload = payload && typeof payload === 'object' ? { ...payload } : { value: payload };
+  if (!eventPayload.eventId) {
+    eventPayload.eventId = `${event}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  const message = JSON.stringify({ type: event, data: eventPayload });
   activeClients.forEach(c => {
     if (c.ws.readyState === WebSocket.OPEN) {
       c.ws.send(message);

@@ -1,8 +1,77 @@
 import express, { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.js';
+import { broadcastToUser } from '../services/wsService.js';
 
 const router = express.Router();
+
+async function maybeAwardReferralBonus(referredUserId?: string, platform?: string) {
+  try {
+    if (!platform || !referredUserId) {
+      return;
+    }
+    const { data: referredProfile, error: referredError } = await supabase
+      .from('profiles')
+      .select('referred_by')
+      .eq('id', referredUserId)
+      .maybeSingle();
+
+    if (referredError || !referredProfile?.referred_by) {
+      return;
+    }
+
+    const { data: referrerProfile, error: referrerError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('referral_code', referredProfile.referred_by)
+      .maybeSingle();
+
+    if (referrerError || !referrerProfile) {
+      return;
+    }
+
+    const { data: existingBalance } = await supabase
+      .from('platform_balances')
+      .select('*')
+      .eq('user_id', referrerProfile.id)
+      .eq('platform', platform)
+      .maybeSingle();
+
+    const bonusAmount = 1.50;
+    if (existingBalance) {
+      const updatedBalance = Number((parseFloat(existingBalance.wallet_balance as any) + bonusAmount).toFixed(2));
+      await supabase
+        .from('platform_balances')
+        .update({ wallet_balance: updatedBalance })
+        .eq('user_id', referrerProfile.id)
+        .eq('platform', platform);
+    } else {
+      await supabase
+        .from('platform_balances')
+        .insert({
+          user_id: referrerProfile.id,
+          platform,
+          wallet_balance: bonusAmount,
+          reviews_count: 0,
+          current_position: 0
+        });
+    }
+
+    await supabase.from('deposits').insert({
+      user_id: referrerProfile.id,
+      platform,
+      protocol: 'REFERRAL',
+      amount: bonusAmount,
+      tx_hash: `REF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+      remark: 'Referral bonus for 3 completed reviews',
+      status: 'Approved'
+    });
+
+    broadcastToUser(referrerProfile.id, 'balance_update', { type: 'bonus', amount: bonusAmount, platform });
+  } catch (error) {
+    console.warn('Referral bonus processing failed:', error);
+  }
+}
 
 // 1. Fetch Campaigns Pool by Platform
 router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
@@ -320,6 +389,16 @@ router.post('/override-approve', authenticateToken, async (req: AuthenticatedReq
         .update(updates)
         .eq('user_id', userId)
         .eq('platform', platform);
+
+      const { count: completedReviewCount } = await supabase
+        .from('review_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'Completed');
+
+      if ((completedReviewCount || 0) === 3) {
+        await maybeAwardReferralBonus(userId, platform);
+      }
     }
 
     res.json({ success: true, message: 'Developer status override: Pending reviews authorized.' });
