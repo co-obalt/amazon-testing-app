@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ShieldCheck, ArrowRight, User, Mail, Lock, Key, Award } from 'lucide-react';
+import { API_BASE } from '../config';
 
 interface RegisterPageProps {
   onRegisterSuccess: (username: string, email: string) => void;
@@ -22,7 +23,7 @@ export default function RegisterPage({
   const [referralCode, setReferralCode] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -57,7 +58,29 @@ export default function RegisterPage({
       return;
     }
 
-    onRegisterSuccess(username.trim(), email.trim());
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username.trim(),
+          email: email.trim(),
+          password: loginPassword,
+          withdrawalPassword: withdrawalPassword,
+          referredBy: referralCode.trim()
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || 'Registration failed');
+        return;
+      }
+
+      onRegisterSuccess(username.trim(), email.trim());
+    } catch (err) {
+      setErrorMessage('Server connection error. Please make sure the backend is active.');
+    }
   };
 
   return (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { ShieldCheck, Check, Clock, ShieldAlert, ArrowRight } from 'lucide-react';
+import { API_BASE } from '../config';
 
 interface UnderReviewPageProps {
   username: string;
@@ -13,6 +14,18 @@ export default function UnderReviewPage({
   onApproveAndNavigateToLogin,
   onNavigateHome,
 }: UnderReviewPageProps) {
+  const handleOverrideApprove = async () => {
+    try {
+      await fetch(`${API_BASE}/auth/override-approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+    } catch (e) {
+      console.warn('Developer override approve query failed:', e);
+    }
+    onApproveAndNavigateToLogin();
+  };
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between font-sans">
       {/* Sleek Minimal Header */}
@@ -92,7 +105,7 @@ export default function UnderReviewPage({
               ADMINISTRATION PREVIEW OVERRIDE
             </p>
             <button
-              onClick={onApproveAndNavigateToLogin}
+              onClick={handleOverrideApprove}
               className="w-full bg-[#131921] hover:bg-black text-white font-extrabold text-xs py-3.5 rounded-lg transition shadow-md flex items-center justify-center space-x-2 cursor-pointer border border-transparent"
             >
               <ShieldCheck className="h-4.5 w-4.5 text-green-400" />

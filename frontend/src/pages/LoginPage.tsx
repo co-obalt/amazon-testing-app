@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, User, Lock, ArrowLeft } from 'lucide-react';
+import { API_BASE } from '../config';
 
 interface LoginPageProps {
   onLoginSuccess: (username: string) => void;
@@ -13,13 +14,13 @@ export default function LoginPage({
   onLoginSuccess,
   onNavigateToRegister,
   onNavigateHome,
-  defaultUsername = 'demo_reviewer'
+  defaultUsername = ''
 }: LoginPageProps) {
   const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -28,9 +29,24 @@ export default function LoginPage({
       return;
     }
 
-    // Standard credential checking
-    const finalUsername = loginInput.includes('@') ? loginInput.split('@')[0] : loginInput;
-    onLoginSuccess(finalUsername);
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginInput, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || 'Authentication failed');
+        return;
+      }
+
+      localStorage.setItem('reviewer_auth_token', data.token);
+      onLoginSuccess(data.user.username);
+    } catch (err) {
+      setErrorMessage('Server connection error. Please make sure the backend is active.');
+    }
   };
 
   return (

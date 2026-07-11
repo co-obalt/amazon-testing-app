@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Vine | Admin Control Panel</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            amazon: {
+              gold: '#F7CA00',
+              orange: '#FF9900',
+              blue: '#007185',
+              dark: '#131921',
+              navy: '#232F3E'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full overflow-hidden flex flex-col antialiased text-gray-900">
+
+  <!-- ================= AUTH SCREEN ================= -->
+  <div id="authScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-amazon-dark p-4">
+    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-amazon-dark to-black opacity-80"></div>
+    <div class="relative bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl w-full max-w-md shadow-2xl text-left">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center space-x-1 font-black text-xl text-white italic tracking-tight mb-2">
+          <span class="text-white text-2xl font-black uppercase tracking-widest">Admin Panel</span>
+        </div>
+        <p class="text-xs text-gray-400">Enter your secure administration credentials</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div class="space-y-1">
+          <label class="text-[10px] text-gray-300 font-bold uppercase tracking-wider">Username</label>
+          <input 
+            type="text" 
+            id="loginUsername"
+            required
+            placeholder="admin"
+            class="w-full bg-white/5 border border-white/15 px-4 py-2.5 rounded-xl text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amazon-gold"
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] text-gray-300 font-bold uppercase tracking-wider">Password</label>
+          <input 
+            type="password" 
+            id="loginPassword"
+            required
+            placeholder="••••••••"
+            class="w-full bg-white/5 border border-white/15 px-4 py-2.5 rounded-xl text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amazon-gold"
+          />
+        </div>
+        <button 
+          type="submit"
+          class="w-full bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs py-3 rounded-xl shadow-md transition cursor-pointer mt-2"
+        >
+          Sign In to Controller
+        </button>
+      </form>
+      <div id="loginError" class="mt-4 text-center text-xs text-red-400 font-medium hidden"></div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN LAYOUT SCREEN ================= -->
+  <div id="mainDashboard" class="flex-1 flex overflow-hidden hidden">
+    <!-- Collapsible Sidebar -->
+    <aside class="bg-amazon-dark text-white w-64 border-r border-gray-800 flex flex-col justify-between flex-shrink-0">
+      <div class="py-4 space-y-4">
+        <!-- Logo block -->
+        <div class="px-6 pb-2 border-b border-gray-800">
+          <div class="flex flex-col">
+            <span class="text-white text-sm font-black uppercase tracking-widest">Amazon Vine</span>
+            <span class="text-amazon-gold text-[9px] font-bold uppercase tracking-widest mt-0.5">Admin Control Panel</span>
+          </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="space-y-1 px-3">
+          <button 
+            onclick="switchTab('overview')" 
+            id="tab-overview"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-gray-800 text-amazon-gold"
+          >
+            <i data-lucide="bar-chart-2" class="h-4.5 w-4.5"></i>
+            <span>Metrics Overview</span>
+          </button>
+          <button 
+            onclick="switchTab('users')" 
+            id="tab-users"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <i data-lucide="users" class="h-4.5 w-4.5"></i>
+            <span>User Directory</span>
+          </button>
+          <button 
+            onclick="switchTab('products')" 
+            id="tab-products"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <i data-lucide="shopping-bag" class="h-4.5 w-4.5"></i>
+            <span>Products Campaign</span>
+          </button>
+          <button 
+            onclick="switchTab('ledgers')" 
+            id="tab-ledgers"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <i data-lucide="wallet" class="h-4.5 w-4.5"></i>
+            <span>Ledger Approvals</span>
+          </button>
+          <button 
+            onclick="switchTab('chats')" 
+            id="tab-chats"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <i data-lucide="message-square" class="h-4.5 w-4.5"></i>
+            <span>Customer Support</span>
+          </button>
+          <button 
+            onclick="switchTab('settings')" 
+            id="tab-settings"
+            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <i data-lucide="settings" class="h-4.5 w-4.5"></i>
+            <span>System Settings</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Admin profile/logout footer -->
+      <div class="p-3 border-t border-gray-800">
+        <button 
+          onclick="handleLogout()"
+          class="w-full flex items-center space-x-3 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-950/30 hover:text-red-300 rounded-lg transition-all text-left"
+        >
+          <i data-lucide="log-out" class="h-4 w-4"></i>
+          <span>Logout System</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Frame -->
+    <main class="flex-1 flex flex-col overflow-hidden bg-gray-50 text-left">
+      <!-- Navbar header -->
+      <header class="bg-white h-14 border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0">
+        <h2 id="currentTabTitle" class="text-sm font-black text-gray-800 uppercase tracking-wider">Metrics Overview</h2>
+        <span class="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200 font-extrabold uppercase font-mono animate-pulse">Node Sync Active</span>
+      </header>
+
+      <!-- Scrollable workspace viewport -->
+      <div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+
+        <!-- ================= TAB: OVERVIEW ================= -->
+        <div id="view-overview" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center space-x-4">
+              <div class="p-3 bg-blue-50 text-blue-600 rounded-lg"><i data-lucide="users" class="h-6 w-6"></i></div>
+              <div>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Users</p>
+                <h3 id="statTotalUsers" class="text-xl font-black text-gray-900 mt-1 font-mono">0</h3>
+              </div>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center space-x-4">
+              <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><i data-lucide="arrow-down-left" class="h-6 w-6"></i></div>
+              <div>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Deposits</p>
+                <h3 id="statDeposited" class="text-xl font-black text-gray-900 mt-1 font-mono">$0.00</h3>
+              </div>
+            </div>
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center space-x-4">
+              <div class="p-3 bg-amber-50 text-amber-600 rounded-lg"><i data-lucide="shield-alert" class="h-6 w-6"></i></div>
+              <div>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Pending Approvals</p>
+                <h3 id="statPendingApprovals" class="text-xl font-black text-gray-900 mt-1 font-mono">0</h3>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Links -->
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs space-y-4">
+            <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Quick Actions & Administration</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button onclick="switchTab('ledgers')" class="flex items-center justify-between p-3.5 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl text-blue-800 transition cursor-pointer font-bold text-xs">
+                <span>Approve Deposits</span>
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+              <button onclick="switchTab('ledgers')" class="flex items-center justify-between p-3.5 bg-rose-50/50 hover:bg-rose-50 border border-rose-100 rounded-xl text-rose-800 transition cursor-pointer font-bold text-xs">
+                <span>Approve Withdrawals</span>
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+              <button onclick="switchTab('users')" class="flex items-center justify-between p-3.5 bg-amber-50/50 hover:bg-amber-50 border border-amber-100 rounded-xl text-amber-800 transition cursor-pointer font-bold text-xs">
+                <span>Approve Users</span>
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Charts Section -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- User Growth Chart -->
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs space-y-4 text-left">
+              <h4 class="text-[10px] font-black uppercase text-gray-500 tracking-wider">User Growth (Last 7 Days)</h4>
+              <div class="h-32 flex items-end justify-between space-x-2 pt-4">
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/20 hover:bg-blue-500 rounded-t transition-all" style="height: 25%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Mon</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/35 hover:bg-blue-500 rounded-t transition-all" style="height: 40%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Tue</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/50 hover:bg-blue-500 rounded-t transition-all" style="height: 55%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Wed</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/65 hover:bg-blue-500 rounded-t transition-all" style="height: 60%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Thu</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/80 hover:bg-blue-500 rounded-t transition-all" style="height: 75%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Fri</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500/90 hover:bg-blue-500 rounded-t transition-all" style="height: 85%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Sat</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-blue-500 rounded-t transition-all" style="height: 95%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Sun</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Daily Deposits Chart -->
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs space-y-4 text-left">
+              <h4 class="text-[10px] font-black uppercase text-gray-500 tracking-wider">Daily Deposits ($)</h4>
+              <div class="h-32 flex items-end justify-between space-x-2 pt-4">
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/30 hover:bg-emerald-500 rounded-t transition-all" style="height: 35%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Mon</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/45 hover:bg-emerald-500 rounded-t transition-all" style="height: 50%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Tue</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/35 hover:bg-emerald-500 rounded-t transition-all" style="height: 42%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Wed</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/70 hover:bg-emerald-500 rounded-t transition-all" style="height: 75%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Thu</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/60 hover:bg-emerald-500 rounded-t transition-all" style="height: 65%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Fri</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500/80 hover:bg-emerald-500 rounded-t transition-all" style="height: 85%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Sat</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-emerald-500 rounded-t transition-all" style="height: 98%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Sun</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Monthly Earnings Chart -->
+            <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs space-y-4 text-left">
+              <h4 class="text-[10px] font-black uppercase text-gray-500 tracking-wider">Monthly Earnings (Est.)</h4>
+              <div class="h-32 flex items-end justify-between space-x-2 pt-4">
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-indigo-500/30 hover:bg-indigo-500 rounded-t transition-all" style="height: 35%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">May</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-indigo-500/60 hover:bg-indigo-500 rounded-t transition-all" style="height: 65%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Jun</span>
+                </div>
+                <div class="flex-1 flex flex-col items-center space-y-1">
+                  <div class="w-full bg-indigo-500 rounded-t transition-all" style="height: 95%"></div>
+                  <span class="text-[8px] text-gray-400 font-bold uppercase">Jul</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Activity Hidden Feed Container for background notifications loop -->
+          <div id="activityLogs" class="hidden"></div>
+        </div>
+
+        <!-- ================= TAB: USERS ================= -->
+        <div id="view-users" class="space-y-6 hidden">
+          <!-- Search Bar -->
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
+            <div class="relative w-full max-w-md">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"></i>
+              <input 
+                type="text" 
+                id="searchUserField"
+                oninput="fetchUsers()"
+                placeholder="Search user profile records..."
+                class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-xs"
+              />
+            </div>
+          </div>
+
+          <!-- User Directory List -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                  <th class="p-4">Username</th>
+                  <th class="p-4">Email</th>
+                  <th class="p-4">Location</th>
+                  <th class="p-4">Login Password</th>
+                  <th class="p-4">Withdrawal Password</th>
+                  <th class="p-4">Referral Code</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody" class="divide-y divide-gray-200">
+                <!-- Data loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ================= TAB: PRODUCTS ================= -->
+        <div id="view-products" class="space-y-6 hidden">
+          <!-- Create Product Campaign Form -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs p-5 space-y-4 max-w-3xl">
+            <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Add Campaign Product</h4>
+            
+            <!-- Amazon URL Autofill Scraper Tool -->
+            <div class="bg-amber-50/50 p-4 border border-amber-250 rounded-xl text-xs space-y-2">
+              <label class="font-bold text-amber-800 uppercase text-[9px]">Autofill from Amazon Product Link</label>
+              <div class="flex space-x-2">
+                <input 
+                  type="url" 
+                  id="scrapeUrlField" 
+                  placeholder="Paste Amazon product URL (e.g. https://www.amazon.com/dp/B0...)" 
+                  class="flex-1 border border-gray-300 rounded p-2.5 focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white"
+                />
+                <button 
+                  type="button" 
+                  onclick="scrapeAmazonProduct()" 
+                  id="scrapeFetchBtn"
+                  class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-4 rounded-lg transition-colors cursor-pointer text-[10px] uppercase tracking-wider"
+                >
+                  Fetch details
+                </button>
+              </div>
+              <p id="scrapeStatusMsg" class="text-[9px] font-bold text-gray-500 italic hidden"></p>
+            </div>
+
+            <form id="createProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Select Platform</label>
+                <select id="prodPlatform" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold">
+                  <option value="Amazon">Amazon (VIP 1)</option>
+                  <option value="Alibaba">Alibaba (VIP 2)</option>
+                  <option value="Shopify">Shopify (VIP 3)</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Product Title</label>
+                <input type="text" id="prodTitle" required placeholder="e.g. Wireless Noise Cancelling Earbuds" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Category</label>
+                <input type="text" id="prodCategory" required placeholder="Electronics" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Image URL</label>
+                <input type="url" id="prodImage" required placeholder="https://images.unsplash.com/..." class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Commission Payout ($)</label>
+                <input type="number" step="any" id="prodPayout" required placeholder="1.50" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Difficulty Rating</label>
+                <select id="prodDifficulty" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold">
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Expert">Expert</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Word Limit Requirement</label>
+                <input type="number" id="prodWordLimit" required value="20" class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Merchant Link / URL</label>
+                <input type="url" id="prodLink" required placeholder="https://www.amazon.com/..." class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold"/>
+              </div>
+              <div class="md:col-span-2 pt-2">
+                <button type="submit" class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm">Save Campaign</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- ================= TAB: LEDGERS ================= -->
+        <div id="view-ledgers" class="space-y-6 hidden">
+          <!-- Pending Deposits Queue -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending Deposits Approvals</h4>
+            </div>
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                  <th class="p-4">User</th>
+                  <th class="p-4">Platform</th>
+                  <th class="p-4">Protocol</th>
+                  <th class="p-4">Amount</th>
+                  <th class="p-4">TxHash (Hash ID)</th>
+                  <th class="p-4 text-right">Audits</th>
+                </tr>
+              </thead>
+              <tbody id="depositApprovalBody" class="divide-y divide-gray-150">
+                <!-- Data loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pending Withdrawals Queue -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending Payout Withdrawals</h4>
+            </div>
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                  <th class="p-4">User</th>
+                  <th class="p-4">Amount Requested</th>
+                  <th class="p-4">USDT Wallet Address</th>
+                  <th class="p-4">Request Date</th>
+                  <th class="p-4 text-right">Audits</th>
+                </tr>
+              </thead>
+              <tbody id="withdrawApprovalBody" class="divide-y divide-gray-150">
+                <!-- Data loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pending Submissions Review Queue -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending Compliance Reviews</h4>
+            </div>
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                  <th class="p-4">User</th>
+                  <th class="p-4">Product Campaign</th>
+                  <th class="p-4">Order Reference ID</th>
+                  <th class="p-4">Opinion Draft Text</th>
+                  <th class="p-4 text-right">Audits</th>
+                </tr>
+              </thead>
+              <tbody id="submissionApprovalBody" class="divide-y divide-gray-150">
+                <!-- Data loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ================= TAB: CHATS (Mini Support Inbox) ================= -->
+        <div id="view-chats" class="bg-white rounded-xl border border-gray-200 shadow-sm h-[calc(100vh-8rem)] flex overflow-hidden hidden text-xs">
+          <!-- Sidebar: Conversations List -->
+          <div class="w-80 border-r border-gray-200 flex flex-col flex-shrink-0 bg-gray-50/50">
+            <div class="p-4 border-b border-gray-200 bg-white">
+              <h4 class="font-black text-gray-800 uppercase tracking-wider">Support Inbox</h4>
+              <p class="text-[10px] text-gray-400 mt-1">Real-time operator chat feeds</p>
+            </div>
+            
+            <!-- Start Chat with Any Registered User Search -->
+            <div class="p-3 border-b border-gray-200 bg-gray-50 flex items-center space-x-2">
+              <input 
+                type="text" 
+                id="searchNewChatUser"
+                placeholder="Enter username to message..." 
+                class="flex-1 border border-gray-300 rounded px-2 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white font-medium"
+              />
+              <button 
+                onclick="initiateNewChatFromSearch()"
+                class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-3 py-1 rounded transition text-[9px] uppercase tracking-wider cursor-pointer"
+              >
+                Chat
+              </button>
+            </div>
+
+            <div id="supportUserList" class="flex-1 overflow-y-auto divide-y divide-gray-150">
+              <!-- Users with active feeds load here -->
+              <p class="text-gray-455 italic p-6 text-center">No active chats in feed</p>
+            </div>
+          </div>
+
+          <!-- Main Pane: Current Thread Workspace -->
+          <div class="flex-1 flex flex-col bg-white">
+            <div id="supportChatHeader" class="h-14 border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0 bg-gray-50/10">
+              <div class="flex items-center space-x-2">
+                <span class="h-2.5 w-2.5 bg-gray-300 rounded-full inline-block" id="activeSupportUserStatusIcon"></span>
+                <span class="font-black text-gray-800 uppercase tracking-wider" id="activeSupportUser">No Active Chat Selected</span>
+              </div>
+            </div>
+
+            <!-- Messages Stream -->
+            <div id="supportMessagesStream" class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
+              <div class="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                <i data-lucide="message-square" class="h-10 w-10 text-gray-300"></i>
+                <p class="italic text-[11px]">Select a user from the Support Inbox sidebar to begin responding</p>
+              </div>
+            </div>
+
+            <!-- Typing panel input -->
+            <div id="supportChatInputPanel" class="p-4 border-t border-gray-200 flex items-center space-x-3 bg-white flex-shrink-0 hidden">
+              <!-- Image attachment button -->
+              <button 
+                type="button" 
+                onclick="triggerAdminImageAttach()"
+                title="Attach Screenshot"
+                class="p-2.5 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition cursor-pointer flex-shrink-0 border border-gray-200"
+              >
+                <i data-lucide="paperclip" class="h-4.5 w-4.5"></i>
+              </button>
+              <input type="file" id="adminImageAttachInput" accept="image/*" class="hidden" onchange="handleAdminImageSelected(event)"/>
+
+              <input 
+                type="text" 
+                id="supportMsgField"
+                placeholder="Type your support message reply... (Use Shift+Enter for multiline)"
+                onkeydown="handleSupportFieldKey(event)"
+                class="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white"
+              />
+              <button 
+                onclick="sendSupportReply()"
+                class="bg-[#131921] hover:bg-black text-white font-black px-5 py-2.5 rounded-lg transition cursor-pointer flex-shrink-0 text-[10px] uppercase tracking-wider"
+              >
+                Send Message
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB: SETTINGS ================= -->
+        <div id="view-settings" class="space-y-6 hidden">
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs p-5 space-y-4 max-w-xl">
+            <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">System Wallets & Channels Settings</h4>
+            <form id="settingsForm" class="space-y-4 text-xs">
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">USDT (TRC-20) Receiving Address</label>
+                <input type="text" id="cfgTrc20" required class="w-full border border-gray-300 rounded-lg p-2.5 font-mono"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">USDT (ERC-20) Receiving Address</label>
+                <input type="text" id="cfgErc20" required class="w-full border border-gray-300 rounded-lg p-2.5 font-mono"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">BTC (Bitcoin) Receiving Address</label>
+                <input type="text" id="cfgBtc" required class="w-full border border-gray-300 rounded-lg p-2.5 font-mono"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Telegram Channel/Support URL</label>
+                <input type="url" id="cfgTelegram" required class="w-full border border-gray-300 rounded-lg p-2.5"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-gray-500 uppercase text-[9px]">Navbar Real-time Alert Notification Banner</label>
+                <input type="text" id="cfgNotification" required class="w-full border border-gray-300 rounded-lg p-2.5"/>
+              </div>
+              <button type="submit" class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm">Save Config</button>
+            </form>
+          </div>
+
+          <!-- Desktop Notifications Settings -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xs p-5 space-y-4 max-w-xl">
+            <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Browser Notifications Preferences</h4>
+            <div class="space-y-3 text-xs">
+              <label class="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                <input type="checkbox" id="prefNotifyChat" checked onchange="saveNotifyPrefs()" class="h-4 w-4 text-amazon-gold focus:ring-amazon-gold border-gray-300 rounded"/>
+                <span class="font-bold text-gray-700">Chat Messages Notification</span>
+              </label>
+              <label class="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                <input type="checkbox" id="prefNotifySignup" checked onchange="saveNotifyPrefs()" class="h-4 w-4 text-amazon-gold focus:ring-amazon-gold border-gray-300 rounded"/>
+                <span class="font-bold text-gray-700">New Signups/Registrations Notification</span>
+              </label>
+              <label class="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                <input type="checkbox" id="prefNotifyDeposit" checked onchange="saveNotifyPrefs()" class="h-4 w-4 text-amazon-gold focus:ring-amazon-gold border-gray-300 rounded"/>
+                <span class="font-bold text-gray-700">USDT Deposits Submissions Notification</span>
+              </label>
+              <label class="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                <input type="checkbox" id="prefNotifyWithdrawal" checked onchange="saveNotifyPrefs()" class="h-4 w-4 text-amazon-gold focus:ring-amazon-gold border-gray-300 rounded"/>
+                <span class="font-bold text-gray-700">USDT Withdrawals Cashout Requests Notification</span>
+              </label>
+              <label class="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                <input type="checkbox" id="prefNotifyReview" checked onchange="saveNotifyPrefs()" class="h-4 w-4 text-amazon-gold focus:ring-amazon-gold border-gray-300 rounded"/>
+                <span class="font-bold text-gray-700">Compliance Reviews Submissions Notification</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- User Details Bada Section / Slideout Modal panel -->
+  <div id="userDetailModal" class="fixed inset-0 z-40 flex justify-end bg-black/60 backdrop-blur-xs hidden">
+    <div class="bg-white w-full max-w-4xl h-full shadow-2xl overflow-y-auto flex flex-col p-6 space-y-6 text-left">
+      <div class="flex justify-between items-center pb-4 border-b border-gray-250">
+        <h3 id="udUsername" class="text-base font-black text-gray-900 uppercase">User Dashboard Profile</h3>
+        <button onclick="closeUserDetailModal()" class="p-1 hover:bg-gray-150 rounded-full"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Profile details, IP Logs & CS Chat -->
+        <div class="space-y-6">
+          <div class="bg-gray-50 p-4 border rounded-xl space-y-3 text-xs">
+            <h4 class="font-black text-gray-800 uppercase tracking-wider">A-Z Profile Information</h4>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Username</p>
+                <p id="udProfileUsername" class="font-bold text-gray-800 mt-0.5">user</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Bound USDT Address</p>
+                <p id="udBoundUsdt" class="font-mono font-bold text-green-600 mt-0.5 select-all">None Bound</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Login Password</p>
+                <p id="udPassword" class="font-mono font-bold text-gray-800 mt-0.5 select-all">Plaintext</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Withdrawal PIN/Pass</p>
+                <p id="udWithdrawPin" class="font-mono font-bold text-red-500 mt-0.5 select-all">Plaintext</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Registration Location</p>
+                <p id="udGeo" class="font-medium text-gray-700 mt-0.5">New York, US</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gray-400 font-bold uppercase">Account Status</p>
+                <select id="udStatusSelect" onchange="updateUserStatus()" class="border border-gray-300 rounded px-1.5 py-0.5 mt-0.5 bg-white text-[10px] font-bold uppercase">
+                  <option value="pending">Pending</option>
+                  <option value="active">Active</option>
+                  <option value="restricted">Restricted</option>
+                  <option value="rejected">Reject & Delete</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- IP Logs History -->
+          <div class="bg-gray-50 p-4 border rounded-xl space-y-2 text-xs">
+            <h4 class="font-black text-gray-800 uppercase tracking-wider">Geolocation IP Audits</h4>
+            <div id="udIpLogsList" class="max-h-28 overflow-y-auto divide-y divide-gray-200">
+              <!-- Logs loaded dynamically -->
+            </div>
+          </div>
+
+          <!-- Operator Support Chat logs -->
+          <div class="bg-gray-50 p-4 border rounded-xl space-y-2 text-xs flex flex-col h-60">
+            <h4 class="font-black text-gray-800 uppercase tracking-wider">Live Telegram / CS Chat History</h4>
+            <div id="udChatLogsList" class="flex-1 overflow-y-auto space-y-2 p-2 bg-white rounded border border-gray-200">
+              <!-- Chat transcript loaded dynamically -->
+            </div>
+            <button 
+              onclick="openUserInSupportInbox()" 
+              class="w-full mt-2 bg-amazon-dark hover:bg-black text-white font-bold py-1.5 rounded uppercase tracking-wider text-[9px] transition cursor-pointer"
+            >
+              Open in Support Workspace
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Balance adjustments, Reset, Gigs category locking, Combo rule config, Direct Bonus -->
+        <div class="space-y-6">
+          <!-- Active platform balances checklist and lock category toggler -->
+          <div class="space-y-3 bg-gray-50 p-4 border border-gray-200 rounded-xl text-xs">
+            <h4 class="font-black text-gray-800 uppercase tracking-wider">Active Workspace Balances & Controls</h4>
+            <div id="udBalancesList" class="space-y-2">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+
+          <!-- Configure Combo Checkpoints -->
+          <div class="space-y-3 bg-amber-50/50 p-4 border border-amber-250 rounded-xl text-xs">
+            <h4 class="font-black text-amber-800 uppercase tracking-wider">Configure Combo Checkpoint System</h4>
+            <form id="comboRuleForm" onsubmit="saveComboRule(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <div class="sm:col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Platform</label>
+                <select id="comboPlatform" class="w-full border border-gray-300 rounded p-1 bg-white">
+                  <option value="Amazon">Amazon</option>
+                  <option value="Alibaba">Alibaba</option>
+                  <option value="Shopify">Shopify</option>
+                </select>
+              </div>
+              <div class="sm:col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Position</label>
+                <input type="number" id="comboPosition" required placeholder="e.g. 8" class="w-full border border-gray-300 rounded p-1 bg-white"/>
+              </div>
+              <div class="sm:col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Trigger ($)</label>
+                <input type="number" step="any" id="comboTrigger" required placeholder="87.00" class="w-full border border-gray-300 rounded p-1 bg-white"/>
+              </div>
+              <div class="sm:col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Profit ($)</label>
+                <input type="number" step="any" id="comboProfit" placeholder="0.00" class="w-full border border-gray-300 rounded p-1 bg-white"/>
+              </div>
+              <div class="sm:col-span-4 mt-1">
+                <button type="submit" class="w-full bg-[#131921] hover:bg-black text-white py-1.5 rounded font-bold">Apply Checkpoint Trigger</button>
+              </div>
+            </form>
+            <div class="mt-2 space-y-1">
+              <p class="text-[9px] text-gray-400 font-bold uppercase">Active Checkpoints</p>
+              <div id="udCombosList" class="space-y-1 max-h-24 overflow-y-auto">
+                <!-- Loaded dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Direct Bonus and Manual adjustments -->
+          <div class="space-y-3 bg-emerald-50/50 p-4 border border-emerald-200 rounded-xl text-xs">
+            <h4 class="font-black text-emerald-800 uppercase tracking-wider">Direct Bonus & Balance Adjuster</h4>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Workspace</label>
+                <select id="adjustPlatform" class="w-full border border-gray-300 rounded p-1.5 bg-white">
+                  <option value="Amazon">Amazon</option>
+                  <option value="Alibaba">Alibaba</option>
+                  <option value="Shopify">Shopify</option>
+                </select>
+              </div>
+              <div class="col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Amount ($)</label>
+                <input type="number" step="any" id="adjustAmount" placeholder="e.g. 50.00" class="w-full border border-gray-300 rounded p-1.5 bg-white"/>
+              </div>
+              <div class="col-span-1">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Action Type</label>
+                <select id="adjustActionType" class="w-full border border-gray-300 rounded p-1.5 bg-white">
+                  <option value="balance">Manual Adjust</option>
+                  <option value="bonus">Grant Bonus</option>
+                </select>
+              </div>
+              <div class="col-span-3">
+                <label class="text-[9px] text-gray-400 font-bold uppercase">Description / Audit Note</label>
+                <input type="text" id="adjustNote" placeholder="e.g. Campaign combo incentive bonus" class="w-full border border-gray-300 rounded p-1.5 bg-white"/>
+              </div>
+            </div>
+            <button onclick="applyFinancialAction()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold">Execute Financial Action</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // System Variables
+    const API_URL = ''; // Relative path, backend will resolve endpoints natively
+    let activeTab = 'overview';
+    let adminToken = sessionStorage.getItem('adminToken') || '';
+    let selectedUserDetailId = null;
+    let selectedSupportUserId = null;
+    let supportChatPollInterval = null;
+    let lastCheckedActivityTime = null;
+    let lastCheckedChatTime = null;
+
+    // Login Form Handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+      const errEl = document.getElementById('loginError');
+      errEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/auth/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errEl.textContent = data.error || 'Authentication failed';
+          errEl.classList.remove('hidden');
+          return;
+        }
+
+        if (data.user.role !== 'admin') {
+          errEl.textContent = 'Administrative credentials are required to enter the dashboard.';
+          errEl.classList.remove('hidden');
+          return;
+        }
+
+        adminToken = data.token;
+        sessionStorage.setItem('adminToken', adminToken);
+        initializeAdminSession();
+      } catch (err) {
+        errEl.textContent = 'API server network failure';
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    // Logout Handler
+    function handleLogout() {
+      sessionStorage.removeItem('adminToken');
+      adminToken = '';
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('mainDashboard').classList.add('hidden');
+    }
+
+    // Toggle Workspace Views
+    function switchTab(tabId) {
+      activeTab = tabId;
+      document.querySelectorAll('nav button').forEach(btn => {
+        btn.classList.remove('bg-gray-800', 'text-amazon-gold');
+        btn.classList.add('text-gray-300', 'hover:bg-gray-800', 'hover:text-white');
+      });
+      document.getElementById(`tab-${tabId}`).classList.remove('text-gray-300', 'hover:bg-gray-800', 'hover:text-white');
+      document.getElementById(`tab-${tabId}`).classList.add('bg-gray-800', 'text-amazon-gold');
+
+      document.querySelectorAll('main > div > div').forEach(section => {
+        section.classList.add('hidden');
+      });
+      document.getElementById(`view-${tabId}`).classList.remove('hidden');
+      document.getElementById('currentTabTitle').textContent = document.getElementById(`tab-${tabId}`).querySelector('span').textContent;
+
+      if (supportChatPollInterval) {
+        clearInterval(supportChatPollInterval);
+        supportChatPollInterval = null;
+      }
+
+      if (tabId === 'overview') fetchStats();
+      if (tabId === 'users') fetchUsers();
+      if (tabId === 'chats') fetchSupportChats();
+      if (tabId === 'ledgers') fetchLedgers();
+      if (tabId === 'settings') fetchSettings();
+    }
+
+    // Auth validation check
+    function checkAuth() {
+      if (adminToken) {
+        initializeAdminSession();
+      } else {
+        handleLogout();
+      }
+    }
+
+    function saveNotifyPrefs() {
+      localStorage.setItem('pref_notify_chat', document.getElementById('prefNotifyChat').checked);
+      localStorage.setItem('pref_notify_signup', document.getElementById('prefNotifySignup').checked);
+      localStorage.setItem('pref_notify_deposit', document.getElementById('prefNotifyDeposit').checked);
+      localStorage.setItem('pref_notify_withdrawal', document.getElementById('prefNotifyWithdrawal').checked);
+      localStorage.setItem('pref_notify_review', document.getElementById('prefNotifyReview').checked);
+    }
+
+    function loadNotifyPrefs() {
+      document.getElementById('prefNotifyChat').checked = localStorage.getItem('pref_notify_chat') !== 'false';
+      document.getElementById('prefNotifySignup').checked = localStorage.getItem('pref_notify_signup') !== 'false';
+      document.getElementById('prefNotifyDeposit').checked = localStorage.getItem('pref_notify_deposit') !== 'false';
+      document.getElementById('prefNotifyWithdrawal').checked = localStorage.getItem('pref_notify_withdrawal') !== 'false';
+      document.getElementById('prefNotifyReview').checked = localStorage.getItem('pref_notify_review') !== 'false';
+    }
+
+    function requestNotificationPermission() {
+      if ('Notification' in window) {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
+    }
+
+    let adminWs;
+    function connectAdminWebSocket() {
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = window.location.host;
+      const wsUrl = `${wsProto}//${wsHost}?token=${encodeURIComponent(adminToken)}`;
+      
+      adminWs = new WebSocket(wsUrl);
+
+      adminWs.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          if (message.type === 'new_order') {
+            fetchStats();
+            fetchLedgers();
+            if (message.data && message.data.type === 'signup') fetchUsers();
+            
+            const alertData = message.data;
+            let showNotif = true;
+            if (alertData.type === 'deposit') showNotif = document.getElementById('prefNotifyDeposit').checked;
+            if (alertData.type === 'withdrawal') showNotif = document.getElementById('prefNotifyWithdrawal').checked;
+            if (alertData.type === 'signup') showNotif = document.getElementById('prefNotifySignup').checked;
+            
+            if (showNotif && 'Notification' in window && Notification.permission === 'granted') {
+              if (alertData.type === 'signup') {
+                new Notification("New User Registration", {
+                  body: `${alertData.username} has registered and is awaiting approval`,
+                  tag: 'alert-signup-' + Date.now()
+                });
+              } else {
+                new Notification("New Live Transaction Request", {
+                  body: `User submitted a new pending ${alertData.type} of $${alertData.amount}`,
+                  tag: 'alert-tx-' + Date.now()
+                });
+              }
+            }
+          }
+
+          if (message.type === 'new_chat_message') {
+            fetchSupportChats(true);
+            if (selectedSupportUserId === message.data.userId) {
+              fetchSupportHistory(selectedSupportUserId, true);
+            }
+            
+            const notifyChat = document.getElementById('prefNotifyChat').checked;
+            if (notifyChat && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification("New Support Chat Message", {
+                body: message.data.text,
+                tag: 'chat-msg-' + Date.now()
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing real-time websocket message:", err);
+        }
+      };
+
+      adminWs.onclose = () => {
+        setTimeout(connectAdminWebSocket, 3000);
+      };
+    }
+
+    function initializeAdminSession() {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('mainDashboard').classList.remove('hidden');
+      lucide.createIcons();
+      loadNotifyPrefs();
+      requestNotificationPermission();
+      connectAdminWebSocket();
+      fetchStats();
+      // Low frequency fallback poll (60 seconds instead of high frequency 5s)
+      setInterval(fetchStats, 60000);
+    }
+
+    // Fetch Stats Overview
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/admin/stats', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (!res.ok) return handleLogout();
+        const data = await res.json();
+
+        document.getElementById('statTotalUsers').textContent = data.totalUsers;
+        document.getElementById('statDeposited').textContent = `$${data.totalDeposited.toFixed(2)}`;
+        document.getElementById('statPendingApprovals').textContent = data.pendingApprovals;
+
+        // Render feed
+        const logsEl = document.getElementById('activityLogs');
+        logsEl.innerHTML = data.activityFeed.map(feedItem => `
+          <div class="py-3 flex justify-between items-center">
+            <span class="font-medium text-gray-800">${feedItem.text}</span>
+            <span class="text-[10px] text-gray-400 font-mono">${new Date(feedItem.date).toLocaleTimeString()}</span>
+          </div>
+        `).join('');
+
+        // Trigger native notifications for new activities
+        if (data.activityFeed && data.activityFeed.length > 0) {
+          const newestTime = new Date(data.activityFeed[0].date).getTime();
+          if (lastCheckedActivityTime !== null) {
+            for (let i = data.activityFeed.length - 1; i >= 0; i--) {
+              const itemTime = new Date(data.activityFeed[i].date).getTime();
+              if (itemTime > lastCheckedActivityTime) {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification("Admin Panel Activity Alert", {
+                    body: data.activityFeed[i].text,
+                    tag: 'activity-' + itemTime
+                  });
+                }
+              }
+            }
+          }
+          lastCheckedActivityTime = newestTime;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Fetch User Directory
+    async function fetchUsers() {
+      try {
+        const searchVal = document.getElementById('searchUserField').value;
+        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(searchVal)}`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const users = await res.json();
+
+        const tableBody = document.getElementById('userTableBody');
+        tableBody.innerHTML = users.map(u => `
+          <tr class="hover:bg-gray-50">
+            <td class="p-4">
+              <div class="font-black text-gray-900">${u.username}</div>
+            </td>
+            <td class="p-4">
+              <div class="text-xs text-gray-600 font-mono">${u.email || '<span class="text-gray-400 italic">No email</span>'}</div>
+            </td>
+            <td class="p-4">
+              <div class="font-medium text-gray-800">${u.country !== 'Unknown' ? u.country : '<span class="text-gray-400 italic">Localhost</span>'}</div>
+              <div class="text-[10px] text-gray-400 font-mono">${u.city !== 'Unknown' ? u.city : ''}</div>
+            </td>
+            <td class="p-4">
+              <div class="flex items-center space-x-1.5">
+                <span class="font-mono text-gray-800 bg-gray-100 border px-1.5 py-0.5 rounded font-bold" id="lpw-${u.id}">••••••••</span>
+                <button onclick="togglePw('lpw-${u.id}', '${(u.password || '').replace(/'/g, '\\\'')}')" class="text-[9px] text-blue-500 hover:underline font-bold cursor-pointer">View</button>
+              </div>
+            </td>
+            <td class="p-4">
+              <div class="flex items-center space-x-1.5">
+                <span class="font-mono text-gray-800 bg-gray-100 border px-1.5 py-0.5 rounded font-bold" id="wpw-${u.id}">••••••••</span>
+                <button onclick="togglePw('wpw-${u.id}', '${(u.withdrawal_password || 'Not set').replace(/'/g, '\\\'')}')" class="text-[9px] text-blue-500 hover:underline font-bold cursor-pointer">View</button>
+              </div>
+            </td>
+            <td class="p-4 font-mono font-bold text-gray-700 tracking-wider">${u.referral_code}</td>
+            <td class="p-4">
+              <select
+                onchange="updateUserStatus('${u.id}', this.value)"
+                class="text-[10px] font-black uppercase border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amazon-gold cursor-pointer ${
+                  u.status === 'active' ? 'bg-green-50 text-green-700 border-green-300' :
+                  u.status === 'restricted' ? 'bg-red-50 text-red-700 border-red-300' :
+                  'bg-amber-50 text-amber-700 border-amber-300'
+                }"
+              >
+                <option value="pending" ${u.status === 'pending' ? 'selected' : ''}>Pending</option>
+                <option value="active" ${u.status === 'active' ? 'selected' : ''}>Accept</option>
+                <option value="restricted" ${u.status === 'restricted' ? 'selected' : ''}>Reject</option>
+              </select>
+            </td>
+            <td class="p-4 text-right space-x-2">
+              <button onclick="openUserDetailModal('${u.id}')" class="px-3 py-1.5 bg-[#131921] hover:bg-black text-white rounded font-bold text-[10px]">View Profile</button>
+              <button onclick="deleteUser('${u.id}')" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded font-bold text-[10px]">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function togglePw(elId, value) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      if (el.textContent === '••••••••') {
+        el.textContent = value;
+      } else {
+        el.textContent = '••••••••';
+      }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm('Permanently delete this user account? This action cannot be undone.')) return;
+      try {
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (res.ok) {
+          fetchUsers();
+          fetchStats();
+        } else {
+          alert('Failed to delete user.');
+        }
+      } catch (err) {
+        alert('Network error.');
+      }
+    }
+
+    // Open User Detailed Info Panel
+    async function openUserDetailModal(userId) {
+      selectedUserDetailId = userId;
+      try {
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const data = await res.json();
+
+        document.getElementById('udUsername').textContent = 'User Profile: ' + data.profile.username;
+        document.getElementById('udProfileUsername').textContent = data.profile.username;
+        document.getElementById('udBoundUsdt').textContent = data.profile.bound_usdt_address || 'None Bound';
+        document.getElementById('udPassword').textContent = data.profile.password;
+        document.getElementById('udWithdrawPin').textContent = data.profile.withdrawal_password || 'None Set';
+        document.getElementById('udGeo').textContent = `${data.profile.city}, ${data.profile.country} (IP: ${data.profile.ip_address})`;
+        document.getElementById('udStatusSelect').value = data.profile.status;
+
+        // Render IP Logs
+        const ipLogsEl = document.getElementById('udIpLogsList');
+        ipLogsEl.innerHTML = data.ipLogs.length === 0
+          ? `<p class="text-gray-400 italic py-2 text-center">No IP geolocation logs recorded</p>`
+          : data.ipLogs.map(log => `
+            <div class="py-1.5 flex justify-between items-center text-[10px] font-mono">
+              <span class="text-gray-800 font-bold">${log.ip_address}</span>
+              <span class="text-gray-500">${log.city}, ${log.country}</span>
+              <span class="text-gray-450">${new Date(log.created_at).toLocaleDateString()}</span>
+            </div>
+          `).join('');
+
+        // Render Chat History
+        const chatEl = document.getElementById('udChatLogsList');
+        chatEl.innerHTML = data.chatLogs.length === 0
+          ? `<p class="text-gray-400 italic p-4 text-center">No customer support chat logs recorded</p>`
+          : data.chatLogs.map(msg => `
+            <div class="p-2 rounded-lg text-[10px] ${msg.sender === 'admin' ? 'bg-amazon-gold/10 ml-6 border border-amazon-gold/20' : 'bg-gray-150 mr-6'}">
+              <div class="flex justify-between font-bold text-gray-500 mb-0.5 text-[8px] uppercase">
+                <span>${msg.sender}</span>
+                <span>${msg.time}</span>
+              </div>
+              <p class="text-gray-800 leading-relaxed font-sans">${msg.text}</p>
+            </div>
+          `).join('');
+        setTimeout(() => chatEl.scrollTop = chatEl.scrollHeight, 50);
+
+        // Render Platform Balances & Reset Actions
+        const balEl = document.getElementById('udBalancesList');
+        balEl.innerHTML = data.balances.map(b => `
+          <div class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-2xs">
+            <div>
+              <span class="font-black text-gray-900 uppercase">${b.platform}</span>
+              <div class="text-[9px] text-gray-500 mt-0.5">Progress: ${b.current_position || 0} / 25 reviews</div>
+            </div>
+            <div class="flex items-center space-x-3 text-right">
+              <div>
+                <div class="font-mono font-black text-green-600">$${parseFloat(b.wallet_balance).toFixed(2)}</div>
+                <div class="text-[9px] text-gray-400 uppercase mt-0.5">Total: ${b.reviews_count}</div>
+              </div>
+              <button onclick="resetUserBatch('${b.platform}')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold border border-red-200 rounded text-[9px] uppercase transition cursor-pointer">Reset Batch</button>
+            </div>
+          </div>
+        `).join('');
+
+        // Render Active Checkpoints Rules List
+        const comboEl = document.getElementById('udCombosList');
+        comboEl.innerHTML = data.comboRules.length === 0
+          ? `<p class="text-gray-455 italic py-1">No active combo trigger checkpoints</p>`
+          : data.comboRules.map(rule => `
+            <div class="flex justify-between items-center p-2 bg-white border rounded text-[10px] shadow-3xs">
+              <span class="font-black text-gray-700">${rule.platform} (Pos ${rule.position})</span>
+              <div class="flex items-center space-x-2">
+                <span class="font-mono text-amber-600 font-bold">Trigger $${parseFloat(rule.trigger_balance).toFixed(2)}</span>
+                <span class="text-gray-400">|</span>
+                <span class="font-mono text-green-600 font-bold">Profit $${parseFloat(rule.profit_override).toFixed(2)}</span>
+                <button onclick="deleteComboRule('${rule.id}')" class="text-red-500 hover:text-red-700 font-bold ml-2">Delete</button>
+              </div>
+            </div>
+          `).join('');
+
+        document.getElementById('userDetailModal').classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function closeUserDetailModal() {
+      document.getElementById('userDetailModal').classList.add('hidden');
+      selectedUserDetailId = null;
+    }
+
+    // Update User Profile Account Status Lock
+    async function updateUserStatus(userId, statusVal) {
+      const targetId = userId || selectedUserDetailId;
+      const status = statusVal || (document.getElementById('udStatusSelect') ? document.getElementById('udStatusSelect').value : null);
+      if (!targetId || !status) return;
+      try {
+        const res = await fetch(`/api/admin/users/${targetId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (res.ok) {
+          if (!userId) {
+            // Called from detail modal
+            alert(status === 'rejected' ? 'User successfully rejected and deleted.' : 'User status successfully updated.');
+            if (status === 'rejected') closeUserDetailModal();
+          }
+          fetchUsers();
+          fetchStats();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Add Combo Checkpoint Rules
+    async function saveComboRule(e) {
+      e.preventDefault();
+      if (!selectedUserDetailId) return;
+      const platform = document.getElementById('comboPlatform').value;
+      const position = parseInt(document.getElementById('comboPosition').value);
+      const triggerBalance = parseFloat(document.getElementById('comboTrigger').value);
+      const profitOverride = parseFloat(document.getElementById('comboProfit').value || 0.00);
+
+      try {
+        const res = await fetch(`/api/admin/users/${selectedUserDetailId}/combos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ platform, position, triggerBalance, profitOverride })
+        });
+        if (res.ok) {
+          alert('Combo checkpoint rule configured.');
+          document.getElementById('comboRuleForm').reset();
+          openUserDetailModal(selectedUserDetailId);
+        } else {
+          alert('Failed to configure checkpoint.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Delete Combo Rule
+    async function deleteComboRule(ruleId) {
+      if (!selectedUserDetailId || !confirm('Are you sure you want to delete this combo rule?')) return;
+      try {
+        const res = await fetch(`/api/admin/users/${selectedUserDetailId}/combos/${ruleId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        if (res.ok) {
+          openUserDetailModal(selectedUserDetailId);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Reset Review Batch progress position
+    async function resetUserBatch(platform) {
+      if (!selectedUserDetailId || !confirm(`Reset review batch progression for ${platform}?`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${selectedUserDetailId}/reset-batch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ platform })
+        });
+        if (res.ok) {
+          alert('Progress batch successfully reset.');
+          openUserDetailModal(selectedUserDetailId);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Execute direct financial bonus or adjustment
+    async function applyFinancialAction() {
+      if (!selectedUserDetailId) return;
+      const platform = document.getElementById('adjustPlatform').value;
+      const amount = parseFloat(document.getElementById('adjustAmount').value);
+      const actionType = document.getElementById('adjustActionType').value;
+      const note = document.getElementById('adjustNote').value;
+
+      if (isNaN(amount) || amount <= 0) {
+        return alert('Please enter a positive transaction amount.');
+      }
+
+      const endpoint = actionType === 'bonus' 
+        ? `/api/admin/users/${selectedUserDetailId}/bonus` 
+        : `/api/admin/users/${selectedUserDetailId}/balance`;
+
+      const method = actionType === 'bonus' ? 'POST' : 'PUT';
+
+      try {
+        const res = await fetch(endpoint, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ platform, amount, note })
+        });
+        if (res.ok) {
+          alert('Transaction completed successfully.');
+          document.getElementById('adjustAmount').value = '';
+          document.getElementById('adjustNote').value = '';
+          openUserDetailModal(selectedUserDetailId);
+        } else {
+          const err = await res.json();
+          alert('Action failed: ' + (err.error || 'Unknown error'));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // ================================= CHAT INBOX SYSTEM =================================
+    async function fetchSupportChats(silent = false) {
+      try {
+        const res = await fetch('/api/admin/chats', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const threads = await res.json();
+
+        const userListEl = document.getElementById('supportUserList');
+        if (threads.length === 0) {
+          userListEl.innerHTML = `<p class="text-gray-455 italic p-6 text-center">No active chats in support feed</p>`;
+          return;
+        }
+
+        userListEl.innerHTML = threads.map(t => {
+          const isSelected = selectedSupportUserId === t.userId;
+          const isImage = t.text.startsWith('/uploads/') || t.text.startsWith('data:image/');
+          const previewText = isImage ? '🖼️ [Attachment Image]' : t.text;
+          const unreadDot = t.sender === 'user' ? `<span class="h-2 w-2 bg-amazon-orange rounded-full inline-block"></span>` : '';
+
+          return `
+            <div 
+              onclick="selectChatUser('${t.userId}', '${t.username}')"
+              class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-150 transition-colors ${isSelected ? 'bg-amber-50/70 border-l-4 border-amazon-orange' : 'bg-white'}"
+            >
+              <div class="space-y-1.5 flex-1 min-w-0 pr-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-black text-gray-900 uppercase tracking-tight truncate">${t.username}</span>
+                  <span class="text-[9px] text-gray-400 font-mono flex-shrink-0">${t.time}</span>
+                </div>
+                <p class="text-[10px] text-gray-505 truncate leading-relaxed font-medium">
+                  ${t.sender === 'admin' ? '<span class="text-gray-400 uppercase font-black text-[8px] mr-1">You:</span>' : ''}${previewText}
+                </p>
+              </div>
+              <div class="flex-shrink-0">${unreadDot}</div>
+            </div>
+          `;
+        }).join('');
+
+        // Trigger native notifications for new chats
+        if (threads.length > 0) {
+          const newestTime = new Date(threads[0].created_at).getTime();
+          if (lastCheckedChatTime !== null) {
+            for (let i = threads.length - 1; i >= 0; i--) {
+              const threadTime = new Date(threads[i].created_at).getTime();
+              if (threadTime > lastCheckedChatTime && threads[i].sender === 'user') {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  const isImg = threads[i].text.startsWith('/uploads/') || threads[i].text.startsWith('data:image/');
+                  new Notification(`Support Chat from ${threads[i].username}`, {
+                    body: isImg ? "🖼️ Sent an image attachment proof" : threads[i].text,
+                    tag: 'chat-' + threadTime
+                  });
+                }
+              }
+            }
+          }
+          lastCheckedChatTime = newestTime;
+        }
+
+        // Schedule periodic polls
+        if (!silent && !supportChatPollInterval) {
+          supportChatPollInterval = setInterval(() => {
+            fetchSupportChats(true);
+            if (selectedSupportUserId) {
+              fetchSupportHistory(selectedSupportUserId, true);
+            }
+          }, 4000);
+        }
+      } catch (err) {
+        console.error('Failed to fetch support chat list:', err);
+      }
+    }
+
+    async function selectChatUser(userId, username) {
+      selectedSupportUserId = userId;
+      
+      document.getElementById('activeSupportUser').textContent = username;
+      document.getElementById('activeSupportUserStatusIcon').className = 'h-2.5 w-2.5 bg-green-500 rounded-full inline-block animate-pulse';
+      document.getElementById('supportChatInputPanel').classList.remove('hidden');
+      
+      // Update styling highlight inside sidebar
+      document.querySelectorAll('#supportUserList > div').forEach(div => {
+        div.classList.remove('bg-amber-50/70', 'border-l-4', 'border-amazon-orange');
+        div.classList.add('bg-white');
+      });
+      
+      // Fetch thread log history
+      fetchSupportHistory(userId);
+    }
+
+    async function fetchSupportHistory(userId, silent = false) {
+      try {
+        const res = await fetch(`/api/admin/chats/${userId}`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const messages = await res.json();
+
+        const streamEl = document.getElementById('supportMessagesStream');
+        if (messages.length === 0) {
+          streamEl.innerHTML = `<p class="text-gray-455 italic p-6 text-center">Empty chat conversation thread</p>`;
+          return;
+        }
+
+        const currentScroll = streamEl.scrollHeight - streamEl.scrollTop;
+
+        streamEl.innerHTML = messages.map(m => {
+          const isImage = m.text.startsWith('/uploads/') || m.text.startsWith('data:image/');
+          const content = isImage 
+            ? `<img src="${m.text}" class="max-w-xs rounded-lg border shadow-3xs cursor-zoom-in mt-1 hover:brightness-95 transition-all" onclick="window.open('${m.text}', '_blank')"/>` 
+            : `<p class="leading-relaxed font-medium whitespace-pre-wrap">${m.text}</p>`;
+
+          return `
+            <div class="flex flex-col ${m.sender === 'admin' ? 'items-end' : 'items-start'} mt-3">
+              <div class="max-w-md p-3.5 rounded-2xl shadow-3xs text-[11px] ${m.sender === 'admin' ? 'bg-amazon-dark text-white rounded-br-none' : 'bg-gray-150 text-gray-800 rounded-bl-none'}">
+                ${content}
+              </div>
+              <span class="text-[9px] text-gray-400 font-mono mt-1 px-1.5">${m.time}</span>
+            </div>
+          `;
+        }).join('');
+
+        // Auto-scroll logic
+        if (!silent || currentScroll < 120) {
+          streamEl.scrollTop = streamEl.scrollHeight;
+        }
+      } catch (err) {
+        console.error('Failed to load support history:', err);
+      }
+    }
+
+    async function sendSupportReply() {
+      if (!selectedSupportUserId) return;
+      const inputEl = document.getElementById('supportMsgField');
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      inputEl.value = '';
+
+      // Optimistically append reply in chat workspace instantly!
+      const streamEl = document.getElementById('supportMessagesStream');
+      const timeVal = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const optHtml = `
+        <div class="flex flex-col items-end mt-3">
+          <div class="max-w-md p-3.5 rounded-2xl shadow-3xs text-[11px] bg-amazon-dark text-white rounded-br-none">
+            <p class="leading-relaxed font-medium whitespace-pre-wrap">${text}</p>
+          </div>
+          <span class="text-[9px] text-gray-400 font-mono mt-1 px-1.5">${timeVal}</span>
+        </div>
+      `;
+      streamEl.insertAdjacentHTML('beforeend', optHtml);
+      streamEl.scrollTop = streamEl.scrollHeight;
+
+      try {
+        const res = await fetch(`/api/admin/chats/${selectedSupportUserId}/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({
+            text: text,
+            time: timeVal
+          })
+        });
+
+        if (res.ok) {
+          fetchSupportHistory(selectedSupportUserId, true);
+          fetchSupportChats(true);
+        }
+      } catch (err) {
+        console.error('Failed to send support reply:', err);
+      }
+    }
+
+    function handleSupportFieldKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendSupportReply();
+      }
+    }
+
+    async function initiateNewChatFromSearch() {
+      const username = document.getElementById('searchNewChatUser').value.trim();
+      if (!username) {
+        alert('Please enter a username to start chat.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(username)}`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const users = await res.json();
+        
+        const match = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (!match) {
+          alert('No user found matching that username.');
+          return;
+        }
+
+        document.getElementById('searchNewChatUser').value = '';
+        selectChatUser(match.id, match.username);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function openUserInSupportInbox() {
+      const username = document.getElementById('udProfileUsername').textContent;
+      const userId = selectedUserDetailId;
+      if (!userId || !username) return;
+
+      closeUserDetailModal();
+      switchTab('chats');
+      selectChatUser(userId, username);
+    }
+
+    // Attach Image controllers
+    function triggerAdminImageAttach() {
+      document.getElementById('adminImageAttachInput').click();
+    }
+
+    async function handleAdminImageSelected(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert("File is too large. Please select an image under 10MB.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result;
+        try {
+          const statusEl = document.getElementById('supportMsgField');
+          statusEl.placeholder = 'Uploading attachment image... Please wait...';
+          statusEl.disabled = true;
+
+          const res = await fetch('/api/chat/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({ image: base64 })
+          });
+          const data = await res.json();
+
+          statusEl.placeholder = 'Type your support message reply...';
+          statusEl.disabled = false;
+
+          if (res.ok) {
+            // Optimistically render image in chat list instantly!
+            const streamEl = document.getElementById('supportMessagesStream');
+            const timeVal = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const optHtml = `
+              <div class="flex flex-col items-end mt-3">
+                <div class="max-w-md p-3.5 rounded-2xl shadow-3xs text-[11px] bg-amazon-dark text-white rounded-br-none">
+                  <img src="${data.imageUrl}" class="max-w-xs rounded-lg border shadow-3xs cursor-zoom-in mt-1 hover:brightness-95 transition-all" onclick="window.open('${data.imageUrl}', '_blank')"/>
+                </div>
+                <span class="text-[9px] text-gray-400 font-mono mt-1 px-1.5">${timeVal}</span>
+              </div>
+            `;
+            streamEl.insertAdjacentHTML('beforeend', optHtml);
+            streamEl.scrollTop = streamEl.scrollHeight;
+
+            // Send message containing the static URL
+            await fetch(`/api/admin/chats/${selectedSupportUserId}/send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
+              },
+              body: JSON.stringify({
+                text: data.imageUrl,
+                time: timeVal
+              })
+            });
+            fetchSupportHistory(selectedSupportUserId, true);
+            fetchSupportChats(true);
+          } else {
+            alert('Image upload failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Failed to connect to uploader server.');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Scrape Amazon Product link utility
+    async function scrapeAmazonProduct() {
+      const url = document.getElementById('scrapeUrlField').value;
+      const statusEl = document.getElementById('scrapeStatusMsg');
+      const fetchBtn = document.getElementById('scrapeFetchBtn');
+
+      if (!url) {
+        alert('Please paste a valid Amazon product link first.');
+        return;
+      }
+
+      statusEl.textContent = '⏳ Scraping product details from Amazon... Please wait...';
+      statusEl.classList.remove('hidden', 'text-red-500', 'text-green-600');
+      statusEl.classList.add('text-gray-500');
+      fetchBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/scrape-amazon', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          statusEl.textContent = '❌ Error: ' + (data.error || 'Failed to extract Amazon metadata.');
+          statusEl.classList.remove('text-gray-500');
+          statusEl.classList.add('text-red-500');
+          return;
+        }
+
+        // Autofill the form inputs!
+        document.getElementById('prodTitle').value = data.title;
+        document.getElementById('prodImage').value = data.imageUrl;
+        document.getElementById('prodLink').value = url;
+        document.getElementById('prodPlatform').value = 'Amazon';
+
+        const commission = Number((data.price * 0.04).toFixed(2)) || 1.50;
+        document.getElementById('prodPayout').value = commission > 0.5 ? commission : 1.50;
+
+        statusEl.textContent = '✓ Successfully populated Title, Image, Merchant Link, and estimated payout!';
+        statusEl.classList.remove('text-gray-500');
+        statusEl.classList.add('text-green-600');
+      } catch (err) {
+        statusEl.textContent = '❌ Scraper connection failure.';
+        statusEl.classList.remove('text-gray-500');
+        statusEl.classList.add('text-red-500');
+        console.error(err);
+      } finally {
+        fetchBtn.disabled = false;
+      }
+    }
+
+    // Add Product Form Submit
+    document.getElementById('createProductForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const platform = document.getElementById('prodPlatform').value;
+      const title = document.getElementById('prodTitle').value;
+      const category = document.getElementById('prodCategory').value;
+      const imageUrl = document.getElementById('prodImage').value;
+      const payout = parseFloat(document.getElementById('prodPayout').value);
+      const difficulty = document.getElementById('prodDifficulty').value;
+      const wordLimit = parseInt(document.getElementById('prodWordLimit').value);
+      const externalLink = document.getElementById('prodLink').value;
+
+      try {
+        const res = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ platform, title, category, imageUrl, payout, difficulty, wordLimit, externalLink })
+        });
+
+        if (res.ok) {
+          alert('Product campaign successfully generated.');
+          document.getElementById('createProductForm').reset();
+        } else {
+          alert('Failed to upload product.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // Fetch Ledgers Lists
+    async function fetchLedgers() {
+      try {
+        // 1. Fetch Deposits
+        const depRes = await fetch('/api/admin/deposits', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const deposits = await depRes.json();
+        const depBody = document.getElementById('depositApprovalBody');
+        depBody.innerHTML = deposits.length === 0 
+          ? `<tr><td colspan="6" class="p-8 text-center text-gray-400 italic">No pending deposit requests queued</td></tr>`
+          : deposits.map(d => `
+            <tr>
+              <td class="p-4">
+                <div class="font-bold text-gray-900">${d.profiles?.username || 'Unknown'}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${d.ip_address || '127.0.0.1'}</div>
+              </td>
+              <td class="p-4 font-black uppercase text-gray-700">${d.platform}</td>
+              <td class="p-4 font-mono font-bold text-gray-800">${d.protocol}</td>
+              <td class="p-4 font-mono font-black text-green-600">$${parseFloat(d.amount).toFixed(2)}</td>
+              <td class="p-4 font-mono text-gray-500 select-all">${d.tx_hash}</td>
+              <td class="p-4 text-right space-x-2">
+                <button onclick="auditDeposit('${d.id}', 'Approved')" class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded text-[9px] uppercase">Approve</button>
+                <button onclick="auditDeposit('${d.id}', 'Rejected')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[9px] uppercase">Reject</button>
+              </td>
+            </tr>
+          `).join('');
+
+        // 2. Fetch Withdrawals
+        const wRes = await fetch('/api/admin/withdrawals', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const withdrawals = await wRes.json();
+        const wBody = document.getElementById('withdrawApprovalBody');
+        wBody.innerHTML = withdrawals.length === 0 
+          ? `<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No pending withdrawal cashouts queued</td></tr>`
+          : withdrawals.map(w => `
+            <tr>
+              <td class="p-4">
+                <div class="font-bold text-gray-900">${w.profiles?.username || 'Unknown'}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${w.ip_address || '127.0.0.1'}</div>
+              </td>
+              <td class="p-4 font-mono font-black text-rose-600">$${parseFloat(w.amount).toFixed(2)}</td>
+              <td class="p-4 font-mono text-gray-600 select-all">${w.address}</td>
+              <td class="p-4 text-gray-450">${new Date(w.created_at).toLocaleDateString()}</td>
+              <td class="p-4 text-right space-x-2">
+                <button onclick="auditWithdrawal('${w.id}', 'Approved')" class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded text-[9px] uppercase">Approve</button>
+                <button onclick="auditWithdrawal('${w.id}', 'Rejected')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[9px] uppercase">Reject</button>
+              </td>
+            </tr>
+          `).join('');
+
+        // 3. Fetch compliance submissions
+        const subRes = await fetch('/api/admin/submissions', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const subs = await subRes.json();
+        const subBody = document.getElementById('submissionApprovalBody');
+        subBody.innerHTML = subs.length === 0 
+          ? `<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No pending review compliance checks queued</td></tr>`
+          : subs.map(s => `
+            <tr>
+              <td class="p-4">
+                <div class="font-bold text-gray-900">${s.profiles?.username}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${s.user_id}</div>
+              </td>
+              <td class="p-4">
+                <div class="font-bold text-gray-800 line-clamp-1">${s.products?.title}</div>
+                <span class="inline-block px-1.5 py-0.5 bg-gray-150 rounded text-[9px] font-black uppercase text-gray-600">${s.products?.platform}</span>
+              </td>
+              <td class="p-4 font-mono text-gray-700 select-all font-bold">${s.order_id}</td>
+              <td class="p-4 text-gray-500 max-w-sm"><p class="line-clamp-2 leading-relaxed">${s.review_text}</p></td>
+              <td class="p-4 text-right space-x-2">
+                <button onclick="auditSubmission('${s.id}', 'Completed')" class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded text-[9px] uppercase">Approve</button>
+                <button onclick="auditSubmission('${s.id}', 'Rejected')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[9px] uppercase">Reject</button>
+              </td>
+            </tr>
+          `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Audits processing functions
+    async function auditDeposit(id, status) {
+      if (!confirm(`Are you sure you want to set status to ${status}?`)) return;
+      try {
+        const res = await fetch(`/api/admin/deposits/${id}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (res.ok) {
+          alert('Deposit audited.');
+          fetchLedgers();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function auditWithdrawal(id, status) {
+      if (!confirm(`Are you sure you want to set status to ${status}?`)) return;
+      const platform = prompt('Please confirm which platform (Amazon/Alibaba/Shopify) this withdrawal was initiated on (required for processing potential refunds):', 'Amazon');
+      if (!platform) return;
+
+      try {
+        const res = await fetch(`/api/admin/withdrawals/${id}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ status, platform })
+        });
+        if (res.ok) {
+          alert('Withdrawal audited.');
+          fetchLedgers();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function auditSubmission(id, status) {
+      if (!confirm(`Are you sure you want to set compliance review to ${status}?`)) return;
+      try {
+        const res = await fetch(`/api/admin/submissions/${id}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (res.ok) {
+          alert('Review audited.');
+          fetchLedgers();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Fetch config settings
+    async function fetchSettings() {
+      try {
+        const res = await fetch('/api/admin/settings', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const config = await res.json();
+
+        document.getElementById('cfgTrc20').value = config.trc20_address || '';
+        document.getElementById('cfgErc20').value = config.erc20_address || '';
+        document.getElementById('cfgBtc').value = config.btc_address || '';
+        document.getElementById('cfgTelegram').value = config.telegram_link || '';
+        document.getElementById('cfgNotification').value = config.notification_banner || '';
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Save Settings Config
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const trc20_address = document.getElementById('cfgTrc20').value;
+      const erc20_address = document.getElementById('cfgErc20').value;
+      const btc_address = document.getElementById('cfgBtc').value;
+      const telegram_link = document.getElementById('cfgTelegram').value;
+      const notification_banner = document.getElementById('cfgNotification').value;
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({
+            settings: {
+              trc20_address,
+              erc20_address,
+              btc_address,
+              telegram_link,
+              notification_banner
+            }
+          })
+        });
+
+        if (res.ok) {
+          alert('System config successfully updated.');
+          fetchSettings();
+        } else {
+          alert('Failed to update config.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // On Load Initialization
+    checkAuth();
+  </script>
+</body>
+</html>

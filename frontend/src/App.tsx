@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import UnderReviewPage from './pages/UnderReviewPage';
-import DashboardPage from './pages/DashboardPage';
 import { mockProducts } from './data';
+
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const UnderReviewPage = lazy(() => import('./pages/UnderReviewPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'landing' | 'register' | 'under-review' | 'login' | 'dashboard'>(() => {
@@ -17,7 +18,7 @@ export default function App() {
     return 'landing';
   });
   const [username, setUsername] = useState(() => {
-    return localStorage.getItem('reviewer_session_username') || 'demo_reviewer';
+    return localStorage.getItem('reviewer_session_username') || '';
   });
   const [email, setEmail] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -84,47 +85,53 @@ export default function App() {
 
       {/* Main View Router */}
       <div className="flex-1">
-        {currentView === 'landing' && (
-          <LandingPage
-            onNavigateToLogin={() => setCurrentView('login')}
-            onNavigateToRegister={() => setCurrentView('register')}
-            showToast={showToast}
-          />
-        )}
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] text-gray-500 font-bold text-xs tracking-wider uppercase font-mono">
+            Loading secure reviewer terminal...
+          </div>
+        }>
+          {currentView === 'landing' && (
+            <LandingPage
+              onNavigateToLogin={() => setCurrentView('login')}
+              onNavigateToRegister={() => setCurrentView('register')}
+              showToast={showToast}
+            />
+          )}
 
-        {currentView === 'register' && (
-          <RegisterPage
-            onRegisterSuccess={handleRegisterSuccess}
-            onNavigateToLogin={() => setCurrentView('login')}
-            onNavigateHome={() => setCurrentView('landing')}
-          />
-        )}
+          {currentView === 'register' && (
+            <RegisterPage
+              onRegisterSuccess={handleRegisterSuccess}
+              onNavigateToLogin={() => setCurrentView('login')}
+              onNavigateHome={() => setCurrentView('landing')}
+            />
+          )}
 
-        {currentView === 'under-review' && (
-          <UnderReviewPage
-            username={username}
-            onApproveAndNavigateToLogin={handleAdminApproval}
-            onNavigateHome={() => setCurrentView('landing')}
-          />
-        )}
+          {currentView === 'under-review' && (
+            <UnderReviewPage
+              username={username}
+              onApproveAndNavigateToLogin={handleAdminApproval}
+              onNavigateHome={() => setCurrentView('landing')}
+            />
+          )}
 
-        {currentView === 'login' && (
-          <LoginPage
-            onLoginSuccess={handleLoginSuccess}
-            onNavigateToRegister={() => setCurrentView('register')}
-            onNavigateHome={() => setCurrentView('landing')}
-            defaultUsername={username}
-          />
-        )}
+          {currentView === 'login' && (
+            <LoginPage
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToRegister={() => setCurrentView('register')}
+              onNavigateHome={() => setCurrentView('landing')}
+              defaultUsername={username}
+            />
+          )}
 
-        {currentView === 'dashboard' && (
-          <DashboardPage
-            username={username}
-            products={mockProducts}
-            onLogout={handleLogout}
-            showToast={showToast}
-          />
-        )}
+          {currentView === 'dashboard' && (
+            <DashboardPage
+              username={username}
+              products={mockProducts}
+              onLogout={handleLogout}
+              showToast={showToast}
+            />
+          )}
+        </Suspense>
       </div>
 
     </div>
