@@ -8,8 +8,15 @@ router.post('/deposit', authenticateToken, async (req, res) => {
     try {
         const userId = req.user?.id;
         const { platform, protocol, amount, txHash, remark, currency, cryptoAmount } = req.body;
-        if (!platform || !protocol || !amount || !txHash) {
-            return res.status(400).json({ error: 'Platform, protocol, amount, and transaction hash are required' });
+        if (!platform || !protocol || !amount) {
+            return res.status(400).json({ error: 'Platform, protocol, and amount are required' });
+        }
+        if (!txHash || txHash.trim() === '') {
+            return res.status(400).json({ error: 'TXID required' });
+        }
+        const validNetworks = ['TRC-20', 'ERC-20', 'BTC', 'ERC-25'];
+        if (!validNetworks.includes(protocol)) {
+            return res.status(400).json({ error: 'Invalid network selected' });
         }
         const numericAmount = parseFloat(amount);
         if (isNaN(numericAmount) || numericAmount <= 0) {
@@ -18,10 +25,6 @@ router.post('/deposit', authenticateToken, async (req, res) => {
         const normalizedProtocol = protocol === 'ERC-25' ? 'ERC-20' : protocol;
         const normalizedCurrency = String(currency || (normalizedProtocol === 'BTC' ? 'BTC' : 'USDT')).toUpperCase();
         const normalizedCryptoAmount = parseFloat(cryptoAmount ?? amount);
-        const minimumDeposit = platform === 'Amazon' ? 20 : platform === 'Alibaba' ? 299 : null;
-        if (minimumDeposit !== null && numericAmount < minimumDeposit) {
-            return res.status(400).json({ error: `${platform} requires a minimum deposit of $${minimumDeposit.toFixed(2)} to unlock.` });
-        }
         // Capture requester IP address
         let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
         if (clientIp.includes(','))
@@ -73,7 +76,7 @@ router.post('/deposit', authenticateToken, async (req, res) => {
             if (error.code === '23505') {
                 return res.status(400).json({ error: 'This transaction hash (TxID) has already been submitted.' });
             }
-            if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+            if (error.message?.includes('column') && (error.message?.includes('does not exist') || error.message?.includes('schema cache') || error.code === '42703')) {
                 const fallbackResult = await supabase
                     .from('deposits')
                     .insert({
@@ -127,8 +130,8 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Amount and target platform are required' });
         }
         const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount) || numericAmount < 10.00) {
-            return res.status(400).json({ error: 'Minimum withdrawal amount is $10.00' });
+        if (isNaN(numericAmount) || numericAmount < 1.00) {
+            return res.status(400).json({ error: 'Minimum withdrawal is 1 USDT' });
         }
         // Capture requester IP address
         let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
@@ -182,9 +185,10 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
             .insert({
             user_id: userId,
             amount: numericAmount,
-            address: boundAddress,
+            address: boundAddress + '|' + platform,
             ip_address: clientIp,
-            status: 'Pending'
+            status: 'Pending',
+            platform: platform
         })
             .select()
             .single();
@@ -213,11 +217,12 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
 router.get('/history', authenticateToken, async (req, res) => {
     try {
         const userId = req.user?.id;
-        // Fetch user's deposits
+        // Fetch user's deposits (exclude bonus grants — those are separate)
         const { data: deposits } = await supabase
             .from('deposits')
             .select('*')
             .eq('user_id', userId)
+            .neq('protocol', 'BONUS')
             .order('created_at', { ascending: false });
         // Fetch user's withdrawals
         const { data: withdrawals } = await supabase
@@ -239,14 +244,20 @@ router.get('/history', authenticateToken, async (req, res) => {
             date: new Date(dep.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
             details: `${dep.protocol} ${dep.currency || (dep.protocol === 'BTC' ? 'BTC' : 'USDT')} - Hash: ${dep.tx_hash?.substring(0, 8) || 'N/A'}...`
         }));
-        const formattedWithdrawals = (withdrawals || []).map((w) => ({
-            id: w.id,
-            type: 'Withdrawal',
-            amount: parseFloat(w.amount),
-            status: w.status,
-            date: new Date(w.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-            details: `Wallet Address: ${w.address.substring(0, 8)}...`
-        }));
+        const formattedWithdrawals = (withdrawals || []).map((w) => {
+            const parts = (w.address || '').split('|');
+            const rawAddress = parts[0] || '';
+            const platformName = parts[1] || 'Amazon';
+            return {
+                id: w.id,
+                type: 'Withdrawal',
+                platform: platformName,
+                amount: parseFloat(w.amount),
+                status: w.status,
+                date: new Date(w.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+                details: `Wallet Address: ${rawAddress.substring(0, 8)}...`
+            };
+        });
         const history = [...formattedDeposits, ...formattedWithdrawals].sort((a, b) => {
             return new Date(b.date).getTime() - new Date(a.date).getTime();
         });

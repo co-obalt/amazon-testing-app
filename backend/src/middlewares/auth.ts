@@ -8,6 +8,7 @@ export interface AuthenticatedRequest extends Request {
     id: string;
     username: string;
     role: string;
+    isRestricted?: boolean;
   };
 }
 
@@ -29,7 +30,7 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
 }
 
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'super_admin')) {
     return res.status(403).json({ error: 'Administrative privileges required' });
   }
   next();

@@ -42,10 +42,10 @@ export default function UnderReviewPage({
           <div className="space-y-2">
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Application Under Review</h1>
             <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
-              Hello <span className="font-bold text-gray-900">{username}</span>! To maintain a highly premium verified panelist pool, our administration team is currently evaluating your credentials and invite code.
+              Hello <span className="font-bold text-gray-900">{username}</span>! To maintain a highly premium verified panelist pool, our review team is currently evaluating your credentials and invite code. This security auditing process typically completes within 24 hours.
             </p>
           </div>
-
+ 
           {/* Secure Evaluation Pipeline Tracker */}
           <div className="bg-gray-50 rounded-xl border border-gray-150 p-4 text-left space-y-3.5 max-w-md mx-auto">
             <p className="text-[10px] font-mono font-extrabold text-gray-400 uppercase tracking-widest border-b border-gray-200/80 pb-1.5">
@@ -62,7 +62,7 @@ export default function UnderReviewPage({
                 Verified
               </span>
             </div>
-
+ 
             <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
               <span className="flex items-center space-x-2.5">
                 <span className="h-5 w-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-[10px] font-black">✓</span>
@@ -72,24 +72,24 @@ export default function UnderReviewPage({
                 Passed
               </span>
             </div>
-
+ 
             <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
               <span className="flex items-center space-x-2.5">
                 <span className="h-5 w-5 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-[10px] font-black animate-pulse">⏳</span>
-                <span>Administrator Verification</span>
+                <span>Compliance Review</span>
               </span>
               <span className="text-amber-500 font-extrabold text-[10px] uppercase font-mono bg-amber-50 px-2 py-0.5 rounded border border-amber-150 animate-pulse">
                 In Progress
               </span>
             </div>
           </div>
-
+ 
           <div className="pt-6 border-t border-gray-100 space-y-3">
             <p className="text-[10px] font-mono font-bold text-gray-400 tracking-wider">
-              ADMINISTRATOR VERIFICATION
+              COMPLIANCE TEAM AUDIT
             </p>
             <p className="text-[10px] text-gray-400 leading-normal max-w-xs mx-auto">
-              Our review team will approve your account after checking the submitted profile and invite details.
+              Our review team will audit and process your registration. New accounts are processed in up to 24 hours.
             </p>
           </div>
         </motion.div>

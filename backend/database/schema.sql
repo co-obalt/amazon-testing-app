@@ -10,22 +10,42 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  phone TEXT,
   email TEXT,
   password TEXT NOT NULL, -- Stored as plaintext (as requested by user)
   withdrawal_password TEXT, -- Stored as plaintext (as requested by user)
-  role TEXT NOT NULL DEFAULT 'user', -- 'user' | 'admin'
   country TEXT DEFAULT 'Unknown',
   city TEXT DEFAULT 'Unknown',
   ip_address TEXT DEFAULT '127.0.0.1',
-  status TEXT NOT NULL DEFAULT 'pending', -- 'active' | 'restricted' | 'pending'
+  status TEXT NOT NULL DEFAULT 'pending', -- 'active' | 'restricted' | 'pending' | 'rejected'
   referral_code TEXT UNIQUE NOT NULL,
   referred_by TEXT,
   bound_usdt_address TEXT, -- Bound USDT Withdrawal Address (locked to profile)
+  platform TEXT, -- Bound workspace platform network ('Amazon' | 'Alibaba' | 'Shopify')
+  profile_photo TEXT, -- Profile Photo (Base64 data URL string)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Index for username lookup
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
+
+-- 1.5. Admins Table (for administrative nodes)
+CREATE TABLE IF NOT EXISTS admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  email TEXT,
+  phone TEXT,
+  password TEXT NOT NULL, -- Stored as plaintext (as requested by user)
+  ip_address TEXT DEFAULT '127.0.0.1',
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'active' | 'rejected'
+  is_restricted BOOLEAN DEFAULT FALSE, -- Restricted admin account flag
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Index for admin username lookup
+CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 
 -- 2. Platform Balances Table (tracks progress parameters per user category)
 CREATE TABLE IF NOT EXISTS platform_balances (
@@ -48,11 +68,9 @@ CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   platform TEXT NOT NULL, -- 'Amazon' | 'Alibaba' | 'Shopify'
   title TEXT NOT NULL,
-  category TEXT NOT NULL,
   image_url TEXT NOT NULL,
-  payout NUMERIC(10, 2) NOT NULL DEFAULT 1.00,
-  difficulty TEXT NOT NULL, -- 'Easy' | 'Medium' | 'Expert'
-  word_limit INT NOT NULL DEFAULT 20,
+  price NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  payout NUMERIC(10, 2) NOT NULL DEFAULT 1.00, -- Stores the commission payout amount
   external_link TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -79,6 +97,8 @@ CREATE TABLE IF NOT EXISTS deposits (
   platform TEXT NOT NULL, -- 'Amazon' | 'Alibaba' | 'Shopify'
   protocol TEXT NOT NULL, -- 'TRC-20' | 'ERC-20' | 'BTC'
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+  crypto_amount NUMERIC(20, 8), -- Loaded via network check
+  currency TEXT, -- Loaded via network check
   tx_hash TEXT UNIQUE NOT NULL,
   remark TEXT,
   ip_address TEXT DEFAULT '127.0.0.1', -- Captured remote IP during request
@@ -90,6 +110,7 @@ CREATE TABLE IF NOT EXISTS deposits (
 CREATE TABLE IF NOT EXISTS withdrawals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL DEFAULT 'Amazon', -- Platform context
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
   address TEXT NOT NULL, -- Matched to profile bound address
   ip_address TEXT DEFAULT '127.0.0.1', -- Captured remote IP during request
@@ -135,7 +156,20 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 10. Global System Settings Configuration Table
+-- 10. Bonus Grants Ledger Table (admin-granted incentive bonuses, separate from deposits)
+CREATE TABLE IF NOT EXISTS bonus_grants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+  note TEXT,
+  granted_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Index for bonus grants user lookup
+CREATE INDEX IF NOT EXISTS idx_bonus_grants_user ON bonus_grants(user_id);
+
+-- 11. Global System Settings Configuration Table
 CREATE TABLE IF NOT EXISTS system_config (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -155,12 +189,17 @@ ON CONFLICT (key) DO NOTHING;
 -- ========================================
 CREATE INDEX IF NOT EXISTS idx_chat_messages_user_created ON chat_messages(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_referral_code ON profiles(referral_code);
 CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
 CREATE INDEX IF NOT EXISTS idx_deposits_status ON deposits(status);
 CREATE INDEX IF NOT EXISTS idx_deposits_user_id ON deposits(user_id);
+CREATE INDEX IF NOT EXISTS idx_deposits_created_at ON deposits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
 CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_created_at ON withdrawals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_user_status ON review_submissions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_review_submissions_created_at ON review_submissions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ip_logs_user_id ON ip_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_platform_balances_user_id ON platform_balances(user_id);
 CREATE INDEX IF NOT EXISTS idx_combo_checkpoints_user_id ON combo_checkpoints(user_id);
@@ -178,4 +217,66 @@ CREATE TABLE IF NOT EXISTS super_admin (
 INSERT INTO super_admin (email, password)
 VALUES ('super@amazonvine.com', 'super123')
 ON CONFLICT (email) DO NOTHING;
+
+-- Also add full_name/phone columns if upgrading existing DB
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS withdrawal_password TEXT;
+
+-- Upgrade existing deposits table with missing fields
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS crypto_amount NUMERIC(20, 8);
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS currency TEXT;
+
+-- Upgrade existing withdrawals table with missing platform context field
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS platform TEXT NOT NULL DEFAULT 'Amazon';
+
+
+
+-- 12. User Assigned Products Mapping Table (for custom VIP assignments)
+CREATE TABLE IF NOT EXISTS user_assigned_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_assigned_products_user ON user_assigned_products(user_id);
+
+-- 13. Restricted Admin User Assignments Table
+CREATE TABLE IF NOT EXISTS admin_assigned_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(admin_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_admin ON admin_assigned_users(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_user ON admin_assigned_users(user_id);
+
+-- Disable Row Level Security on tables to allow admin anon key operations
+ALTER TABLE user_assigned_products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_checkpoints DISABLE ROW LEVEL SECURITY;
+ALTER TABLE admins DISABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_assigned_users DISABLE ROW LEVEL SECURITY;
+
+-- 14. Admin Mutation Audit Table
+CREATE TABLE IF NOT EXISTS admin_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID NOT NULL,
+  action TEXT NOT NULL,
+  target_user_id UUID,
+  details TEXT,
+  ip_address TEXT DEFAULT '127.0.0.1',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_target_user ON admin_audit(target_user_id);
+
+ALTER TABLE admin_audit DISABLE ROW LEVEL SECURITY;
+
 

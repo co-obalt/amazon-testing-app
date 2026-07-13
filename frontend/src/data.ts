@@ -4,7 +4,6 @@ export const mockProducts: Product[] = [
   {
     id: "prod-1",
     title: "ZonHub Smart Echo (5th Gen) | Premium spatial sound with voice assistant",
-    category: "Smart Home",
     price: 99.99,
     rating: 4.8,
     reviewsCount: 12403,
@@ -19,14 +18,11 @@ export const mockProducts: Product[] = [
     isBestSeller: true,
     isPrime: true,
     payout: 2.80,
-    platform: "Amazon",
-    difficulty: "Easy",
-    wordLimit: 40
+    platform: "Amazon"
   },
   {
     id: "prod-2",
     title: "ZonReader Paperwhite (16 GB) | 6.8\" display and adjustable warm light",
-    category: "Electronics",
     price: 139.99,
     rating: 4.9,
     reviewsCount: 8945,
@@ -41,14 +37,11 @@ export const mockProducts: Product[] = [
     isBestSeller: true,
     isPrime: true,
     payout: 3.50,
-    platform: "Amazon",
-    difficulty: "Medium",
-    wordLimit: 60
+    platform: "Amazon"
   },
   {
     id: "prod-3",
     title: "AliUltra Foldable Electric Scooter | Dual motor, 35 miles long-range battery",
-    category: "Transportation",
     price: 649.99,
     rating: 4.7,
     reviewsCount: 1530,
@@ -63,14 +56,11 @@ export const mockProducts: Product[] = [
     isBestSeller: true,
     isPrime: false,
     payout: 4.80,
-    platform: "Alibaba",
-    difficulty: "Expert",
-    wordLimit: 100
+    platform: "Alibaba"
   },
   {
     id: "prod-4",
     title: "AliVision 4K Native LED Projector | 15,000 Lumens outdoor cinematic display",
-    category: "Entertainment",
     price: 189.99,
     rating: 4.6,
     reviewsCount: 2315,
@@ -85,14 +75,11 @@ export const mockProducts: Product[] = [
     isBestSeller: false,
     isPrime: false,
     payout: 3.10,
-    platform: "Alibaba",
-    difficulty: "Medium",
-    wordLimit: 50
+    platform: "Alibaba"
   },
   {
     id: "prod-5",
     title: "Minimalist Full-Grain Leather Wallet | RFID Blocking ultra-thin organizer",
-    category: "Apparel",
     price: 39.99,
     rating: 4.7,
     reviewsCount: 10420,
@@ -107,14 +94,11 @@ export const mockProducts: Product[] = [
     isBestSeller: true,
     isPrime: false,
     payout: 2.50,
-    platform: "Shopify",
-    difficulty: "Easy",
-    wordLimit: 30
+    platform: "Shopify"
   },
   {
     id: "prod-6",
     title: "Therapeutic Essential Oils Diffuser | Ceramic ultrasonic humidifying glow",
-    category: "Wellness",
     price: 45.00,
     rating: 4.5,
     reviewsCount: 1680,
@@ -129,9 +113,7 @@ export const mockProducts: Product[] = [
     isBestSeller: false,
     isPrime: false,
     payout: 2.20,
-    platform: "Shopify",
-    difficulty: "Easy",
-    wordLimit: 30
+    platform: "Shopify"
   }
 ];
 

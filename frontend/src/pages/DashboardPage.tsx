@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_BASE } from '../config';
 import { 
@@ -75,116 +75,11 @@ interface DashboardPageProps {
 interface AssignedProduct {
   id: string;
   title: string;
-  category: string;
   image: string;
   payout: number;
-  difficulty: 'Easy' | 'Medium' | 'Expert';
-  wordLimit: number;
   externalLink: string;
 }
 
-const ASSIGNED_PRODUCTS: Record<'Amazon' | 'Alibaba' | 'Shopify', AssignedProduct[]> = {
-  Amazon: [
-    { id: "asg-amz-1", title: "ZonHub Smart Echo (5th Gen) | Spatial sound", category: "Smart Home", image: "https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=600", payout: 1.25, difficulty: "Easy", wordLimit: 30, externalLink: "https://www.amazon.com/s?k=smart+echo+speaker" },
-    { id: "asg-amz-2", title: "ZonReader Paperwhite (16 GB) | Warm light", category: "Electronics", image: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&q=80&w=600", payout: 1.95, difficulty: "Medium", wordLimit: 45, externalLink: "https://www.amazon.com/s?k=paperwhite+ereader" },
-    { id: "asg-amz-3", title: "Organic Bamboo Coasters Set (6-Pack) | Non-slip", category: "Kitchen & Home", image: "https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&q=80&w=600", payout: 0.80, difficulty: "Easy", wordLimit: 20, externalLink: "https://www.amazon.com/s?k=bamboo+coasters" },
-    { id: "asg-amz-4", title: "Ergonomic Memory Foam Office Seat Cushion", category: "Office Products", image: "https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&q=80&w=600", payout: 1.10, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.amazon.com/s?k=office+seat+cushion" },
-    { id: "asg-amz-5", title: "Stainless Steel Vacuum Insulated Water Bottle (32oz)", category: "Sports & Outdoors", image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=600", payout: 1.40, difficulty: "Easy", wordLimit: 30, externalLink: "https://www.amazon.com/s?k=insulated+water+bottle" },
-    { id: "asg-amz-6", title: "Professional Ceramic Ionic Hair Dryer | 1875W", category: "Personal Care", image: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=600", payout: 2.20, difficulty: "Expert", wordLimit: 50, externalLink: "https://www.amazon.com/s?k=hair+dryer" },
-    { id: "asg-amz-7", title: "Adjustable Laptop Stand | Ergonomic Aluminum Stand", category: "Office Products", image: "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=600", payout: 1.65, difficulty: "Medium", wordLimit: 40, externalLink: "https://www.amazon.com/s?k=laptop+stand" },
-    { id: "asg-amz-8", title: "Premium Matcha Green Tea Powder (Organic)", category: "Grocery & Gourmet", image: "https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=600", payout: 0.95, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.amazon.com/s?k=matcha+powder" },
-    { id: "asg-amz-9", title: "Dual-Port USB-C Wall Charger Block | 40W Fast Charger", category: "Electronics", image: "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&q=80&w=600", payout: 1.05, difficulty: "Easy", wordLimit: 20, externalLink: "https://www.amazon.com/s?k=usb+c+charger" },
-    { id: "asg-amz-10", title: "Wireless Active Noise Cancelling Earbuds | Bluetooth 5.3", category: "Electronics", image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=600", payout: 2.10, difficulty: "Expert", wordLimit: 45, externalLink: "https://www.amazon.com/s?k=noise+cancelling+earbuds" },
-    { id: "asg-amz-11", title: "Digital Kitchen Scale | High Precision Multi-unit", category: "Kitchen & Home", image: "https://images.unsplash.com/photo-1588675646184-f550218b57b5?auto=format&fit=crop&q=80&w=600", payout: 0.75, difficulty: "Easy", wordLimit: 20, externalLink: "https://www.amazon.com/s?k=kitchen+scale" },
-    { id: "asg-amz-12", title: "Aromatherapy Ceramic Essential Oil Diffuser (500ml)", category: "Smart Home", image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600", payout: 1.30, difficulty: "Medium", wordLimit: 30, externalLink: "https://www.amazon.com/s?k=essential+oil+diffuser" }
-  ],
-  Alibaba: [
-    { id: "asg-ali-1", title: "AliUltra Foldable Electric Scooter | Dual motor", category: "Transportation", image: "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&q=80&w=600", payout: 2.50, difficulty: "Expert", wordLimit: 50, externalLink: "https://www.alibaba.com/trade/search?SearchText=electric+scooter" },
-    { id: "asg-ali-2", title: "AliVision 4K Native LED Projector | 15k Lms", category: "Entertainment", image: "https://images.unsplash.com/photo-1535016120720-40c646be5580?auto=format&fit=crop&q=80&w=600", payout: 2.15, difficulty: "Medium", wordLimit: 40, externalLink: "https://www.alibaba.com/trade/search?SearchText=4k+projector" },
-    { id: "asg-ali-3", title: "AliSecure HD Outdoor IP Camera | Wifi PTZ Node", category: "Security", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&q=80&w=600", payout: 1.80, difficulty: "Medium", wordLimit: 35, externalLink: "https://www.alibaba.com/trade/search?SearchText=wifi+ip+camera" },
-    { id: "asg-ali-4", title: "Smart Automated Robot Vacuum Cleaner | LIDAR Map", category: "Smart Home", image: "https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?auto=format&fit=crop&q=80&w=600", payout: 2.40, difficulty: "Expert", wordLimit: 50, externalLink: "https://www.alibaba.com/trade/search?SearchText=robot+vacuum" },
-    { id: "asg-ali-5", title: "Portable Solar Generator Station | 500Wh Output", category: "Electronics", image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&q=80&w=600", payout: 2.30, difficulty: "Expert", wordLimit: 45, externalLink: "https://www.alibaba.com/trade/search?SearchText=portable+solar+generator" },
-    { id: "asg-ali-6", title: "Heavy Duty Massage Gun | 30 Speeds Deep Tissue", category: "Personal Care", image: "https://images.unsplash.com/photo-1607962837359-5e7eaf562642?auto=format&fit=crop&q=80&w=600", payout: 1.60, difficulty: "Medium", wordLimit: 30, externalLink: "https://www.alibaba.com/trade/search?SearchText=massage+gun" },
-    { id: "asg-ali-7", title: "Adjustable Dumbbells Set (50lbs) | Quick Dial", category: "Sports & Outdoors", image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=600", payout: 2.25, difficulty: "Expert", wordLimit: 40, externalLink: "https://www.alibaba.com/trade/search?SearchText=adjustable+dumbbells" },
-    { id: "asg-ali-8", title: "Automatic Espresso Coffee Machine | 20 Bar Pump", category: "Kitchen & Home", image: "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?auto=format&fit=crop&q=80&w=600", payout: 2.45, difficulty: "Expert", wordLimit: 50, externalLink: "https://www.alibaba.com/trade/search?SearchText=espresso+machine" },
-    { id: "asg-ali-9", title: "Electric Oral Irrigator Dental Flosser | 4 Modes", category: "Personal Care", image: "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?auto=format&fit=crop&q=80&w=600", payout: 0.95, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.alibaba.com/trade/search?SearchText=oral+irrigator" },
-    { id: "asg-ali-10", title: "Portable Bluetooth Thermal Label Printer", category: "Office Products", image: "https://images.unsplash.com/photo-1543269664-76bc3997d9ea?auto=format&fit=crop&q=80&w=600", payout: 1.20, difficulty: "Easy", wordLimit: 30, externalLink: "https://www.alibaba.com/trade/search?SearchText=label+printer" },
-    { id: "asg-ali-11", title: "Dual Layer Car Roof Cargo Carrier Bag | Waterproof", category: "Transportation", image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600", payout: 1.50, difficulty: "Medium", wordLimit: 35, externalLink: "https://www.alibaba.com/trade/search?SearchText=roof+cargo+bag" },
-    { id: "asg-ali-12", title: "Foldable Lightbox Photography Studio Kit", category: "Entertainment", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600", payout: 1.45, difficulty: "Medium", wordLimit: 30, externalLink: "https://www.alibaba.com/trade/search?SearchText=lightbox+studio" }
-  ],
-  Shopify: [
-    { id: "asg-shp-1", title: "Minimalist Full-Grain Leather Wallet | RFID organizer", category: "Apparel & Accessories", image: "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600", payout: 1.10, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.google.com/search?q=minimalist+leather+wallet" },
-    { id: "asg-shp-2", title: "Therapeutic Essential Oils Diffuser | Ceramic ultrasonic", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600", payout: 0.90, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.google.com/search?q=ceramic+essential+oils+diffuser" },
-    { id: "asg-shp-3", title: "Eco-Friendly Cork Yoga Mat | Non-slip sweat-resistant", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600", payout: 1.70, difficulty: "Medium", wordLimit: 35, externalLink: "https://www.google.com/search?q=cork+yoga+mat" },
-    { id: "asg-shp-4", title: "Hydro Flask Insulated Travel Coffee Mug | 16oz Wide Mouth", category: "Apparel & Accessories", image: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=600", payout: 1.20, difficulty: "Easy", wordLimit: 20, externalLink: "https://www.google.com/search?q=insulated+travel+mug" },
-    { id: "asg-shp-5", title: "Premium Bamboo Bed Sheets Set | King Size Cooling", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600", payout: 2.35, difficulty: "Expert", wordLimit: 50, externalLink: "https://www.google.com/search?q=bamboo+bed+sheets" },
-    { id: "asg-shp-6", title: "Minimalist Wooden Desk Organizer Stand | Handcrafted Walnut", category: "Apparel & Accessories", image: "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=600", payout: 1.50, difficulty: "Medium", wordLimit: 30, externalLink: "https://www.google.com/search?q=wooden+desk+organizer" },
-    { id: "asg-shp-7", title: "Aromatherapy Soy Wax Candles Set | Lavender & Eucalyptus", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=600", payout: 0.85, difficulty: "Easy", wordLimit: 20, externalLink: "https://www.google.com/search?q=soy+wax+candles" },
-    { id: "asg-shp-8", title: "Polarized Retro Round Sunglasses | UV400 Unbreakable", category: "Apparel & Accessories", image: "https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=600", payout: 1.30, difficulty: "Medium", wordLimit: 30, externalLink: "https://www.google.com/search?q=polarized+round+sunglasses" },
-    { id: "asg-shp-9", title: "Manual Ceramic Burr Coffee Grinder | Adjustable Coarseness", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=600", payout: 1.45, difficulty: "Easy", wordLimit: 25, externalLink: "https://www.google.com/search?q=manual+coffee+grinder" },
-    { id: "asg-shp-10", title: "Stainless Steel French Press Coffee Maker | Double Wall", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=600", payout: 1.90, difficulty: "Expert", wordLimit: 40, externalLink: "https://www.google.com/search?q=french+press+coffee+maker" },
-    { id: "asg-shp-11", title: "Vegan Leather Minimalist Backpack | 15.6 Inch Laptop Sleeve", category: "Apparel & Accessories", image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600", payout: 2.10, difficulty: "Expert", wordLimit: 45, externalLink: "https://www.google.com/search?q=vegan+leather+backpack" },
-    { id: "asg-shp-12", title: "Ergonomic Balance Ball Chair with Stability Base", category: "Wellness & Spa", image: "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=600", payout: 2.25, difficulty: "Expert", wordLimit: 45, externalLink: "https://www.google.com/search?q=balance+ball+chair" }
-  ]
-};
-
-export const AVATARS = [
-  { 
-    gradient: 'from-indigo-500 to-purple-600', 
-    name: 'Professional Reviewer', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="currentColor">
-        <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.75 16.65c0-1.84 1.25-3.41 3.03-3.79a9.78 9.78 0 0110.44 0c1.78.38 3.03 1.95 3.03 3.79a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
-      </svg>
-    )
-  },
-  { 
-    gradient: 'from-amber-500 to-orange-600', 
-    name: 'VIP Node Evaluator', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2a5 5 0 100 10 5 5 0 000-10zM12 14a8 8 0 00-8 8h16a8 8 0 00-8-8z" />
-      </svg>
-    )
-  },
-  { 
-    gradient: 'from-emerald-500 to-teal-650', 
-    name: 'Secure Trust Auditor', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    )
-  },
-  { 
-    gradient: 'from-rose-500 to-pink-650', 
-    name: 'Elite Star Reviewer', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="currentColor">
-        <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12c0 2.761 1.147 5.253 3.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
-      </svg>
-    )
-  },
-  { 
-    gradient: 'from-blue-500 to-cyan-600', 
-    name: 'E-Commerce Analyst', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-      </svg>
-    )
-  },
-  { 
-    gradient: 'from-gray-700 to-gray-900', 
-    name: 'Enterprise Reviewer', 
-    icon: (className = "h-12 w-12") => (
-      <svg className={`${className} text-white`} viewBox="0 0 24 24" fill="currentColor">
-        <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 18.75a.75.75 0 00.75-.75 6.75 6.75 0 00-13.5 0 .75.75 0 00.75.75h12z" clipRule="evenodd" />
-      </svg>
-    )
-  }
-];
 
 export default function DashboardPage({
   username,
@@ -207,10 +102,11 @@ export default function DashboardPage({
 
   // Navigation & Layout states
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'orders' | 'record' | 'profile' | 'invitation' | 'customer-service' | 'terms' | 'about-us' | 'faq'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'orders' | 'withdraw' | 'profile' | 'invitation' | 'customer-service' | 'terms' | 'about-us' | 'faq'>('home');
   const [activePlatform, setActivePlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [enabledPlatform, setEnabledPlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   // Deposit Request and VIP Unlock States
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
@@ -237,11 +133,22 @@ export default function DashboardPage({
 
   // Gigs Search and Filters
   const [gigsSearch, setGigsSearch] = useState('');
-  const [gigsDifficulty, setGigsDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Expert'>('All');
   const [gigsPage, setGigsPage] = useState(1);
+
+  // Campaigns slider states
+  const [allCampaigns, setAllCampaigns] = useState<any[]>([]);
+  const [shuffledCampaigns, setShuffledCampaigns] = useState<any[]>([]);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(true);
+
+  // New withdrawal states
+  const [newWithdrawAmount, setNewWithdrawAmount] = useState('');
+  const [newWithdrawPassword, setNewWithdrawPassword] = useState('');
 
   // Orders Filter and Search
   const [ordersStatusFilter, setOrdersStatusFilter] = useState<'All' | 'Completed' | 'Pending' | 'Failed'>('All');
+  const [ordersSubTab, setOrdersSubTab] = useState<'pending' | 'completed'>('pending');
   const [ordersDateFilter, setOrdersDateFilter] = useState<'All' | 'Last 7 days' | 'This month'>('All');
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderRecord | null>(null);
 
@@ -250,7 +157,48 @@ export default function DashboardPage({
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
 
   // Edit Profile States
-  const [selectedAvatar, setSelectedAvatar] = useState(0);
+  const [profile_photo, setProfile_photo] = useState<string | null>(() => {
+    return localStorage.getItem(`profile_photo_${username}`);
+  });
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.size > 1.5 * 1024 * 1024) {
+      showToast("File size too large. Please select an image under 1.5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Url = event.target?.result as string;
+      
+      const token = localStorage.getItem('reviewer_auth_token');
+      try {
+        const res = await fetch(`${API_BASE}/auth/update-profile-photo`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ profile_photo: base64Url })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+          setProfile_photo(base64Url);
+          localStorage.setItem(`profile_photo_${username}`, base64Url);
+          showToast("✓ Profile photo updated successfully!");
+        } else {
+          showToast(data.error || "Failed to update profile photo.");
+        }
+      } catch (err) {
+        showToast("Server connection error. Failed to save photo.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   const [profileActiveSection, setProfileActiveSection] = useState<'details' | 'wallet' | 'security'>('details');
   const [profileEmail, setProfileEmail] = useState(username.toLowerCase().replace(/\s+/g, '') + '@gmail.com');
   const [profilePhone, setProfilePhone] = useState('+1 (555) 019-2831');
@@ -297,10 +245,16 @@ export default function DashboardPage({
     }
 
     try {
-      // 1. Fetch User details, balances, and system settings configurations
-      const userRes = await fetch(`${API_BASE}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Fetch all required data points in parallel
+      const [userRes, historyRes, subsRes, chatRes, allRes] = await Promise.all([
+        fetch(`${API_BASE}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/transactions/history`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/reviews/submissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/chat/history`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/reviews/products/all`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
+      // 1. Process User details, balances, and system settings configurations
       if (!userRes.ok) {
         onLogout();
         return;
@@ -334,19 +288,12 @@ export default function DashboardPage({
         });
 
         // Resolve workspace locks dynamically
-        const amzActive = userData.balances.Amazon.walletBalance > 0 || userData.balances.Amazon.completedReviewsCount > 0;
-        const aliActive = userData.balances.Alibaba.walletBalance > 0 || userData.balances.Alibaba.completedReviewsCount > 0;
-        const shoActive = userData.balances.Shopify.walletBalance > 0 || userData.balances.Shopify.completedReviewsCount > 0;
-
-        if (amzActive) {
-          setEnabledPlatform('Amazon');
-          if (!activePlatform) setActivePlatform('Amazon');
-        } else if (aliActive) {
-          setEnabledPlatform('Alibaba');
-          if (!activePlatform) setActivePlatform('Alibaba');
-        } else if (shoActive) {
-          setEnabledPlatform('Shopify');
-          if (!activePlatform) setActivePlatform('Shopify');
+        if (userData.platform) {
+          setActivePlatform(userData.platform);
+          setEnabledPlatform(userData.platform);
+        } else {
+          setActivePlatform(null);
+          setEnabledPlatform(null);
         }
       }
 
@@ -359,9 +306,15 @@ export default function DashboardPage({
         setIsAddressBound(false);
       }
 
+      // Update withdrawal security password state
+      if (userData.withdrawalPassword) {
+        setWithdrawalPassword(userData.withdrawalPassword);
+      }
+
       // Update dynamic configuration wallets and links
       if (userData.systemConfig) {
         setDepositAddresses({
+          'TRC-25': userData.systemConfig.trc20_address || 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
           'TRC-20': userData.systemConfig.trc20_address || 'TTisWCo1GTszkukUB6gmmdPRaXYsBATJKM',
           'ERC-20': userData.systemConfig.erc20_address || '0xde833b4707431ffa4fcd62da08219172a8360d95',
           'BTC': userData.systemConfig.btc_address || 'bc1q5kt8tzmkvk52xr6ty0n55v5lc0nahwv6xpu8zs'
@@ -374,10 +327,16 @@ export default function DashboardPage({
         }
       }
 
-      // 2. Fetch transaction logs (Deposits & Withdrawals)
-      const historyRes = await fetch(`${API_BASE}/transactions/history`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Update profile photo state from database
+      if (userData.profile_photo) {
+        setProfile_photo(userData.profile_photo);
+        localStorage.setItem(`profile_photo_${username}`, userData.profile_photo);
+      } else {
+        setProfile_photo(null);
+        localStorage.removeItem(`profile_photo_${username}`);
+      }
+
+      // 2. Process transaction logs (Deposits & Withdrawals)
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         const deps = historyData.filter((x: any) => x.type === 'Deposit');
@@ -398,10 +357,7 @@ export default function DashboardPage({
         setWithdrawals(withs);
       }
 
-      // 3. Fetch review submissions history to merge in platform logs
-      const subsRes = await fetch(`${API_BASE}/reviews/submissions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // 3. Process review submissions history to merge in platform logs
       if (subsRes.ok) {
         const subsData = await subsRes.json();
         setPlatformsData(prev => {
@@ -417,18 +373,29 @@ export default function DashboardPage({
         });
       }
 
-      // 4. Fetch chat logs
-      const chatRes = await fetch(`${API_BASE}/chat/history`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // 4. Process chat logs
       if (chatRes.ok) {
         const chatData = await chatRes.json();
         setChatMessages(chatData);
       }
 
+      // 5. Process all campaigns for available campaigns pool slider
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        setAllCampaigns(allData.map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          image: p.image_url,
+          payout: parseFloat(p.payout) || 0,
+          price: parseFloat(p.price) || 0
+        })));
+      }
+
       setLastRefreshed(new Date().toLocaleTimeString());
     } catch (err) {
       console.warn("Active session data sync error:", err);
+    } finally {
+      setIsDataLoading(false);
     }
   };
 
@@ -454,9 +421,15 @@ export default function DashboardPage({
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'balance_update' || message.type === 'approval_notice') {
+        if (
+          message.type === 'balance_update' || 
+          message.type === 'approval_notice' ||
+          message.type === 'vip_unlocked' ||
+          message.type === 'vip_locked' ||
+          message.type === 'vip_configured'
+        ) {
           fetchAllData();
-          showToast(`⚡ Real-time updates synchronized successfully.`);
+          showToast(`⚡ Real-time workspace updates synchronized successfully.`);
         }
       } catch (err) {
         console.error("Error handling real-time socket packet:", err);
@@ -471,6 +444,91 @@ export default function DashboardPage({
       ws.close();
     };
   }, [activePlatform]);
+
+  // Shuffling effect for Available Campaigns Pool marquee
+  useEffect(() => {
+    if (allCampaigns.length === 0) return;
+    setShuffledCampaigns([...allCampaigns].sort(() => Math.random() - 0.5));
+    const interval = setInterval(() => {
+      setShuffledCampaigns(prev => {
+        if (prev.length <= 1) return prev;
+        const next = [...prev];
+        return next.sort(() => Math.random() - 0.5);
+      });
+    }, 7000);
+    return () => clearInterval(interval);
+  }, [allCampaigns]);
+
+  // Scroll arrow dynamic visibility logic
+  const handleScroll = () => {
+    if (sliderRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = sliderRef.current;
+      setShowLeftArrow(scrollLeft > 5);
+      setShowRightArrow(scrollWidth - scrollLeft - clientWidth > 5);
+    }
+  };
+
+  const scrollSlider = (direction: 'left' | 'right') => {
+    if (sliderRef.current) {
+      const { clientWidth } = sliderRef.current;
+      const scrollAmount = direction === 'left' ? -clientWidth * 0.75 : clientWidth * 0.75;
+      sliderRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    setTimeout(handleScroll, 100);
+  }, [shuffledCampaigns]);
+
+  // Handle new secure cashout withdrawal request submission
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(newWithdrawAmount);
+    if (isNaN(amount) || amount < 1) {
+      showToast("Minimum withdrawal is $1.00.");
+      return;
+    }
+    if (amount > currentPlatformData.walletBalance) {
+      showToast("Insufficient wallet balance.");
+      return;
+    }
+    if (!newWithdrawPassword.trim()) {
+      showToast("Please enter your withdrawal password.");
+      return;
+    }
+    if (newWithdrawPassword !== withdrawalPassword) {
+      showToast("Error: Incorrect withdrawal password.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const res = await fetch(`${API_BASE}/transactions/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          platform: activePlatform,
+          amount: amount
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.error || 'Withdrawal submission failed');
+        return;
+      }
+
+      setNewWithdrawAmount('');
+      setNewWithdrawPassword('');
+      showToast(`✓ Withdrawal request for $${amount.toFixed(2)} submitted successfully!`);
+      fetchAllData();
+    } catch (err) {
+      showToast('Server connection error. Failed to submit withdrawal.');
+    }
+  };
 
   useEffect(() => {
     if (!activePlatform) {
@@ -490,11 +548,8 @@ export default function DashboardPage({
           setAssignedProducts(data.map((p: any) => ({
             id: p.id,
             title: p.title,
-            category: p.category,
             image: p.image_url,
             payout: parseFloat(p.payout),
-            difficulty: p.difficulty,
-            wordLimit: p.word_limit,
             externalLink: p.external_link
           })));
         } else {
@@ -575,7 +630,8 @@ export default function DashboardPage({
   const [reviewStep, setReviewStep] = useState<1 | 2 | 3 | 4>(1);
   const [inputOrderId, setInputOrderId] = useState('');
   const [reviewDraftText, setReviewDraftText] = useState('');
-  const [reviewStars, setReviewStars] = useState(5);
+  const [reviewStars, setReviewStars] = useState(0);
+  const [selectedTextCode, setSelectedTextCode] = useState<string | null>(null);
 
   // Profile details
   const [cryptoNetwork, setCryptoNetwork] = useState('TRC-20');
@@ -673,22 +729,22 @@ export default function DashboardPage({
   const handleChangeWithdrawalPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (oldWithdrawalPassword !== withdrawalPassword) {
-      showToast("Error: Current withdrawal security password does not match.");
+      showToast("Error: Current withdrawal PIN does not match.");
       return;
     }
-    if (newWithdrawalPassword.length < 4) {
-      showToast("Error: New withdrawal security password must be at least 4 characters.");
+    if (!/^\d{4}$/.test(newWithdrawalPassword)) {
+      showToast("Error: New withdrawal PIN must be exactly 4 digits.");
       return;
     }
     if (newWithdrawalPassword !== confirmWithdrawalPassword) {
-      showToast("Error: Confirm withdrawal password does not match new withdrawal password.");
+      showToast("Error: Confirm withdrawal PIN does not match new withdrawal PIN.");
       return;
     }
     setWithdrawalPassword(newWithdrawalPassword);
     setOldWithdrawalPassword('');
     setNewWithdrawalPassword('');
     setConfirmWithdrawalPassword('');
-    showToast("✓ Withdrawal security password changed successfully.");
+    showToast("✓ Withdrawal PIN changed successfully.");
   };
 
   const triggerUserImageAttach = () => {
@@ -827,7 +883,8 @@ export default function DashboardPage({
     setReviewStep(1);
     setInputOrderId('');
     setReviewDraftText('');
-    setReviewStars(5);
+    setReviewStars(0);
+    setSelectedTextCode(null);
   };
 
   const handleStep1Complete = () => {
@@ -848,14 +905,19 @@ export default function DashboardPage({
   const handleStep3Complete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeReviewProduct) return;
-    const wordsCount = reviewDraftText.trim().split(/\s+/).filter(Boolean).length;
-    if (wordsCount < (activeReviewProduct.wordLimit || 20)) {
-      showToast(`Review draft is too short! Write at least ${activeReviewProduct.wordLimit} words.`);
+    if (reviewStars < 1 || reviewStars > 5) {
+      showToast("Please select a star rating between 1 and 5.");
+      return;
+    }
+    if (!selectedTextCode) {
+      showToast("Please select a feedback text template.");
       return;
     }
 
     try {
       const token = localStorage.getItem('reviewer_auth_token');
+      // Generate a mock order ID
+      const randomOrderId = 'ORD-' + Math.random().toString(36).substring(2, 12).toUpperCase();
       const res = await fetch(`${API_BASE}/reviews/submit`, {
         method: 'POST',
         headers: {
@@ -864,8 +926,8 @@ export default function DashboardPage({
         },
         body: JSON.stringify({
           productId: activeReviewProduct.id,
-          orderId: inputOrderId,
-          reviewText: reviewDraftText
+          orderId: randomOrderId,
+          reviewText: selectedTextCode
         })
       });
       const data = await res.json();
@@ -885,11 +947,33 @@ export default function DashboardPage({
         return;
       }
 
-      setReviewStep(4);
-      showToast("Review submitted! Placed in merchant authorization queue.");
-      fetchAllData();
+      showToast(`✓ Evaluation submitted successfully! +$${activeReviewProduct.payout.toFixed(2)} USD credited.`);
+      
+      // Clear input state parameters
+      setReviewStars(0);
+      setSelectedTextCode(null);
+
+      // Refresh all user data (balances, orders counts, etc.)
+      await fetchAllData();
+
+      // Automatically find next campaign product to open (skip already completed or pending ones!)
+      const remainingPending = assignedProducts.filter(p => {
+        if (p.id === activeReviewProduct.id) return false;
+        const isCompleted = currentPlatformData.orders.some(o => o.productTitle === p.title && o.status === 'Completed');
+        const isPending = currentPlatformData.orders.some(o => o.productTitle === p.title && o.status === 'Pending');
+        return !isCompleted && !isPending;
+      });
+
+      const nextProduct = remainingPending[0] || null;
+      if (nextProduct) {
+        setActiveReviewProduct(nextProduct);
+        setReviewStep(1);
+      } else {
+        setActiveReviewProduct(null);
+        showToast("✓ All assigned campaigns for today have been completed!");
+      }
     } catch (err) {
-      showToast('Server connection error. Failed to submit draft.');
+      showToast('Server connection error. Failed to submit evaluation.');
     }
   };
 
@@ -970,10 +1054,10 @@ export default function DashboardPage({
       showToast("Please paste the transaction hash or TxID.");
       return;
     }
-    const minimumDeposit = depositTargetPlatform === 'Amazon' ? 20 : depositTargetPlatform === 'Alibaba' ? 299 : null;
+    const targetPlatform = enabledPlatform || depositTargetPlatform;
+    const minimumDeposit = targetPlatform === 'Amazon' ? 20 : targetPlatform === 'Alibaba' ? 299 : null;
     if (minimumDeposit !== null && amount < minimumDeposit) {
-      showToast(`Minimum deposit for ${depositTargetPlatform} is $${minimumDeposit.toFixed(2)}.`);
-      return;
+      showToast(`⚠️ Note: Entered amount is less than the standard $${minimumDeposit.toFixed(2)} minimum to unlock ${targetPlatform}. Request will be queued for review.`);
     }
 
     try {
@@ -985,7 +1069,7 @@ export default function DashboardPage({
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          platform: depositTargetPlatform,
+          platform: targetPlatform,
           protocol: selectedProtocol,
           amount: amount,
           txHash: newDepositTxHash,
@@ -1004,7 +1088,7 @@ export default function DashboardPage({
       setNewDepositAmount('');
       setNewDepositTxHash('');
       setNewDepositRemark('');
-      showToast(`Deposit request submitted for ${depositTargetPlatform}! Awaiting administrator approval.`);
+      showToast(`Deposit request submitted for ${targetPlatform}! Awaiting audit verification by our review team.`);
       fetchAllData();
     } catch (err) {
       showToast('Server connection error. Failed to submit deposit.');
@@ -1058,6 +1142,23 @@ export default function DashboardPage({
   // Reusable Network/Platform workspace selector bar (moved to header dropdown)
   const renderNetworkSelector = () => null;
 
+  if (isDataLoading) {
+    return (
+      <div className="h-screen w-screen bg-[#F3F4F6] flex flex-col items-center justify-center font-sans text-gray-900">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative h-12 w-12">
+            <div className="absolute inset-0 border-4 border-amazon-gold/20 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-amazon-gold border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">amazon<span className="text-amazon-gold">Vine</span></h3>
+            <p className="text-[10px] text-gray-400 font-sans mt-1">Initializing review dashboard secure session...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-[#F3F4F6] flex flex-col font-sans text-gray-900 overflow-hidden">
       
@@ -1089,70 +1190,15 @@ export default function DashboardPage({
         {/* Network & Active Wallet Info Dropdown */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2.5">
-            {/* Custom dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNetworkDropdown(!showNetworkDropdown)}
-                className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-left flex items-center justify-between space-x-2 cursor-pointer select-none text-white hover:border-gray-700 transition"
-              >
-                <div>
-                  <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Network</p>
-                  <p className="text-xs font-black text-amazon-gold mt-0.5 leading-none">
-                    {activePlatform ? `${activePlatform}` : 'Select Network'}
-                  </p>
-                </div>
-                <span className="text-[10px] text-gray-400">▼</span>
-              </button>
+            {activePlatform && (
+              <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-left select-none text-white">
+                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Network</p>
+                <p className="text-xs font-black text-amazon-gold mt-0.5 leading-none">
+                  {activePlatform}
+                </p>
+              </div>
+            )}
 
-              <AnimatePresence>
-                {showNetworkDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowNetworkDropdown(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 5 }}
-                      className="absolute right-0 mt-1.5 w-48 bg-[#1a222d] border border-gray-800 rounded-lg shadow-xl z-50 py-1 overflow-hidden"
-                    >
-                      {(['Amazon', 'Alibaba', 'Shopify'] as const).map((plat) => {
-                        const isLocked = enabledPlatform !== null && enabledPlatform !== plat;
-                        const isSelected = activePlatform === plat;
-                        return (
-                          <button
-                            key={plat}
-                            disabled={isLocked}
-                            onClick={() => {
-                              handleSelectPlatform(plat);
-                              setShowNetworkDropdown(false);
-                            }}
-                            className={`w-full text-left px-3.5 py-2 text-xs font-bold transition flex items-center justify-between cursor-pointer ${
-                              isSelected 
-                                ? 'bg-amazon-gold/10 text-amazon-gold font-black' 
-                                : isLocked 
-                                  ? 'text-gray-650 cursor-not-allowed hover:bg-transparent' 
-                                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                            }`}
-                          >
-                            <span className="flex items-center space-x-1.5">
-                              {plat === 'Amazon' && <span>Amazon (VIP 1)</span>}
-                              {plat === 'Alibaba' && <span>Alibaba (VIP 2)</span>}
-                              {plat === 'Shopify' && <span>Shopify (VIP 3)</span>}
-                            </span>
-                            {isLocked ? (
-                              <Lock className="h-3 w-3 text-gray-600" />
-                            ) : isSelected ? (
-                              <Check className="h-3.5 w-3.5 text-amazon-gold" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Wallet balance */}
             <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-right min-w-[70px]">
               <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Wallet</p>
               <p className="text-xs font-mono font-black text-green-500 mt-0.5 leading-none">
@@ -1260,10 +1306,14 @@ export default function DashboardPage({
             </AnimatePresence>
           </div>
 
-          {/* User Profile avatar dropdown */}
+          {/* User Profile photo */}
           <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
-            <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${AVATARS[selectedAvatar].gradient} border border-white/20 flex items-center justify-center p-1.5 shadow-inner select-none`} title="Go to Profile Settings">
-              {AVATARS[selectedAvatar].icon("h-4.5 w-4.5")}
+            <div className="h-8 w-8 rounded-full overflow-hidden border border-gray-700 bg-gray-900 flex items-center justify-center shadow-inner cursor-pointer" title="Go to Profile Settings">
+              {profile_photo ? (
+                <img src={profile_photo} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-4.5 w-4.5 text-gray-400" />
+              )}
             </div>
             <button 
               onClick={onLogout}
@@ -1287,7 +1337,7 @@ export default function DashboardPage({
           }`}
         >
           {/* Main Navigation Items */}
-          <div className="py-4 space-y-1">
+          <div className="py-4 flex-1 overflow-y-auto min-h-0 space-y-1 no-scrollbar">
             <div className="px-4 mb-4 select-none">
               {!isSidebarCollapsed && (
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Navigation Central</p>
@@ -1334,17 +1384,17 @@ export default function DashboardPage({
                 {!isSidebarCollapsed && <span>Orders</span>}
               </button>
 
-              {/* Record */}
+              {/* Withdraw */}
               <button
-                onClick={() => setActiveTab('record')}
+                onClick={() => setActiveTab('withdraw')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'record'
+                  activeTab === 'withdraw'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                 }`}
               >
-                <ClipboardCheck className="h-4 w-4 flex-shrink-0" />
-                {!isSidebarCollapsed && <span>Record</span>}
+                <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
+                {!isSidebarCollapsed && <span>Withdraw</span>}
               </button>
 
               {/* Profile */}
@@ -1447,57 +1497,31 @@ export default function DashboardPage({
           {/* Tab Content Router */}
           <div className="flex-1 space-y-6">
             {/* ================================== OVERVIEW ================================== */}
-            {/* ================================== OVERVIEW ================================== */}
             {activeTab === 'home' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {activePlatform === null ? (
-                  /* Case 1: No active platform selected */
-                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
+                {enabledPlatform === null ? (
+                  /* Case 1: Workspace not activated / new user with no VIP config */
+                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-5 max-w-xl mx-auto shadow-xs my-6">
                     <div className="h-14 w-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500 border border-amber-100">
-                      <Layers className="h-7 w-7" />
+                      <Lock className="h-6 w-6" />
                     </div>
                     <div className="space-y-1.5">
-                      <h2 className="text-lg font-black text-gray-900">Workspace Selection Required</h2>
-                      <p className="text-xs text-gray-550 leading-relaxed">
-                        Welcome to your reviewer portal! To begin evaluating e-commerce product campaigns and earning commissions, please select a retail network (Amazon, Alibaba, or Shopify) from the dropdown in the top navigation header.
+                      <h2 className="text-lg font-black text-gray-900">Workspace Activation Required</h2>
+                      <p className="text-xs text-gray-500 leading-relaxed font-sans">
+                        Welcome to the reviewer portal! Your evaluation workspace is currently locked. To activate your workspace (Amazon, Alibaba, or Shopify) and start earning commissions, please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
                       </p>
                     </div>
-                  </div>
-                ) : enabledPlatform === null ? (
-                  /* Case 2: Platform selected, but not activated (no deposit) */
-                  <div className="space-y-6">
-                    {/* Welcome greeting */}
-                    <div className="bg-gradient-to-r from-amazon-navy to-amazon-dark text-white rounded-xl p-6 shadow-sm border border-gray-800">
-                      <h2 className="text-lg font-black text-white">Welcome, {username}! Workspace Pending</h2>
-                      <p className="text-xs text-gray-300 mt-1.5 leading-relaxed max-w-3xl">
-                        You have selected the <strong className="text-amazon-gold font-bold">{activePlatform}</strong> network workspace. To activate reviews and enable balance sync, please deposit the minimum protocol collateral.
-                      </p>
-                    </div>
-
-                    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-5 max-w-xl mx-auto shadow-xs">
-                      <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100">
-                        <Lock className="h-6 w-6" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <h2 className="text-lg font-black text-gray-900">{activePlatform} Workspace is Locked</h2>
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                          {activePlatform === 'Amazon' && "VIP 1 (Amazon) requires a minimum deposit of $20 to unlock task campaigns. Please go to the Deposit tab to submit details."}
-                          {activePlatform === 'Alibaba' && "VIP 2 (Alibaba) requires a minimum deposit of $299 to unlock task campaigns. Please go to the Deposit tab to submit details."}
-                          {activePlatform === 'Shopify' && "VIP 3 (Shopify) requires manual review activation. Please contact Customer Service or deposit to proceed."}
-                        </p>
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          onClick={() => setActiveTab('deposit')}
-                          className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
-                        >
-                          Go to Deposit Page
-                        </button>
-                      </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => setActiveTab('deposit')}
+                        className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                      >
+                        Go to Deposit Page
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  /* Case 3: Fully unlocked and active */
+                  /* Case 2: Fully unlocked and active */
                   <div className="space-y-6 animate-fadeIn">
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1624,36 +1648,71 @@ export default function DashboardPage({
                         Sellers utilize this dashboard to verify purchase compliance and payout legitimate micro-commissions. Please head over to the <strong>Assigned Gigs</strong> tab to begin compliance steps. All rewards range between <strong>$0.50 and $2.50 max</strong> per product.
                       </p>
                     </div>
-
-                    {/* Short Assigned Product Preview */}
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider">Active Evaluation Gigs</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {assignedProducts.slice(0, 2).map((prod) => (
-                          <div key={prod.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center space-x-4">
-                            <img src={prod.image} alt={prod.title} className="h-14 w-14 object-contain rounded border border-gray-100 p-1 bg-gray-50 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-xs font-bold text-gray-900 truncate">{prod.title}</h4>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <span className="text-[10px] font-mono font-black text-green-600">+${prod.payout.toFixed(2)}</span>
-                                <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-bold uppercase">{prod.difficulty}</span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setActiveTab('orders');
-                                startReviewFlow(prod);
-                              }}
-                              className="px-3 py-1.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-[10px] rounded transition-colors cursor-pointer"
-                            >
-                              Start Review
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                 )}
+
+                    {/* Available Evaluation Campaigns Pool Slider */}
+                    <div className="space-y-3.5 pt-2">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Available Campaigns Pool</h3>
+                          <p className="text-[10px] text-gray-400 font-sans">Live dynamic campaign feeds updated in real-time.</p>
+                        </div>
+                        <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-0.5 border border-green-200 rounded-full animate-pulse">Live Feeds</span>
+                      </div>
+
+                      <div className="relative group">
+                        {showLeftArrow && (
+                          <button
+                            type="button"
+                            onClick={() => scrollSlider('left')}
+                            className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
+                          >
+                            ‹
+                          </button>
+                        )}
+
+                        <div
+                          ref={sliderRef}
+                          onScroll={handleScroll}
+                          className="flex space-x-4 overflow-x-auto scrollbar-none pb-2 select-none"
+                        >
+                          {shuffledCampaigns.slice(0, 15).map((prod) => (
+                            <div
+                              key={prod.id}
+                              className="flex-shrink-0 w-52 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col justify-between shadow-xxs hover:shadow-xs transition p-4 space-y-3.5"
+                            >
+                              <div className="h-36 w-full flex items-center justify-center bg-gray-50/50 rounded-lg p-2 overflow-hidden">
+                                <img src={prod.image} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply" />
+                              </div>
+                              <div className="space-y-1">
+                                <h4 className="text-xs font-bold text-gray-655 truncate leading-snug" title={prod.title}>{prod.title}</h4>
+                                <div className="flex justify-between items-baseline pt-1">
+                                  <div className="flex flex-col text-left">
+                                    <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Price</span>
+                                    <span className="text-sm font-mono font-bold text-gray-800 mt-0.5">${parseFloat(prod.price || 0).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex flex-col text-right">
+                                    <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Payout</span>
+                                    <span className="text-sm font-mono font-black text-green-600 mt-0.5">+${parseFloat(prod.payout || 0).toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {showRightArrow && (
+                          <button
+                            type="button"
+                            onClick={() => scrollSlider('right')}
+                            className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
+                          >
+                            ›
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
               </div>
             )}
@@ -1779,39 +1838,52 @@ export default function DashboardPage({
                     {/* Deposit details form inputs */}
                     <form onSubmit={handleDepositSubmit} className="space-y-4">
                        {/* Platform Network selector block */}
-                       <div className="space-y-2">
-                         <label className="text-[10px] text-gray-450 uppercase font-black tracking-wider">Select platform network workspace to fund</label>
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                           {([
-                             { key: 'Amazon', name: 'Amazon (VIP 1)', rate: '4% Profit', min: 'Min Deposit $20' },
-                             { key: 'Alibaba', name: 'Alibaba (VIP 2)', rate: '8% Commission', min: 'Min Deposit $299' },
-                             { key: 'Shopify', name: 'Shopify (VIP 3)', rate: '12% Commission', min: 'Deposit / CS Contact' }
-                           ] as const).map((plat) => (
-                             <button
-                               key={plat.key}
-                               type="button"
-                               onClick={() => setDepositTargetPlatform(plat.key)}
-                               className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 ${
-                                 depositTargetPlatform === plat.key
-                                   ? 'border-amazon-gold bg-amber-50/20 ring-1 ring-amazon-gold shadow-xs'
-                                   : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-white'
-                               }`}
-                             >
-                               <div className="flex items-center justify-between w-full">
-                                 <span className="text-[11px] font-black text-gray-900 leading-none">{plat.name}</span>
-                                 {depositTargetPlatform === plat.key && (
-                                   <span className="h-2 w-2 rounded-full bg-amazon-gold" />
-                                 )}
-                               </div>
-                               <div className="space-y-0.5">
-                                 <p className="text-[10px] font-black text-green-600 leading-none">{plat.rate}</p>
-                                 <p className="text-[9px] text-gray-450 leading-none font-medium">{plat.min}</p>
-                               </div>
-                             </button>
-                           ))}
+                       {enabledPlatform === null ? (
+                         /* Unbound user: can select platform */
+                         <div className="space-y-2">
+                           <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Select platform network workspace to fund</label>
+                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                             {([
+                               { key: 'Amazon', name: 'Amazon (VIP 1)', rate: '4% Profit', min: 'Min Deposit $20' },
+                               { key: 'Alibaba', name: 'Alibaba (VIP 2)', rate: '8% Commission', min: 'Min Deposit $299' },
+                               { key: 'Shopify', name: 'Shopify (VIP 3)', rate: '12% Commission', min: 'Deposit / CS Contact' }
+                             ] as const).map((plat) => (
+                               <button
+                                 key={plat.key}
+                                 type="button"
+                                 onClick={() => setDepositTargetPlatform(plat.key)}
+                                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 ${
+                                   depositTargetPlatform === plat.key
+                                     ? 'border-amazon-gold bg-amber-50/20 ring-1 ring-amazon-gold shadow-xs'
+                                     : 'border-gray-200 hover:border-gray-300 text-gray-650 bg-white'
+                                 }`}
+                               >
+                                 <div className="flex items-center justify-between w-full">
+                                   <span className="text-[11px] font-black text-gray-900 leading-none">{plat.name}</span>
+                                   {depositTargetPlatform === plat.key && (
+                                     <span className="h-2 w-2 rounded-full bg-amazon-gold" />
+                                   )}
+                                 </div>
+                                 <div className="space-y-0.5">
+                                   <p className="text-[10px] font-black text-green-600 leading-none">{plat.rate}</p>
+                                   <p className="text-[9px] text-gray-450 leading-none font-medium">{plat.min}</p>
+                                 </div>
+                               </button>
+                             ))}
+                           </div>
                          </div>
-                       </div>
-
+                       ) : (
+                         /* Bound user: read-only static indicator */
+                         <div className="bg-amber-50/50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
+                           <div>
+                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Bound Platform Network</span>
+                             <h4 className="text-sm font-black text-gray-955 mt-0.5 uppercase">{enabledPlatform} Workspace</h4>
+                           </div>
+                           <span className="bg-[#131921] text-amazon-gold text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-gray-800">
+                             Activated & Locked
+                           </span>
+                         </div>
+                       )}
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <label className="text-[10px] text-gray-505 uppercase font-black">Amount ({selectedProtocol === 'BTC' ? 'BTC' : 'USDT'})</label>
@@ -1859,13 +1931,13 @@ export default function DashboardPage({
                   </div>
 
                   {/* Right part: Recent Deposit Requests history with simulation approval triggers */}
-                  <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
+                  <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col space-y-4">
                     <div>
                       <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Recent deposit requests</h3>
                       <p className="text-xs text-gray-400 mt-0.5 font-sans">Check and validate your pending crypto transfers.</p>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto max-h-[350px] space-y-3.5 pt-2">
+                    <div className="flex-1 overflow-y-auto space-y-3.5 pt-2">
                       {depositRequests.map((req) => (
                         <div key={req.id} className="border border-gray-150 p-4.5 rounded-xl bg-gray-50/50 space-y-3 text-xs">
                           <div className="flex justify-between items-center border-b border-gray-150 pb-2">
@@ -1894,24 +1966,6 @@ export default function DashboardPage({
                             <div>Date:</div>
                             <div className="text-right font-mono text-gray-500">{req.date}</div>
                           </div>
-
-                          {/* Simulation controls for developers to approve/deny deposits manually */}
-                          {req.status === 'Pending' && (
-                            <div className="flex space-x-2 pt-2 border-t border-gray-150">
-                              <button
-                                onClick={() => handleSimulateApprove(req.id, req.amount)}
-                                className="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] rounded transition cursor-pointer text-center"
-                              >
-                                Approve (Simulate)
-                              </button>
-                              <button
-                                onClick={() => handleSimulateReject(req.id)}
-                                className="flex-1 py-1.5 bg-red-650 hover:bg-red-700 text-white font-bold text-[10px] rounded transition cursor-pointer text-center"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          )}
                         </div>
                       ))}
 
@@ -1931,29 +1985,16 @@ export default function DashboardPage({
             {/* ================================== ORDERS (EVALUATIONS) ================================== */}
             {activeTab === 'orders' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {activePlatform === null ? (
-                  /* Case 1: No active platform selected */
-                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
-                    <div className="h-14 w-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500 border border-amber-100">
-                      <Lock className="h-6 w-6" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h2 className="text-lg font-black text-gray-900">Campaign Evaluation Locked</h2>
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        To view and begin active product evaluation campaigns, please select a network from the dropdown in the top navigation header and deposit the minimum collateral.
-                      </p>
-                    </div>
-                  </div>
-                ) : enabledPlatform === null ? (
-                  /* Case 2: Platform selected, but not activated (no deposit) */
+                {enabledPlatform === null ? (
+                  /* Case 1: Workspace not activated / locked */
                   <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
                     <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100">
                       <Lock className="h-6 w-6" />
                     </div>
                     <div className="space-y-1.5">
-                      <h2 className="text-lg font-black text-gray-900">{activePlatform} Evaluation Workspace Locked</h2>
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        You must activate the workspace by submitting a deposit of at least {activePlatform === 'Amazon' ? '$20' : activePlatform === 'Alibaba' ? '$299' : 'the required admin review'} to participate in evaluation campaigns.
+                      <h2 className="text-lg font-black text-gray-900">Campaign Evaluation Locked</h2>
+                      <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
+                        Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
                       </p>
                     </div>
                     <div className="pt-2">
@@ -1966,7 +2007,7 @@ export default function DashboardPage({
                     </div>
                   </div>
                 ) : (
-                  /* Case 3: Fully unlocked and active */
+                  /* Case 2: Fully unlocked and active */
                   <div className="space-y-6 animate-fadeIn">
                     <div>
                       <h2 className="text-lg font-black text-gray-900">Merchant Evaluation Tasks</h2>
@@ -1975,14 +2016,44 @@ export default function DashboardPage({
                       </p>
                     </div>
 
+                    {/* Sub-tabs: Pending vs Completed Gigs */}
+                    <div className="flex border-b border-gray-200">
+                      <button
+                        onClick={() => {
+                          setOrdersSubTab('pending');
+                          setGigsPage(1);
+                        }}
+                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
+                          ordersSubTab === 'pending'
+                            ? 'border-amazon-gold text-[#131921] font-black'
+                            : 'border-transparent text-gray-400 hover:text-gray-655'
+                        }`}
+                      >
+                        Pending Tasks
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOrdersSubTab('completed');
+                          setGigsPage(1);
+                        }}
+                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
+                          ordersSubTab === 'completed'
+                            ? 'border-amazon-gold text-[#131921] font-black'
+                            : 'border-transparent text-gray-400 hover:text-gray-655'
+                        }`}
+                      >
+                        Completed Tasks ({currentPlatformData.orders.length})
+                      </button>
+                    </div>
+
                     {/* Search and Filters Bar */}
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3.5 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
                       {/* Search bar */}
-                      <div className="relative flex-1 max-w-md">
+                      <div className="relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Search campaign gigs by title or category..."
+                          placeholder="Search campaign gigs by title..."
                           value={gigsSearch}
                           onChange={(e) => {
                             setGigsSearch(e.target.value);
@@ -1991,36 +2062,16 @@ export default function DashboardPage({
                           className="w-full pl-9 pr-4 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-gray-800 font-medium"
                         />
                       </div>
-
-                      {/* Difficulty category filters */}
-                      <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-                        <span className="text-[10px] text-gray-400 uppercase font-black mr-1 flex-shrink-0">Difficulty:</span>
-                        {(['All', 'Easy', 'Medium', 'Expert'] as const).map((diff) => (
-                          <button
-                            key={diff}
-                            onClick={() => {
-                              setGigsDifficulty(diff);
-                              setGigsPage(1); // Reset to page 1
-                            }}
-                            className={`px-3 py-1 rounded-full text-[10px] font-black transition-colors flex-shrink-0 uppercase cursor-pointer border ${
-                              gigsDifficulty === diff
-                                ? 'bg-amazon-gold text-amazon-dark border border-[#a88734]'
-                                : 'bg-gray-100 border-gray-200 hover:bg-gray-200 text-gray-600 hover:text-gray-900'
-                            }`}
-                          >
-                            {diff}
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
                     {/* Tasks Grid */}
                     {(() => {
                       const filteredProducts = assignedProducts.filter(product => {
-                        const matchesSearch = product.title.toLowerCase().includes(gigsSearch.toLowerCase()) || 
-                                              product.category.toLowerCase().includes(gigsSearch.toLowerCase());
-                        const matchesDifficulty = gigsDifficulty === 'All' || product.difficulty === gigsDifficulty;
-                        return matchesSearch && matchesDifficulty;
+                        const matchesSearch = product.title.toLowerCase().includes(gigsSearch.toLowerCase());
+                        const isCompleted = currentPlatformData.orders.some(o => o.productTitle === product.title && o.status === 'Completed');
+                        const matchesSubTab = ordersSubTab === 'completed' ? isCompleted : !isCompleted;
+                        
+                        return matchesSearch && matchesSubTab;
                       });
 
                       const pageSize = 10;
@@ -2035,7 +2086,6 @@ export default function DashboardPage({
                               {paginatedProducts.map((product) => {
                                 // Check if already completed
                                 const isCompleted = currentPlatformData.orders.some(o => o.productTitle === product.title && o.status === 'Completed');
-                                const isPending = currentPlatformData.orders.some(o => o.productTitle === product.title && o.status === 'Pending');
 
                                 return (
                                   <div
@@ -2044,24 +2094,11 @@ export default function DashboardPage({
                                   >
                                     <div className="relative bg-gray-50 h-44 flex items-center justify-center p-4">
                                       <img src={product.image} alt={product.title} className="max-h-full max-w-full object-contain mix-blend-multiply" referrerPolicy="no-referrer" />
-                                      <div className="absolute top-2 left-2 flex items-center space-x-1.5">
-                                        <span className="bg-gray-900 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase font-mono">
-                                          {product.category}
-                                        </span>
-                                        <span className="bg-[#131921] text-amazon-gold font-black text-[9px] px-1.5 py-0.5 rounded uppercase font-sans">
-                                          {activePlatform}
-                                        </span>
-                                      </div>
                                     </div>
 
                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
                                       <div className="space-y-1">
                                         <h3 className="text-xs font-bold text-gray-955 leading-snug line-clamp-2">{product.title}</h3>
-                                        <div className="flex items-center space-x-2 pt-1 text-[10px]">
-                                          <span className="text-gray-400 font-semibold font-mono">Word Limit: {product.wordLimit} words</span>
-                                          <span className="text-gray-300">•</span>
-                                          <span className="text-gray-400 font-semibold uppercase">{product.difficulty}</span>
-                                        </div>
                                       </div>
 
                                       <div className="pt-3 flex items-center justify-between">
@@ -2073,10 +2110,6 @@ export default function DashboardPage({
                                         {isCompleted ? (
                                           <span className="bg-green-50 text-green-700 font-bold text-[10px] px-2.5 py-1 rounded border border-green-200 uppercase">
                                             ✓ Claimed
-                                          </span>
-                                        ) : isPending ? (
-                                          <span className="bg-amber-50 text-amber-700 font-bold text-[10px] px-2.5 py-1 rounded border border-amber-200 uppercase animate-pulse">
-                                            Under Review
                                           </span>
                                         ) : (
                                           <button
@@ -2095,7 +2128,16 @@ export default function DashboardPage({
                             </div>
                           ) : (
                             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
-                              <p>No campaign tasks found matching your search or filters.</p>
+                              <p className="font-bold text-gray-500">
+                                {ordersSubTab === 'pending' 
+                                  ? "All assigned campaign tasks have been completed!" 
+                                  : "You have not completed any campaign tasks yet."}
+                              </p>
+                              <p className="text-[11px] text-gray-400 mt-1">
+                                {ordersSubTab === 'pending' 
+                                  ? "Check back later or wait for administrators to unlock new batches." 
+                                  : "Select pending campaigns to complete evaluation compliance tasks."}
+                              </p>
                             </div>
                           )}
 
@@ -2313,6 +2355,207 @@ export default function DashboardPage({
               </div>
             )}
 
+            {/* ================================== WITHDRAW ================================== */}
+            {activeTab === 'withdraw' && (
+              <div className="space-y-6 animate-fadeIn text-left">
+                {enabledPlatform === null ? (
+                  /* Case 1: Workspace not activated / locked */
+                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
+                    <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100">
+                      <Lock className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h2 className="text-lg font-black text-gray-900">Withdrawal Operations Locked</h2>
+                      <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
+                        Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => setActiveTab('deposit')}
+                        className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                      >
+                        Go to Deposit Page
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Case 2: Activated workspace — show form and history */
+                  <>
+                    <div>
+                      <h2 className="text-lg font-black text-gray-900">Request Payout Withdrawal</h2>
+                      <p className="text-xs text-gray-505 mt-1 font-sans font-medium">
+                        Submit a secure withdrawal request to transfer your verified review commissions to your bound USDT wallet address.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      {/* Left Column: Withdrawal Form */}
+                      <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-xs">
+                        <div>
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">New Payout Request</h3>
+                          <p className="text-xs text-gray-400 mt-0.5 font-sans">Withdraw funds from your active workspace balance.</p>
+                        </div>
+                    {/* Warning notices if locked */}
+                    {currentPlatformData.completedOrders < 25 && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start space-x-3 text-red-800">
+                        <Lock className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-600" />
+                        <div className="text-xs leading-relaxed font-semibold">
+                          <strong className="text-red-900 font-bold">Withdrawal Locked:</strong>
+                          <p className="mt-0.5 text-red-700 font-sans">
+                            Minimum compliance threshold requires 25 completed reviews. Currently completed: {currentPlatformData.completedOrders}/25. Please complete more task evaluations to authorize withdrawals.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!isAddressBound && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start justify-between space-x-3 text-amber-800">
+                        <div className="flex items-start space-x-3">
+                          <ShieldAlert className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                          <div className="text-xs leading-relaxed font-semibold">
+                            <strong className="text-amber-900 font-bold">USDT Address Required:</strong>
+                            <p className="mt-0.5 text-amber-700 font-sans">
+                              Please configure and bind your receiving wallet address in the Profile settings tab before requesting withdrawals.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('profile');
+                            setProfileActiveSection('wallet');
+                          }}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xxs uppercase font-black rounded-lg transition-colors cursor-pointer whitespace-nowrap self-center"
+                        >
+                          Bind Address →
+                        </button>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+                      {/* Active Platform details */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
+                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Active Workspace</span>
+                          <p className="text-xs font-black text-gray-900 mt-1 uppercase">{activePlatform || 'Amazon'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
+                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Available Balance</span>
+                          <p className="text-xs font-black text-green-600 mt-1">${currentPlatformData.walletBalance.toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      {/* Bound USDT Address display */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-baseline">
+                          <label className="text-[10px] text-gray-500 uppercase font-black">Linked USDT Payout Address</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('profile');
+                              setProfileActiveSection('wallet');
+                            }}
+                            className="text-[10px] text-amazon-blue hover:underline font-bold font-sans"
+                          >
+                            Change in Profile →
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          readOnly
+                          value={defaultWalletAddress || 'No receiving wallet linked'}
+                          className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-lg text-gray-500 font-mono"
+                        />
+                      </div>
+
+                      {/* Amount input */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-gray-550 uppercase font-black">Withdrawal Amount (USDT)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            required
+                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                            placeholder="Min 20.00"
+                            value={newWithdrawAmount}
+                            onChange={(e) => setNewWithdrawAmount(e.target.value)}
+                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-gray-555 uppercase font-black font-sans">Withdrawal Password</label>
+                          <input
+                            type="password"
+                            required
+                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                            placeholder="Enter your withdrawal password"
+                            value={newWithdrawPassword}
+                            onChange={(e) => setNewWithdrawPassword(e.target.value)}
+                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                        className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed border-0"
+                      >
+                        Submit Payout Request
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Right Column: Withdrawal request history */}
+                  <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col space-y-4">
+                    <div>
+                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Recent Payout History</h3>
+                      <p className="text-xs text-gray-400 mt-0.5 font-sans">Review your submitted withdrawals and ledger standing.</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3.5 pt-2">
+                      {withdrawals.map((req) => (
+                        <div key={req.id} className="border border-gray-150 p-4.5 rounded-xl bg-gray-50/50 space-y-3 text-xs">
+                          <div className="flex justify-between items-center border-b border-gray-150 pb-2">
+                            <span className="font-bold text-gray-855">Withdrawal Request</span>
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${
+                              req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
+                              req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
+                              'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
+                            }`}>
+                              {req.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-y-1.5 text-gray-600 font-medium font-sans">
+                            <div>Amount:</div>
+                            <div className="text-right font-black font-mono text-gray-900">${parseFloat(req.amount).toFixed(2)} USDT</div>
+                            <div>Address:</div>
+                            <div className="text-right font-mono text-[10px] text-gray-400 truncate max-w-[120px] ml-auto cursor-pointer" title={req.address || defaultWalletAddress}>
+                              {(req.address || defaultWalletAddress || '').slice(0, 8)}...{(req.address || defaultWalletAddress || '').slice(-8)}
+                            </div>
+                            <div>Date:</div>
+                            <div className="text-right font-mono text-gray-500">{new Date(req.created_at || req.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {withdrawals.length === 0 && (
+                        <div className="text-center py-12 text-gray-400">
+                          <Wallet className="h-10 w-10 mx-auto text-gray-300 mb-2" />
+                          <p className="font-bold font-sans">No withdrawals requested yet.</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Submit details on the left to request payout.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
             {/* ================================== PROFILE ================================== */}
             {activeTab === 'profile' && (
               <div className="space-y-6 animate-fadeIn text-left">
@@ -2349,45 +2592,75 @@ export default function DashboardPage({
                   {/* TAB 1: IDENTITY & PERSONA */}
                   {profileActiveSection === 'details' && (
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fadeIn">
-                      {/* Left: Avatar Customize Card */}
+                      {/* Left: Profile Photo Upload Card */}
                       <div className="md:col-span-4 bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center justify-center text-center space-y-4 shadow-xs">
                         <div className="space-y-2">
-                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Reviewer Avatar</h3>
-                          <p className="text-[11px] text-gray-450 leading-snug">Switch your identity persona across merchant review feeds.</p>
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Profile Photo</h3>
+                          <p className="text-[11px] text-gray-450 leading-snug">Upload a custom profile photo for your reviewer account.</p>
                         </div>
 
                         <div className="py-4">
-                          <div className={`h-24 w-24 rounded-full bg-gradient-to-br ${AVATARS[selectedAvatar].gradient} flex items-center justify-center p-5 border-4 border-white shadow-md mx-auto transition-transform duration-200 transform hover:scale-105 select-none`}>
-                            {AVATARS[selectedAvatar].icon("h-12 w-12")}
+                          <div className="relative group h-24 w-24 rounded-full overflow-hidden border-4 border-white shadow-md mx-auto bg-gray-50 flex items-center justify-center">
+                            {profile_photo ? (
+                              <img src={profile_photo} alt="Profile" className="h-full w-full object-cover" />
+                            ) : (
+                              <User className="h-12 w-12 text-gray-400" />
+                            )}
+                            
+                            <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase tracking-wider cursor-pointer transition-opacity">
+                              Change
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={handlePhotoChange} 
+                                className="hidden" 
+                              />
+                            </label>
                           </div>
-                          <p className="text-xs font-bold text-gray-900 mt-3">{AVATARS[selectedAvatar].name}</p>
-                          <span className="text-[9px] bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-200 uppercase font-bold tracking-wider mt-1.5 inline-block">
-                            Active Persona
-                          </span>
+                          
+                          {profile_photo && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const token = localStorage.getItem('reviewer_auth_token');
+                                try {
+                                  const res = await fetch(`${API_BASE}/auth/update-profile-photo`, {
+                                    method: 'PUT',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'Authorization': `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({ profile_photo: null })
+                                  });
+                                  if (res.ok) {
+                                    setProfile_photo(null);
+                                    localStorage.removeItem(`profile_photo_${username}`);
+                                    showToast("✓ Profile photo removed.");
+                                  } else {
+                                    showToast("Failed to remove profile photo.");
+                                  }
+                                } catch (err) {
+                                  showToast("Server connection error.");
+                                }
+                              }}
+                              className="mt-2 text-[10px] text-red-500 hover:text-red-600 font-bold uppercase tracking-wider cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          )}
                         </div>
 
-                        <div className="w-full border-t border-gray-100 pt-4 space-y-2">
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Choose Avatar Persona</p>
-                          <div className="grid grid-cols-6 gap-2">
-                            {AVATARS.map((av, idx) => (
-                              <button
-                                key={av.name}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedAvatar(idx);
-                                  showToast(`✓ Persona switched to ${av.name}!`);
-                                }}
-                                className={`h-8 w-8 rounded-full bg-gradient-to-br ${av.gradient} flex items-center justify-center p-1.5 cursor-pointer transition transform hover:scale-110 active:scale-95 border border-white/20 ${
-                                  selectedAvatar === idx
-                                    ? 'ring-2 ring-amazon-gold ring-offset-1 scale-105 shadow'
-                                    : 'opacity-70 hover:opacity-100'
-                                }`}
-                                title={av.name}
-                              >
-                                {av.icon("h-4.5 w-4.5")}
-                              </button>
-                            ))}
-                          </div>
+                        <div className="w-full border-t border-gray-100 pt-4">
+                          <label className="inline-block px-4 py-2 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-[10px] rounded-lg border border-[#a88734] transition cursor-pointer uppercase">
+                            Upload Photo
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              onChange={handlePhotoChange} 
+                              className="hidden" 
+                            />
+                          </label>
+                          <p className="text-[9px] text-gray-400 mt-2">Supports JPG, PNG under 1.5MB</p>
                         </div>
                       </div>
 
@@ -2641,7 +2914,7 @@ export default function DashboardPage({
                               required
                               value={newWithdrawalPassword}
                               onChange={(e) => setNewWithdrawalPassword(e.target.value)}
-                              placeholder="Min 4 digits"
+                              placeholder="4 digits"
                               className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-gray-855"
                             />
                           </div>
@@ -2728,14 +3001,20 @@ export default function DashboardPage({
                     </div>
                   </div>
 
-                  {/* QR Code Placeholder */}
+                  {/* QR Code */}
                   <div className="space-y-2">
                     <label className="text-[10px] text-gray-400 uppercase font-black">QR Code</label>
-                    <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center py-10 space-y-3">
-                      <QrCode className="h-14 w-14 text-gray-300" />
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center py-6 space-y-3">
+                      <div className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(referralCode ? `https://www.amazonecommercehub.com/register?ref=${referralCode}` : 'https://www.amazonecommercehub.com/register')}`} 
+                          alt="Referral Link QR Code" 
+                          className="h-36 w-36 select-none pointer-events-none"
+                        />
+                      </div>
                       <div className="text-center">
-                        <p className="text-xs font-bold text-gray-400">QR Code</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{referralCode ? `ref=${referralCode}` : 'ref=YOUR_CODE'}</p>
+                        <p className="text-xs font-black text-gray-800">Scan to Register</p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">{referralCode ? `ref=${referralCode}` : 'ref=YOUR_CODE'}</p>
                       </div>
                     </div>
                   </div>
@@ -3399,249 +3678,134 @@ export default function DashboardPage({
 
       {/* ================================== MODAL: VERIFIED COMPLIANCE REVIEW PROGRESS WIZARD ================================== */}
       <AnimatePresence>
-        {activeReviewProduct && (() => {
-          const requiredWords = activeReviewProduct.wordLimit || 20;
-          const currentWords = reviewDraftText.trim().split(/\s+/).filter(Boolean).length;
-          const isWordLimitMet = currentWords >= requiredWords;
-          const progressPercent = Math.min(100, (currentWords / requiredWords) * 100);
+        {activeReviewProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveReviewProduct(null)}
+              className="fixed inset-0 bg-black"
+            />
 
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.5 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setActiveReviewProduct(null)}
-                className="fixed inset-0 bg-black"
-              />
-
-              {/* Centered Modal Card */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full z-50 overflow-hidden relative flex flex-col max-h-[90vh] text-left"
-              >
-                {/* Modal Top Header */}
-                <div className="px-6 py-4 border-b border-gray-150 flex items-center justify-between bg-gray-50">
-                  <div className="space-y-0.5">
-                    <h3 className="text-sm font-black text-gray-900 flex items-center space-x-2">
-                      <span className="bg-[#131921] text-white font-mono text-[9px] px-2 py-0.5 rounded tracking-wider uppercase">{activePlatform} Campaign</span>
-                      <span>Feedback Compliance Workflow</span>
-                    </h3>
-                    <p className="text-[10px] text-gray-400 leading-tight">Follow steps to submit verified purchase and review draft</p>
-                  </div>
-                  <button
-                    onClick={() => setActiveReviewProduct(null)}
-                    className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-black transition"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+            {/* Centered Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full z-50 overflow-hidden relative flex flex-col max-h-[90vh] text-left"
+            >
+              {/* Modal Top Header */}
+              <div className="px-6 py-4 border-b border-gray-150 flex items-center justify-between bg-gray-50">
+                <div className="space-y-0.5">
+                  <h3 className="text-sm font-black text-gray-900 flex items-center space-x-2">
+                    <span className="bg-[#131921] text-white font-mono text-[9px] px-2 py-0.5 rounded tracking-wider uppercase">{activePlatform} Campaign</span>
+                    <span>Evaluation Feedback Workflow</span>
+                  </h3>
+                  <p className="text-[10px] text-gray-400 leading-tight">Complete the 2-step evaluation form below to credit your commission balance.</p>
                 </div>
+                <button
+                  onClick={() => setActiveReviewProduct(null)}
+                  className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-black transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-                {/* Progress Steps Header Line */}
-                <div className="px-6 py-3 bg-[#F9FAFB] border-b border-gray-150 flex justify-between text-[11px] font-black font-mono">
-                  <div className={`flex items-center space-x-1.5 ${reviewStep >= 1 ? 'text-amazon-orange' : 'text-gray-400'}`}>
-                    <span className="h-5 w-5 bg-gray-100 border border-gray-300 rounded-full flex items-center justify-center font-bold">1</span>
-                    <span className="hidden xs:inline">Acquire</span>
-                  </div>
-                  <div className="h-px bg-gray-300 flex-1 self-center mx-2" />
-                  <div className={`flex items-center space-x-1.5 ${reviewStep >= 2 ? 'text-amazon-orange' : 'text-gray-400'}`}>
-                    <span className="h-5 w-5 bg-gray-100 border border-gray-300 rounded-full flex items-center justify-center font-bold">2</span>
-                    <span className="hidden xs:inline">Order ID</span>
-                  </div>
-                  <div className="h-px bg-gray-300 flex-1 self-center mx-2" />
-                  <div className={`flex items-center space-x-1.5 ${reviewStep >= 3 ? 'text-amazon-orange' : 'text-gray-400'}`}>
-                    <span className="h-5 w-5 bg-gray-100 border border-gray-300 rounded-full flex items-center justify-center font-bold">3</span>
-                    <span className="hidden xs:inline">Feedback Draft</span>
-                  </div>
-                  <div className="h-px bg-gray-300 flex-1 self-center mx-2" />
-                  <div className={`flex items-center space-x-1.5 ${reviewStep >= 4 ? 'text-amazon-orange' : 'text-gray-400'}`}>
-                    <span className="h-5 w-5 bg-gray-100 border border-gray-300 rounded-full flex items-center justify-center font-bold">4</span>
-                    <span className="hidden xs:inline">Approval</span>
-                  </div>
-                </div>
-
-                {/* Modal Body / Scrollable Content */}
-                <div className="p-6 overflow-y-auto space-y-6 flex-1">
-                  
-                  {/* Step 1: Acquisition Instructions */}
-                  {reviewStep === 1 && (
-                    <div className="space-y-4 animate-fadeIn">
-                      <div className="flex items-start space-x-4">
-                        <img src={activeReviewProduct.image} alt={activeReviewProduct.title} className="h-20 w-20 object-contain rounded border border-gray-200 p-1 flex-shrink-0" />
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-bold text-gray-900">{activeReviewProduct.title}</h4>
-                          <p className="text-[10px] text-gray-400 font-medium">Estimated commission: <strong className="text-green-600">${activeReviewProduct.payout.toFixed(2)} USD</strong></p>
-                        </div>
-                      </div>
-
-                      <div className="bg-gray-50 rounded-xl p-4.5 border border-gray-150 space-y-3">
-                        <h4 className="text-xs font-black text-gray-800 uppercase tracking-wide">Acquisition Guidelines</h4>
-                        <p className="text-xs text-gray-600 leading-relaxed">
-                          Reviews must originate from active buyers on <strong className="text-gray-800">{activePlatform}</strong>. 
-                        </p>
-                        <ol className="text-xs text-gray-600 space-y-1.5 list-decimal pl-4 leading-normal">
-                          <li>Click the acquisition search link below.</li>
-                          <li>Search for matching items and add to your cart or place order.</li>
-                          <li>Save the order confirmation receipt number (Order ID).</li>
-                        </ol>
-                      </div>
-
-                      <div className="flex justify-between items-center pt-2 gap-4">
-                        <a
-                          href={activeReviewProduct.externalLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-lg border border-gray-300 transition flex items-center space-x-1.5"
-                        >
-                          <span>Open {activePlatform} Search</span>
-                          <ArrowUpRight className="h-4 w-4" />
-                        </a>
-
-                        <button
-                          onClick={handleStep1Complete}
-                          className="px-5 py-2 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition"
-                        >
-                          Step 2: Confirm Purchase
-                        </button>
-                      </div>
+              {/* Modal Body / Scrollable Content */}
+              <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                
+                {/* Product Details Section */}
+                <div className="flex items-start space-x-4 bg-gray-50 p-4 rounded-xl border border-gray-150">
+                  <img src={activeReviewProduct.image} alt={activeReviewProduct.title} className="h-16 w-16 object-contain rounded border border-gray-200 bg-white p-1 flex-shrink-0" />
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black text-gray-900 leading-snug">{activeReviewProduct.title}</h4>
+                    <div className="flex space-x-4 text-[10px] text-gray-400 font-bold">
+                      <span>Price: <strong className="text-gray-800">${parseFloat(activeReviewProduct.price as any).toFixed(2)}</strong></span>
+                      <span>Commission: <strong className="text-green-600">${activeReviewProduct.payout.toFixed(2)} USD</strong></span>
                     </div>
-                  )}
-
-                  {/* Step 2: Submit Order ID */}
-                  {reviewStep === 2 && (
-                    <form onSubmit={handleStep2Complete} className="space-y-4 animate-fadeIn">
-                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-150 space-y-2">
-                        <h4 className="text-xs font-black text-gray-800 uppercase">Input Order Reference Number</h4>
-                        <p className="text-xs text-gray-600 leading-normal">
-                          Input the digital purchase confirmation ID from your e-commerce receipt. Our automated bot cross-references database files to assure compliance.
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-gray-700">Order Reference ID *</label>
-                        <input
-                          type="text"
-                          required
-                          value={inputOrderId}
-                          onChange={(e) => setInputOrderId(e.target.value)}
-                          placeholder={activePlatform === 'Amazon' ? "e.g. 403-9120381-112019" : "e.g. ALI-77128391"}
-                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono font-bold"
-                        />
-                        <p className="text-[10px] text-gray-400">Order verification unlocks the initial <strong className="text-green-600 font-bold">$0.50 pending credit</strong>.</p>
-                      </div>
-
-                      <div className="flex justify-end pt-2">
-                        <button
-                          type="submit"
-                          className="px-5 py-2 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition"
-                        >
-                          Step 3: Draft Review
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Step 3: Feedback Review Text Draft */}
-                  {reviewStep === 3 && (
-                    <form onSubmit={handleStep3Complete} className="space-y-4 animate-fadeIn">
-                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-150 text-xs space-y-1 text-gray-600 leading-normal">
-                        <h4 className="text-xs font-black text-gray-800 uppercase">Formulate Feedback Opinion</h4>
-                        <p>Write an objective evaluation of the product specs and usage. High character and word limits are mandated by active retailers.</p>
-                      </div>
-
-                      {/* Stars */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-700">Star Rating Compliance</label>
-                        <div className="flex space-x-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              type="button"
-                              key={star}
-                              onClick={() => setReviewStars(star)}
-                              className="focus:outline-none focus:ring-0 p-0.5"
-                            >
-                              <Star className={`h-5.5 w-5.5 ${star <= reviewStars ? 'fill-amazon-gold text-amazon-gold' : 'text-gray-300'}`} />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-baseline text-xs">
-                          <label className="font-bold text-gray-700">Feedback Content Text *</label>
-                          <span className={`font-mono text-[10px] font-bold ${isWordLimitMet ? 'text-green-600' : 'text-amber-500'}`}>
-                            {currentWords} / {requiredWords} words
-                          </span>
-                        </div>
-                        <textarea
-                          required
-                          rows={5}
-                          value={reviewDraftText}
-                          onChange={(e) => setReviewDraftText(e.target.value)}
-                          placeholder="Address packaging quality, physical handling, product design, pros & cons, setup difficulty..."
-                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold focus:border-amazon-gold text-gray-900 font-medium resize-none leading-relaxed"
-                        />
-
-                        {/* Word Progress Slider Bar */}
-                        <div className="space-y-1.5">
-                          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div className={`h-full transition-all duration-200 ${isWordLimitMet ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${progressPercent}%` }} />
-                          </div>
-                          {!isWordLimitMet && (
-                            <p className="text-[10px] text-amber-600 font-bold flex items-center space-x-1">
-                              <span>⚠️ Write {requiredWords - currentWords} more words to unlock payout authorization.</span>
-                            </p>
-                          )}
-                          {isWordLimitMet && (
-                            <p className="text-[10px] text-green-600 font-black flex items-center space-x-1">
-                              <span>✓ Payout unlocked! Ready for submission.</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end pt-2">
-                        <button
-                          type="submit"
-                          disabled={!isWordLimitMet}
-                          className={`px-5 py-2 rounded-lg text-xs font-black transition ${
-                            isWordLimitMet
-                              ? 'bg-[#131921] hover:bg-black text-white cursor-pointer'
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
-                          }`}
-                        >
-                          Step 4: Queue Approval
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Step 4: Queue Approval */}
-                  {reviewStep === 4 && (
-                    <div className="space-y-6 text-center py-6 animate-fadeIn">
-                      <div className="h-14 w-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mx-auto border border-amber-200">
-                        <RefreshCw className="h-6 w-6 animate-spin" />
-                      </div>
-
-                      <div className="space-y-1.5 max-w-md mx-auto">
-                        <h4 className="text-sm font-black text-gray-900">Awaiting Merchant Payout Verification</h4>
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                          Your draft feedback and order ID <strong className="font-mono text-gray-700">{inputOrderId}</strong> has been successfully submitted to the e-commerce client. The compliance check typically processes inside 24 hours.
-                        </p>
-                      </div>
-
-
-                    </div>
-                  )}
-
+                  </div>
                 </div>
-              </motion.div>
-            </div>
-          );
-        })()}
+
+                <form onSubmit={handleStep3Complete} className="space-y-5">
+                  {/* Step 1: Star Rating */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5">
+                      <span className="h-4.5 w-4.5 bg-[#131921] text-white text-[10px] rounded-full flex items-center justify-center font-bold">1</span>
+                      <span>Select Rating</span>
+                    </label>
+                    <div className="flex space-x-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          type="button"
+                          key={star}
+                          onClick={() => setReviewStars(star)}
+                          className="focus:outline-none focus:ring-0 p-1 hover:scale-110 transition-transform cursor-pointer"
+                        >
+                          <Star className={`h-7 w-7 ${star <= reviewStars ? 'fill-amazon-gold text-amazon-gold' : 'text-gray-300'}`} />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium">Choose a star rating for this product campaign.</p>
+                  </div>
+
+                  {/* Step 2: Feedback Templates Selection */}
+                  <div className="space-y-2.5">
+                    <label className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5">
+                      <span className="h-4.5 w-4.5 bg-[#131921] text-white text-[10px] rounded-full flex items-center justify-center font-bold">2</span>
+                      <span>Choose Feedback Template</span>
+                    </label>
+                    
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {[
+                        { code: '01', text: "Excellent product quality, fast delivery, and premium packaging. Highly satisfied!" },
+                        { code: '02', text: "Works exactly as described. Reliable performance and durable build. Would recommend!" },
+                        { code: '03', text: "Great value for money. Very easy setup and outstanding customer support." }
+                      ].map((opt) => {
+                        const isSelected = selectedTextCode === opt.code;
+                        return (
+                          <button
+                            type="button"
+                            key={opt.code}
+                            onClick={() => setSelectedTextCode(opt.code)}
+                            className={`w-full p-3.5 text-left text-xs rounded-xl border transition-all cursor-pointer flex items-start space-x-3 ${
+                              isSelected 
+                                ? 'bg-[#fcf8e3] border-amazon-gold shadow-xxs ring-1 ring-amazon-gold text-gray-900 font-semibold' 
+                                : 'bg-white border-gray-200 hover:border-gray-300 text-gray-655 font-medium'
+                            }`}
+                          >
+                            <div className={`mt-0.5 h-4 w-4 rounded-full border flex-shrink-0 flex items-center justify-center ${
+                              isSelected ? 'border-amazon-gold bg-amazon-gold text-amazon-dark' : 'border-gray-300 bg-white'
+                            }`}>
+                              {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-[#131921]" />}
+                            </div>
+                            <span className="leading-relaxed">{opt.text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={reviewStars === 0 || selectedTextCode === null}
+                      className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 border-0 text-amazon-dark disabled:cursor-not-allowed font-black text-xs rounded-lg transition-colors cursor-pointer text-center uppercase tracking-wider flex items-center justify-center space-x-2"
+                    >
+                      <span>Submit and Open Next Campaign</span>
+                      <span className="bg-amazon-dark/10 px-2 py-0.5 rounded text-[10px] font-mono">
+                        {currentPlatformData.completedOrders + 1}/25
+                      </span>
+                    </button>
+                  </div>
+                </form>
+
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* ================================== MODAL: SECURE CASHOUT WITHDRAWAL FORM ================================== */}

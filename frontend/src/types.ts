@@ -1,7 +1,6 @@
 export interface Product {
   id: string;
   title: string;
-  category: string;
   price: number;
   rating: number;
   reviewsCount: number;
@@ -12,8 +11,6 @@ export interface Product {
   isPrime?: boolean;
   payout: number;
   platform: 'Amazon' | 'Alibaba' | 'Shopify';
-  difficulty?: 'Easy' | 'Medium' | 'Expert';
-  wordLimit?: number;
 }
 
 export interface Testimonial {

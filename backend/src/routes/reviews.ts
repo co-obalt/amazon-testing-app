@@ -73,6 +73,24 @@ async function maybeAwardReferralBonus(referredUserId?: string, platform?: strin
   }
 }
 
+// Fetch ALL Campaigns Pool products for visual marquee showcase (no platform filter required, available to all logged-in users)
+router.get('/products/all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json(products || []);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // 1. Fetch Campaigns Pool by Platform
 router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -82,11 +100,26 @@ router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res
       return res.status(400).json({ error: 'Platform query parameter is required' });
     }
 
-    // Fetch products filtered by platform
+    const userId = req.user?.id;
+
+    // Check if user has specific assigned products for this platform
+    const { data: assigned } = await supabase
+      .from('user_assigned_products')
+      .select('product_id')
+      .eq('user_id', userId)
+      .eq('platform', platform);
+
+    if (!assigned || assigned.length === 0) {
+      // If no products assigned, this platform is locked/unassigned for this user
+      return res.json([]);
+    }
+
+    const assignedIds = assigned.map((a: any) => a.product_id);
     let { data: products, error } = await supabase
       .from('products')
       .select('*')
-      .eq('platform', platform);
+      .eq('platform', platform)
+      .in('id', assignedIds);
 
     if (error) {
       return res.status(500).json({ error: 'Failed to retrieve products: ' + error.message });
@@ -97,45 +130,45 @@ router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res
       const { count } = await supabase.from('products').select('*', { count: 'exact', head: true });
       if (count === 0) {
         const defaultProducts = [
-          // Amazon
-          { platform: 'Amazon', title: 'ZonHub Smart Echo (5th Gen) | Spatial sound', category: 'Smart Home', image_url: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=600', payout: 1.25, difficulty: 'Easy', word_limit: 30, external_link: 'https://www.amazon.com/s?k=smart+echo+speaker' },
-          { platform: 'Amazon', title: 'ZonReader Paperwhite (16 GB) | Warm light', category: 'Electronics', image_url: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&q=80&w=600', payout: 1.95, difficulty: 'Medium', word_limit: 45, external_link: 'https://www.amazon.com/s?k=paperwhite+ereader' },
-          { platform: 'Amazon', title: 'Organic Bamboo Coasters Set (6-Pack) | Non-slip', category: 'Kitchen & Home', image_url: 'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&q=80&w=600', payout: 0.80, difficulty: 'Easy', word_limit: 20, external_link: 'https://www.amazon.com/s?k=bamboo+coasters' },
-          { platform: 'Amazon', title: 'Ergonomic Memory Foam Office Seat Cushion', category: 'Office Products', image_url: 'https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&q=80&w=600', payout: 1.10, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.amazon.com/s?k=office+seat+cushion' },
-          { platform: 'Amazon', title: 'Stainless Steel Vacuum Insulated Water Bottle (32oz)', category: 'Sports & Outdoors', image_url: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=600', payout: 1.40, difficulty: 'Easy', word_limit: 30, external_link: 'https://www.amazon.com/s?k=insulated+water+bottle' },
-          { platform: 'Amazon', title: 'Professional Ceramic Ionic Hair Dryer | 1875W', category: 'Personal Care', image_url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=600', payout: 2.20, difficulty: 'Expert', word_limit: 50, external_link: 'https://www.amazon.com/s?k=hair+dryer' },
-          { platform: 'Amazon', title: 'Adjustable Laptop Stand | Ergonomic Aluminum Stand', category: 'Office Products', image_url: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=600', payout: 1.65, difficulty: 'Medium', word_limit: 40, external_link: 'https://www.amazon.com/s?k=laptop+stand' },
-          { platform: 'Amazon', title: 'Premium Matcha Green Tea Powder (Organic)', category: 'Grocery & Gourmet', image_url: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=600', payout: 0.95, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.amazon.com/s?k=matcha+powder' },
-          { platform: 'Amazon', title: 'Dual-Port USB-C Wall Charger Block | 40W Fast Charger', category: 'Electronics', image_url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&q=80&w=600', payout: 1.05, difficulty: 'Easy', word_limit: 20, external_link: 'https://www.amazon.com/s?k=usb+c+charger' },
-          { platform: 'Amazon', title: 'Wireless Active Noise Cancelling Earbuds | Bluetooth 5.3', category: 'Electronics', image_url: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=600', payout: 2.10, difficulty: 'Expert', word_limit: 45, external_link: 'https://www.amazon.com/s?k=noise+cancelling+earbuds' },
-          { platform: 'Amazon', title: 'Digital Kitchen Scale | High Precision Multi-unit', category: 'Kitchen & Home', image_url: 'https://images.unsplash.com/photo-1588675646184-f550218b57b5?auto=format&fit=crop&q=80&w=600', payout: 0.75, difficulty: 'Easy', word_limit: 20, external_link: 'https://www.amazon.com/s?k=kitchen+scale' },
-          { platform: 'Amazon', title: 'Aromatherapy Ceramic Essential Oil Diffuser (500ml)', category: 'Smart Home', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', payout: 1.30, difficulty: 'Medium', word_limit: 30, external_link: 'https://www.amazon.com/s?k=essential+oil+diffuser' },
-          // Alibaba
-          { platform: 'Alibaba', title: 'AliUltra Foldable Electric Scooter | Dual motor', category: 'Transportation', image_url: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&q=80&w=600', payout: 2.50, difficulty: 'Expert', word_limit: 50, external_link: 'https://www.alibaba.com/trade/search?SearchText=electric+scooter' },
-          { platform: 'Alibaba', title: 'AliVision 4K Native LED Projector | 15k Lms', category: 'Entertainment', image_url: 'https://images.unsplash.com/photo-1535016120720-40c646be5580?auto=format&fit=crop&q=80&w=600', payout: 2.15, difficulty: 'Medium', word_limit: 40, external_link: 'https://www.alibaba.com/trade/search?SearchText=4k+projector' },
-          { platform: 'Alibaba', title: 'AliSecure HD Outdoor IP Camera | Wifi PTZ Node', category: 'Security', image_url: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&q=80&w=600', payout: 1.80, difficulty: 'Medium', word_limit: 35, external_link: 'https://www.alibaba.com/trade/search?SearchText=wifi+ip+camera' },
-          { platform: 'Alibaba', title: 'Smart Automated Robot Vacuum Cleaner | LIDAR Map', category: 'Smart Home', image_url: 'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?auto=format&fit=crop&q=80&w=600', payout: 2.40, difficulty: 'Expert', word_limit: 50, external_link: 'https://www.alibaba.com/trade/search?SearchText=robot+vacuum' },
-          { platform: 'Alibaba', title: 'Portable Solar Generator Station | 500Wh Output', category: 'Electronics', image_url: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&q=80&w=600', payout: 2.30, difficulty: 'Expert', word_limit: 45, external_link: 'https://www.alibaba.com/trade/search?SearchText=portable+solar+generator' },
-          { platform: 'Alibaba', title: 'Heavy Duty Massage Gun | 30 Speeds Deep Tissue', category: 'Personal Care', image_url: 'https://images.unsplash.com/photo-1607962837359-5e7eaf562642?auto=format&fit=crop&q=80&w=600', payout: 1.60, difficulty: 'Medium', word_limit: 30, external_link: 'https://www.alibaba.com/trade/search?SearchText=massage+gun' },
-          { platform: 'Alibaba', title: 'Adjustable Dumbbells Set (50lbs) | Quick Dial', category: 'Sports & Outdoors', image_url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=600', payout: 2.25, difficulty: 'Expert', word_limit: 40, external_link: 'https://www.alibaba.com/trade/search?SearchText=adjustable+dumbbells' },
-          { platform: 'Alibaba', title: 'Automatic Espresso Coffee Machine | 20 Bar Pump', category: 'Kitchen & Home', image_url: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?auto=format&fit=crop&q=80&w=600', payout: 2.45, difficulty: 'Expert', word_limit: 50, external_link: 'https://www.alibaba.com/trade/search?SearchText=espresso+machine' },
-          { platform: 'Alibaba', title: 'Electric Oral Irrigator Dental Flosser | 4 Modes', category: 'Personal Care', image_url: 'https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?auto=format&fit=crop&q=80&w=600', payout: 0.95, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.alibaba.com/trade/search?SearchText=oral+irrigator' },
-          { platform: 'Alibaba', title: 'Portable Bluetooth Thermal Label Printer', category: 'Office Products', image_url: 'https://images.unsplash.com/photo-1543269664-76bc3997d9ea?auto=format&fit=crop&q=80&w=600', payout: 1.20, difficulty: 'Easy', word_limit: 30, external_link: 'https://www.alibaba.com/trade/search?SearchText=label+printer' },
-          { platform: 'Alibaba', title: 'Dual Layer Car Roof Cargo Carrier Bag | Waterproof', category: 'Transportation', image_url: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600', payout: 1.50, difficulty: 'Medium', word_limit: 35, external_link: 'https://www.alibaba.com/trade/search?SearchText=roof+cargo+bag' },
-          { platform: 'Alibaba', title: 'Foldable Lightbox Photography Studio Kit', category: 'Entertainment', image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600', payout: 1.45, difficulty: 'Medium', word_limit: 30, external_link: 'https://www.alibaba.com/trade/search?SearchText=lightbox+studio' },
-          // Shopify
-          { platform: 'Shopify', title: 'Minimalist Full-Grain Leather Wallet | RFID organizer', category: 'Apparel & Accessories', image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600', payout: 1.10, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.google.com/search?q=minimalist+leather+wallet' },
-          { platform: 'Shopify', title: 'Therapeutic Essential Oils Diffuser | Ceramic ultrasonic', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', payout: 0.90, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.google.com/search?q=ceramic+essential+oils+diffuser' },
-          { platform: 'Shopify', title: 'Eco-Friendly Cork Yoga Mat | Non-slip sweat-resistant', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600', payout: 1.70, difficulty: 'Medium', word_limit: 35, external_link: 'https://www.google.com/search?q=cork+yoga+mat' },
-          { platform: 'Shopify', title: 'Hydro Flask Insulated Travel Coffee Mug | 16oz Wide Mouth', category: 'Apparel & Accessories', image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=600', payout: 1.20, difficulty: 'Easy', word_limit: 20, external_link: 'https://www.google.com/search?q=insulated+travel+mug' },
-          { platform: 'Shopify', title: 'Premium Bamboo Bed Sheets Set | King Size Cooling', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600', payout: 2.35, difficulty: 'Expert', word_limit: 50, external_link: 'https://www.google.com/search?q=bamboo+bed+sheets' },
-          { platform: 'Shopify', title: 'Minimalist Wooden Desk Organizer Stand | Handcrafted Walnut', category: 'Apparel & Accessories', image_url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=600', payout: 1.50, difficulty: 'Medium', word_limit: 30, external_link: 'https://www.google.com/search?q=wooden+desk+organizer' },
-          { platform: 'Shopify', title: 'Aromatherapy Soy Wax Candles Set | Lavender & Eucalyptus', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=600', payout: 0.85, difficulty: 'Easy', word_limit: 20, external_link: 'https://www.google.com/search?q=soy+wax+candles' },
-          { platform: 'Shopify', title: 'Polarized Retro Round Sunglasses | UV400 Unbreakable', category: 'Apparel & Accessories', image_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=600', payout: 1.30, difficulty: 'Medium', word_limit: 30, external_link: 'https://www.google.com/search?q=polarized+round+sunglasses' },
-          { platform: 'Shopify', title: 'Manual Ceramic Burr Coffee Grinder | Adjustable Coarseness', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=600', payout: 1.45, difficulty: 'Easy', word_limit: 25, external_link: 'https://www.google.com/search?q=manual+coffee+grinder' },
-          { platform: 'Shopify', title: 'Stainless Steel French Press Coffee Maker | Double Wall', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=600', payout: 1.90, difficulty: 'Expert', word_limit: 40, external_link: 'https://www.google.com/search?q=french+press+coffee+maker' },
-          { platform: 'Shopify', title: 'Vegan Leather Minimalist Backpack | 15.6 Inch Laptop Sleeve', category: 'Apparel & Accessories', image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600', payout: 2.10, difficulty: 'Expert', word_limit: 45, external_link: 'https://www.google.com/search?q=vegan+leather+backpack' },
-          { platform: 'Shopify', title: 'Ergonomic Balance Ball Chair with Stability Base', category: 'Wellness & Spa', image_url: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=600', payout: 2.25, difficulty: 'Expert', word_limit: 45, external_link: 'https://www.google.com/search?q=balance+ball+chair' }
+          // Amazon (4% Commission)
+          { platform: 'Amazon', title: 'ZonHub Smart Echo (5th Gen) | Spatial sound', image_url: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=600', price: 31.25, payout: 1.25, external_link: 'https://www.amazon.com/s?k=smart+echo+speaker' },
+          { platform: 'Amazon', title: 'ZonReader Paperwhite (16 GB) | Warm light', image_url: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&q=80&w=600', price: 48.75, payout: 1.95, external_link: 'https://www.amazon.com/s?k=paperwhite+ereader' },
+          { platform: 'Amazon', title: 'Organic Bamboo Coasters Set (6-Pack) | Non-slip', image_url: 'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&q=80&w=600', price: 20.00, payout: 0.80, external_link: 'https://www.amazon.com/s?k=bamboo+coasters' },
+          { platform: 'Amazon', title: 'Ergonomic Memory Foam Office Seat Cushion', image_url: 'https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&q=80&w=600', price: 27.50, payout: 1.10, external_link: 'https://www.amazon.com/s?k=office+seat+cushion' },
+          { platform: 'Amazon', title: 'Stainless Steel Vacuum Insulated Water Bottle (32oz)', image_url: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=600', price: 35.00, payout: 1.40, external_link: 'https://www.amazon.com/s?k=insulated+water+bottle' },
+          { platform: 'Amazon', title: 'Professional Ceramic Ionic Hair Dryer | 1875W', image_url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=600', price: 55.00, payout: 2.20, external_link: 'https://www.amazon.com/s?k=hair+dryer' },
+          { platform: 'Amazon', title: 'Adjustable Laptop Stand | Ergonomic Aluminum Stand', image_url: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=600', price: 41.25, payout: 1.65, external_link: 'https://www.amazon.com/s?k=laptop+stand' },
+          { platform: 'Amazon', title: 'Premium Matcha Green Tea Powder (Organic)', image_url: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=600', price: 23.75, payout: 0.95, external_link: 'https://www.amazon.com/s?k=matcha+powder' },
+          { platform: 'Amazon', title: 'Dual-Port USB-C Wall Charger Block | 40W Fast Charger', image_url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&q=80&w=600', price: 26.25, payout: 1.05, external_link: 'https://www.amazon.com/s?k=usb+c+charger' },
+          { platform: 'Amazon', title: 'Wireless Active Noise Cancelling Earbuds | Bluetooth 5.3', image_url: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=600', price: 52.50, payout: 2.10, external_link: 'https://www.amazon.com/s?k=noise+cancelling+earbuds' },
+          { platform: 'Amazon', title: 'Digital Kitchen Scale | High Precision Multi-unit', image_url: 'https://images.unsplash.com/photo-1588675646184-f550218b57b5?auto=format&fit=crop&q=80&w=600', price: 18.75, payout: 0.75, external_link: 'https://www.amazon.com/s?k=kitchen+scale' },
+          { platform: 'Amazon', title: 'Aromatherapy Ceramic Essential Oil Diffuser (500ml)', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', price: 32.50, payout: 1.30, external_link: 'https://www.amazon.com/s?k=essential+oil+diffuser' },
+          // Alibaba (8% Commission)
+          { platform: 'Alibaba', title: 'AliUltra Foldable Electric Scooter | Dual motor', image_url: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&q=80&w=600', price: 31.25, payout: 2.50, external_link: 'https://www.alibaba.com/trade/search?SearchText=electric+scooter' },
+          { platform: 'Alibaba', title: 'AliVision 4K Native LED Projector | 15k Lms', image_url: 'https://images.unsplash.com/photo-1535016120720-40c646be5580?auto=format&fit=crop&q=80&w=600', price: 26.87, payout: 2.15, external_link: 'https://www.alibaba.com/trade/search?SearchText=4k+projector' },
+          { platform: 'Alibaba', title: 'AliSecure HD Outdoor IP Camera | Wifi PTZ Node', image_url: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&q=80&w=600', price: 22.50, payout: 1.80, external_link: 'https://www.alibaba.com/trade/search?SearchText=wifi+ip+camera' },
+          { platform: 'Alibaba', title: 'Smart Automated Robot Vacuum Cleaner | LIDAR Map', image_url: 'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?auto=format&fit=crop&q=80&w=600', price: 30.00, payout: 2.40, external_link: 'https://www.alibaba.com/trade/search?SearchText=robot+vacuum' },
+          { platform: 'Alibaba', title: 'Portable Solar Generator Station | 500Wh Output', image_url: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&q=80&w=600', price: 28.75, payout: 2.30, external_link: 'https://www.alibaba.com/trade/search?SearchText=portable+solar+generator' },
+          { platform: 'Alibaba', title: 'Heavy Duty Massage Gun | 30 Speeds Deep Tissue', image_url: 'https://images.unsplash.com/photo-1607962837359-5e7eaf562642?auto=format&fit=crop&q=80&w=600', price: 20.00, payout: 1.60, external_link: 'https://www.alibaba.com/trade/search?SearchText=massage+gun' },
+          { platform: 'Alibaba', title: 'Adjustable Dumbbells Set (50lbs) | Quick Dial', image_url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=600', price: 28.12, payout: 2.25, external_link: 'https://www.alibaba.com/trade/search?SearchText=adjustable+dumbbells' },
+          { platform: 'Alibaba', title: 'Automatic Espresso Coffee Machine | 20 Bar Pump', image_url: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?auto=format&fit=crop&q=80&w=600', price: 30.62, payout: 2.45, external_link: 'https://www.alibaba.com/trade/search?SearchText=espresso+machine' },
+          { platform: 'Alibaba', title: 'Electric Oral Irrigator Dental Flosser | 4 Modes', image_url: 'https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?auto=format&fit=crop&q=80&w=600', price: 11.87, payout: 0.95, external_link: 'https://www.alibaba.com/trade/search?SearchText=oral+irrigator' },
+          { platform: 'Alibaba', title: 'Portable Bluetooth Thermal Label Printer', image_url: 'https://images.unsplash.com/photo-1543269664-76bc3997d9ea?auto=format&fit=crop&q=80&w=600', price: 15.00, payout: 1.20, external_link: 'https://www.alibaba.com/trade/search?SearchText=label+printer' },
+          { platform: 'Alibaba', title: 'Dual Layer Car Roof Cargo Carrier Bag | Waterproof', image_url: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600', price: 18.75, payout: 1.50, external_link: 'https://www.alibaba.com/trade/search?SearchText=roof+cargo+bag' },
+          { platform: 'Alibaba', title: 'Foldable Lightbox Photography Studio Kit', image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600', price: 18.12, payout: 1.45, external_link: 'https://www.alibaba.com/trade/search?SearchText=lightbox+studio' },
+          // Shopify (10% Commission)
+          { platform: 'Shopify', title: 'Minimalist Full-Grain Leather Wallet | RFID organizer', image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600', price: 11.00, payout: 1.10, external_link: 'https://www.google.com/search?q=minimalist+leather+wallet' },
+          { platform: 'Shopify', title: 'Therapeutic Essential Oils Diffuser | Ceramic ultrasonic', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', price: 9.00, payout: 0.90, external_link: 'https://www.google.com/search?q=ceramic+essential+oils+diffuser' },
+          { platform: 'Shopify', title: 'Eco-Friendly Cork Yoga Mat | Non-slip sweat-resistant', image_url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600', price: 17.00, payout: 1.70, external_link: 'https://www.google.com/search?q=cork+yoga+mat' },
+          { platform: 'Shopify', title: 'Hydro Flask Insulated Travel Coffee Mug | 16oz Wide Mouth', image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=600', price: 12.00, payout: 1.20, external_link: 'https://www.google.com/search?q=insulated+travel+mug' },
+          { platform: 'Shopify', title: 'Premium Bamboo Bed Sheets Set | King Size Cooling', image_url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600', price: 23.50, payout: 2.35, external_link: 'https://www.google.com/search?q=bamboo+bed+sheets' },
+          { platform: 'Shopify', title: 'Minimalist Wooden Desk Organizer Stand | Handcrafted Walnut', image_url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=600', price: 15.00, payout: 1.50, external_link: 'https://www.google.com/search?q=wooden+desk+organizer' },
+          { platform: 'Shopify', title: 'Aromatherapy Soy Wax Candles Set | Lavender & Eucalyptus', image_url: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=600', price: 8.50, payout: 0.85, external_link: 'https://www.google.com/search?q=soy+wax+candles' },
+          { platform: 'Shopify', title: 'Polarized Retro Round Sunglasses | UV400 Unbreakable', image_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=600', price: 13.00, payout: 1.30, external_link: 'https://www.google.com/search?q=polarized+round+sunglasses' },
+          { platform: 'Shopify', title: 'Manual Ceramic Burr Coffee Grinder | Adjustable Coarseness', image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=600', price: 14.50, payout: 1.45, external_link: 'https://www.google.com/search?q=manual+coffee+grinder' },
+          { platform: 'Shopify', title: 'Stainless Steel French Press Coffee Maker | Double Wall', image_url: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=600', price: 19.00, payout: 1.90, external_link: 'https://www.google.com/search?q=french+press+coffee+maker' },
+          { platform: 'Shopify', title: 'Vegan Leather Minimalist Backpack | 15.6 Inch Laptop Sleeve', image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600', price: 21.00, payout: 2.10, external_link: 'https://www.google.com/search?q=vegan+leather+backpack' },
+          { platform: 'Shopify', title: 'Ergonomic Balance Ball Chair with Stability Base', image_url: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=600', price: 22.50, payout: 2.25, external_link: 'https://www.google.com/search?q=balance+ball+chair' }
         ];
 
         const { error: seedError } = await supabase.from('products').insert(defaultProducts);
@@ -158,9 +191,19 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     const userId = req.user?.id;
     const { productId, orderId, reviewText } = req.body;
 
-    if (!productId || !orderId || !reviewText) {
-      return res.status(400).json({ error: 'Product ID, Order ID, and review draft text are required' });
+    if (!productId || !reviewText) {
+      return res.status(400).json({ error: 'Product ID and feedback template selection are required' });
     }
+
+    if (typeof reviewText !== 'string' || reviewText.trim().length === 0) {
+      return res.status(400).json({ error: 'Invalid review text format' });
+    }
+
+    if (reviewText.length > 500) {
+      return res.status(400).json({ error: 'Review text exceeds maximum allowed length of 500 characters' });
+    }
+
+    const finalOrderId = orderId || ('ORD-' + Math.random().toString(36).substring(2, 12).toUpperCase());
 
     // Fetch product details
     const { data: product, error: productError } = await supabase
@@ -201,6 +244,24 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
           return res.status(400).json({
             error: `Today's review quota completed. A new batch will automatically unlock 24 hours after completion. Time remaining: ${Math.max(0, Math.ceil(24 - hoursElapsed))} hours.`
           });
+        } else {
+          // Auto reset batch
+          const { error: resetError } = await supabase
+            .from('platform_balances')
+            .update({
+              current_position: 0,
+              last_completed_batch_at: null,
+              last_reset_at: new Date().toISOString()
+            })
+            .eq('user_id', userId)
+            .eq('platform', platform);
+
+          if (resetError) {
+            return res.status(500).json({ error: 'Failed to auto-reset your 24-hour review batch: ' + resetError.message });
+          }
+
+          balanceRecord.current_position = 0;
+          balanceRecord.last_completed_batch_at = null;
         }
       }
 
@@ -248,42 +309,79 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       }
     }
 
-    // Validate draft word count limit
-    const wordLimit = product.word_limit || 20;
-    const currentWords = reviewText.trim().split(/\s+/).filter(Boolean).length;
-    if (currentWords < wordLimit) {
+    // Validate code representation (01, 02, 03)
+    if (!['01', '02', '03'].includes(reviewText)) {
       return res.status(400).json({
-        error: `Submission rejected: Opinion draft does not meet criteria. Minimum ${wordLimit} words required (current: ${currentWords} words).`
+        error: 'Invalid feedback selection. Please select one of the three preset text templates.'
       });
     }
 
     if (userId === 'user-dev-uuid' || userId === 'admin-dev-uuid' || !isDbConfigured) {
       return res.status(201).json({
-        message: 'Review draft successfully recorded (Sandbox Mode).',
-        submission: { id: 'submission-dev-uuid', user_id: userId, product_id: productId, order_id: orderId, review_text: reviewText, payout_earned: payoutEarned, status: 'Pending' }
+        message: 'Review draft successfully recorded and approved (Sandbox Mode).',
+        submission: { id: 'submission-dev-uuid', user_id: userId, product_id: productId, order_id: finalOrderId, review_text: reviewText, payout_earned: payoutEarned, status: 'Completed' }
       });
     }
 
-    // Record submission
+    // Record submission directly as Completed
     const { data: submission, error: insertError } = await supabase
       .from('review_submissions')
       .insert({
         user_id: userId,
         product_id: productId,
-        order_id: orderId.trim(),
-        review_text: reviewText.trim(),
+        order_id: finalOrderId,
+        review_text: reviewText,
         payout_earned: payoutEarned,
-        status: 'Pending'
+        status: 'Completed'
       })
       .select()
       .single();
 
     if (insertError) {
-      return res.status(500).json({ error: 'Failed to record review draft: ' + insertError.message });
+      return res.status(500).json({ error: 'Failed to record review: ' + insertError.message });
+    }
+
+    // Auto-approve: Update user platform balance immediately
+    const { data: balanceRecord } = await supabase
+      .from('platform_balances')
+      .select('wallet_balance, reviews_count, current_position')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .single();
+
+    const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
+    const currentReviews = balanceRecord?.reviews_count || 0;
+    const nextPos = (balanceRecord?.current_position || 0) + 1;
+
+    const updates: any = {
+      wallet_balance: Number((currentBalance + payoutEarned).toFixed(2)),
+      reviews_count: currentReviews + 1,
+      current_position: nextPos
+    };
+
+    if (nextPos >= 25) {
+      updates.last_completed_batch_at = new Date().toISOString();
+    }
+
+    await supabase
+      .from('platform_balances')
+      .update(updates)
+      .eq('user_id', userId)
+      .eq('platform', platform);
+
+    // Also check referral bonus
+    const { count: completedReviewCount } = await supabase
+      .from('review_submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'Completed');
+
+    if ((completedReviewCount || 0) === 3) {
+      await maybeAwardReferralBonus(userId, platform);
     }
 
     res.status(201).json({
-      message: 'Review draft successfully recorded. Compliance checks completing in 5 minutes.',
+      message: 'Review successfully submitted and commission credited to your account.',
       submission
     });
   } catch (error: any) {

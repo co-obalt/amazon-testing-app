@@ -32,7 +32,7 @@ export default function App() {
     setUsername(registeredUser);
     setEmail(registeredEmail);
     localStorage.setItem('reviewer_session_username', registeredUser);
-    showToast("Registration successful! Transferring profile to the administrator verification queue.");
+    showToast("Registration successful! Transferring profile to our compliance review queue.");
     setCurrentView('under-review');
   };
 

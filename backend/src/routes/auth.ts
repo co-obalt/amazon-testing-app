@@ -65,18 +65,18 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    if (!normalizedReferralCode) {
-      return res.status(400).json({ error: 'Invalid referral code' });
-    }
+    let referrerCodeToSave = null;
+    if (normalizedReferralCode) {
+      const { data: referrer, error: referralError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('referral_code', normalizedReferralCode)
+        .maybeSingle();
 
-    const { data: referrer, error: referralError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('referral_code', normalizedReferralCode)
-      .maybeSingle();
-
-    if (referralError || !referrer) {
-      return res.status(400).json({ error: 'Invalid referral code' });
+      if (referralError || !referrer) {
+        return res.status(400).json({ error: 'Invalid referral code' });
+      }
+      referrerCodeToSave = normalizedReferralCode;
     }
 
     // Check if user already exists
@@ -84,10 +84,22 @@ router.post('/register', async (req: Request, res: Response) => {
       .from('profiles')
       .select('id')
       .eq('username', username.trim())
-      .single();
+      .maybeSingle();
 
     if (existingUser) {
-      return res.status(400).json({ error: 'Username already taken' });
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    if (email && email.trim() !== '') {
+      const { data: existingEmail } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim())
+        .maybeSingle();
+
+      if (existingEmail) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
     }
 
     // Resolve client IP & geo location info
@@ -107,27 +119,51 @@ router.post('/register', async (req: Request, res: Response) => {
     // All new registrations are always regular users, pending admin approval
     // Admin accounts must be created directly in the Supabase database
     const finalPassword = password;
-    const finalRole = 'user';
     const finalStatus = 'pending';
 
     // Insert user profile
-    const { data: newUser, error: insertError } = await supabase
+    let newUser: any;
+    let insertError: any;
+
+    const insertResult = await supabase
       .from('profiles')
       .insert({
         username: username.trim(),
         email: email ? email.trim() : null,
         password: finalPassword,
         withdrawal_password: withdrawalPassword || null,
-        role: finalRole,
         country,
         city,
         ip_address: clientIp,
         status: finalStatus,
         referral_code: referralCode,
-        referred_by: normalizedReferralCode
+        referred_by: referrerCodeToSave
       })
       .select()
       .single();
+
+    newUser = insertResult.data;
+    insertError = insertResult.error;
+
+    if (insertError && (insertError.message?.includes('column') || insertError.code === '42703')) {
+      console.warn("Retrying registration insert without email and withdrawal_password columns due to missing DB columns...");
+      const fallbackResult = await supabase
+        .from('profiles')
+        .insert({
+          username: username.trim(),
+          password: finalPassword,
+          country,
+          city,
+          ip_address: clientIp,
+          status: finalStatus,
+          referral_code: referralCode,
+          referred_by: referrerCodeToSave
+        })
+        .select()
+        .single();
+      newUser = fallbackResult.data;
+      insertError = fallbackResult.error;
+    }
 
     if (insertError || !newUser) {
       return res.status(500).json({ error: 'Failed to create profile: ' + insertError?.message });
@@ -215,7 +251,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     // Sign session JWT
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user.id, username: user.username, role: 'user' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -232,9 +268,10 @@ router.post('/login', async (req: Request, res: Response) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role,
+        role: 'user',
         status: user.status,
-        referralCode: user.referral_code
+        referralCode: user.referral_code,
+        profile_photo: user.profile_photo || null
       }
     });
   } catch (error: any) {
@@ -261,7 +298,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     // Fetch platform balances
     const { data: balancesData } = await supabase
       .from('platform_balances')
-      .select('platform, wallet_balance, reviews_count')
+      .select('platform, wallet_balance, reviews_count, current_position')
       .eq('user_id', userId);
 
     const formattedBalances: any = {
@@ -275,7 +312,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
         if (formattedBalances[b.platform]) {
           formattedBalances[b.platform] = {
             walletBalance: parseFloat(b.wallet_balance as any) || 0.00,
-            completedReviewsCount: b.reviews_count || 0
+            completedReviewsCount: b.current_position || 0
           };
         }
       });
@@ -293,17 +330,50 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       });
     }
 
+    // Query which platforms are manually unlocked (have assigned products) for this user
+    let unlockedPlatforms: string[] = [];
+    try {
+      const { data: assigned } = await supabase
+        .from('user_assigned_products')
+        .select('platform')
+        .eq('user_id', userId);
+      if (assigned) {
+        unlockedPlatforms = Array.from(new Set(assigned.map((a: any) => a.platform)));
+      }
+    } catch (e) {
+      console.warn("Could not query unlockedPlatforms for /me:", e);
+    }
+
+    // Determine and persist bound platform
+    let boundPlatform = profile.platform || null;
+    if (!boundPlatform && unlockedPlatforms.length > 0) {
+      boundPlatform = unlockedPlatforms[0];
+      try {
+        await supabase
+          .from('profiles')
+          .update({ platform: boundPlatform })
+          .eq('id', userId);
+      } catch (saveErr) {
+        console.warn("Failed to auto-bind platform profile:", saveErr);
+      }
+    }
+
     res.json({
       id: profile.id,
       username: profile.username,
-      role: profile.role,
+      role: 'user',
       status: profile.status,
       country: profile.country,
       city: profile.city,
       referralCode: profile.referral_code,
       referredBy: profile.referred_by,
       balances: formattedBalances,
-      systemConfig: configMap
+      systemConfig: configMap,
+      platform: boundPlatform,
+      boundUsdtAddress: profile.bound_usdt_address || null,
+      withdrawalPassword: profile.withdrawal_password || null,
+      profile_photo: profile.profile_photo || null,
+      unlockedPlatforms: boundPlatform ? [boundPlatform] : []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -311,7 +381,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
 });
 
 // 4. USDT Bind Endpoint
-router.post('/bind-usdt', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/bind-usdt', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const { address } = req.body;
@@ -351,6 +421,31 @@ router.post('/bind-usdt', authenticateToken, async (req: AuthenticatedRequest, r
   }
 });
 
+// 4.5. Update Profile Photo Endpoint
+router.put('/update-profile-photo', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { profile_photo } = req.body; // base64 string or null
+
+    if (profile_photo && profile_photo.length > 2 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Image size is too large. Base64 profile photo must be under 1.5MB.' });
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ profile_photo: profile_photo || null })
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to update profile photo in database: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Profile photo successfully updated.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // ==========================================
 // 5. Admin Panel Separate Auth endpoints
 // ==========================================
@@ -358,37 +453,61 @@ router.post('/bind-usdt', authenticateToken, async (req: AuthenticatedRequest, r
 // Admin Registration Flow (request sent to super_admin as pending)
 router.post('/admin/register', async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    const { username, password, full_name, email, phone } = req.body;
+    if (!username || !password || !full_name) {
+      return res.status(400).json({ error: 'Full name, username and password are required' });
     }
 
-    // Check if username already exists in profiles
-    const { data: existingUser } = await supabase
-      .from('profiles')
+    // Resolve client IP
+    let clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    if (clientIp.includes(',')) clientIp = clientIp.split(',')[0].trim();
+    if (clientIp === '::1' || clientIp === '::ffff:127.0.0.1') clientIp = '127.0.0.1';
+
+    // Check if username already exists in admins or profiles
+    let existingUser: any;
+    const checkAdmins = await supabase
+      .from('admins')
       .select('id')
       .eq('username', username.trim())
-      .single();
+      .maybeSingle();
 
-    if (existingUser) {
-      return res.status(400).json({ error: 'Username already taken' });
+    if (checkAdmins.error && (checkAdmins.error.code === '42P01' || checkAdmins.error.code === 'PGRST205' || checkAdmins.error.message?.includes('does not exist') || checkAdmins.error.message?.includes('schema cache'))) {
+      const checkProfiles = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username.trim())
+        .eq('role', 'admin')
+        .maybeSingle();
+      existingUser = checkProfiles.data;
+    } else {
+      existingUser = checkAdmins.data;
     }
 
-    const referralCode = 'ADMIN-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
 
     // Create the admin profile in pending state (no automatic bypass)
-    const { data: newAdmin, error: insertError } = await supabase
-      .from('profiles')
+    let newAdmin: any;
+    let insertError: any;
+
+    const insertResult = await supabase
+      .from('admins')
       .insert({
         username: username.trim(),
+        full_name: full_name.trim(),
+        email: email ? email.trim() : null,
+        phone: phone ? phone.trim() : null,
         password: password, // plaintext
-        role: 'admin',
-        status: 'pending',
-        referral_code: referralCode,
-        referred_by: null
+        ip_address: clientIp,
+        status: 'pending'
       })
       .select()
       .single();
+
+    newAdmin = insertResult.data;
+    insertError = insertResult.error;
+
 
     if (insertError || !newAdmin) {
       return res.status(500).json({ error: 'Failed to request admin registration: ' + insertError?.message });
@@ -403,7 +522,7 @@ router.post('/admin/register', async (req: Request, res: Response) => {
   }
 });
 
-// Admin Login Endpoint (must be role=admin and status=active)
+// Admin Login Endpoint (must be status=active)
 router.post('/admin/login', async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
@@ -411,22 +530,37 @@ router.post('/admin/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const { data: user, error } = await supabase
-      .from('profiles')
+    let user: any;
+    let error: any;
+
+    const selectResult = await supabase
+      .from('admins')
       .select('*')
       .eq('username', username.trim())
       .single();
+
+    user = selectResult.data;
+    error = selectResult.error;
+
 
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid admin username or password' });
     }
 
-    if (user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied: Requires administrator credentials' });
+    if (user.status === 'pending') {
+      return res.status(403).json({ error: 'Your admin account is pending Super Admin approval.' });
+    }
+
+    if (user.status === 'restricted') {
+      return res.status(403).json({ error: 'Your admin account has been suspended. Contact the Super Admin.' });
+    }
+
+    if (user.status === 'rejected') {
+      return res.status(403).json({ error: 'Your admin registration was rejected. Contact the Super Admin.' });
     }
 
     if (user.status !== 'active') {
-      return res.status(403).json({ error: 'Your admin account request is still pending Super Admin approval.' });
+      return res.status(403).json({ error: 'Admin account is not active.' });
     }
 
     if (password !== user.password) {
@@ -434,7 +568,7 @@ router.post('/admin/login', async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user.id, username: user.username, role: 'admin', isRestricted: !!user.is_restricted },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -444,8 +578,9 @@ router.post('/admin/login', async (req: Request, res: Response) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role,
-        status: user.status
+        role: 'admin',
+        status: user.status,
+        isRestricted: !!user.is_restricted
       }
     });
   } catch (error: any) {
@@ -501,17 +636,22 @@ router.post('/super/login', async (req: Request, res: Response) => {
 // Get all admin accounts
 router.get('/super/admins', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { data: admins, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'admin')
+    let admins: any;
+    let error: any;
+
+    const selectResult = await supabase
+      .from('admins')
+      .select('id, username, full_name, email, phone, status, created_at, ip_address, password, is_restricted')
       .order('created_at', { ascending: false });
+
+    admins = selectResult.data;
+    error = selectResult.error;
 
     if (error) {
       return res.status(500).json({ error: 'Failed to fetch admin accounts: ' + error.message });
     }
 
-    res.json(admins);
+    res.json(admins || []);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
@@ -521,11 +661,11 @@ router.get('/super/admins', authenticateToken, requireSuperAdmin, async (req: Au
 router.post('/super/admins/:id/approve', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { error } = await supabase
-      .from('profiles')
+    let { error } = await supabase
+      .from('admins')
       .update({ status: 'active' })
-      .eq('id', id)
-      .eq('role', 'admin');
+      .eq('id', id);
+
 
     if (error) {
       return res.status(500).json({ error: 'Failed to approve admin account: ' + error.message });
@@ -537,15 +677,75 @@ router.post('/super/admins/:id/approve', authenticateToken, requireSuperAdmin, a
   }
 });
 
-// Reject/Delete admin account
+// Reject admin account (sets status to rejected, keeps record)
+router.post('/super/admins/:id/reject', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    let { error } = await supabase
+      .from('admins')
+      .update({ status: 'rejected' })
+      .eq('id', id);
+
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to reject admin account: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Admin account rejected.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Block admin account (suspend an active admin)
+router.post('/super/admins/:id/block', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    let { error } = await supabase
+      .from('admins')
+      .update({ status: 'restricted' })
+      .eq('id', id);
+
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to block admin account: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Admin account has been suspended.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Unblock/restore admin account
+router.post('/super/admins/:id/unblock', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    let { error } = await supabase
+      .from('admins')
+      .update({ status: 'active' })
+      .eq('id', id);
+
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to restore admin account: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Admin account restored to active.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Delete admin account permanently
 router.delete('/super/admins/:id', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { error } = await supabase
-      .from('profiles')
+    let { error } = await supabase
+      .from('admins')
       .delete()
-      .eq('id', id)
-      .eq('role', 'admin');
+      .eq('id', id);
+
 
     if (error) {
       return res.status(500).json({ error: 'Failed to delete admin account: ' + error.message });
@@ -567,17 +767,150 @@ router.post('/super/admins/:id/reset-password', authenticateToken, requireSuperA
       return res.status(400).json({ error: 'New password is required' });
     }
 
-    const { error } = await supabase
-      .from('profiles')
+    let { error } = await supabase
+      .from('admins')
       .update({ password: password.trim() })
-      .eq('id', id)
-      .eq('role', 'admin');
+      .eq('id', id);
+
 
     if (error) {
       return res.status(500).json({ error: 'Failed to reset password: ' + error.message });
     }
 
     res.json({ success: true, message: 'Admin password reset successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 14. Update admin restriction status
+router.post('/super/admins/:id/restrict', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isRestricted } = req.body;
+    const { error } = await supabase
+      .from('admins')
+      .update({ is_restricted: !!isRestricted })
+      .eq('id', id);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to update admin restriction status: ' + error.message });
+    }
+    res.json({ success: true, message: 'Admin restriction status updated successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 15. Fetch all users for assignments
+router.get('/super/users', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, email')
+      .order('username', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to fetch users: ' + error.message });
+    }
+    res.json(data || []);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 16. Get current user assignments for restricted admin
+router.get('/super/admins/:id/assignments', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('admin_assigned_users')
+      .select('user_id')
+      .eq('admin_id', id);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to fetch assignments: ' + error.message });
+    }
+    res.json((data || []).map((x: any) => x.user_id));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 17. Save user assignments for restricted admin
+router.post('/super/admins/:id/assignments', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userIds } = req.body;
+
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ error: 'userIds must be an array of user IDs' });
+    }
+
+    // Delete existing assignments for this admin
+    const { error: deleteError } = await supabase
+      .from('admin_assigned_users')
+      .delete()
+      .eq('admin_id', id);
+
+    if (deleteError) {
+      return res.status(500).json({ error: 'Failed to clear existing assignments: ' + deleteError.message });
+    }
+
+    if (userIds.length > 0) {
+      const insertRows = userIds.map((uId: string) => ({
+        admin_id: id,
+        user_id: uId
+      }));
+
+      const { error: insertError } = await supabase
+        .from('admin_assigned_users')
+        .insert(insertRows);
+
+      if (insertError) {
+        return res.status(500).json({ error: 'Failed to save new assignments: ' + insertError.message });
+      }
+    }
+
+    res.json({ success: true, message: 'User assignments saved successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Change super admin password
+router.post('/super/password', authenticateToken, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Both current and new password are required' });
+    }
+
+    // Fetch current super admin record
+    const { data: superAdmin, error: fetchError } = await supabase
+      .from('super_admin')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (fetchError || !superAdmin) {
+      return res.status(500).json({ error: 'Could not find super admin record' });
+    }
+
+    if (currentPassword !== superAdmin.password) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const { error: updateError } = await supabase
+      .from('super_admin')
+      .update({ password: newPassword })
+      .eq('id', superAdmin.id);
+
+    if (updateError) {
+      return res.status(500).json({ error: 'Failed to update password: ' + updateError.message });
+    }
+
+    res.json({ success: true, message: 'Super admin password updated successfully.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }

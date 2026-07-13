@@ -451,7 +451,7 @@ export default function Navbar({
                       {/* Cashout Amount Input */}
                       <div className="space-y-1.5 text-left">
                         <div className="flex justify-between items-baseline">
-                          <label className="text-[10px] font-extrabold text-gray-500 uppercase">Amount (Min. $10.00)</label>
+                          <label className="text-[10px] font-extrabold text-gray-500 uppercase">Amount (Min. $1.00)</label>
                           <button
                             onClick={() => {
                               setWithdrawAmount(walletBalance.toFixed(2));
@@ -488,8 +488,8 @@ export default function Navbar({
                             setWithdrawError('Please enter a valid cashout amount.');
                             return;
                           }
-                          if (amt < 10) {
-                            setWithdrawError('Minimum payout threshold is $10.00 USD.');
+                          if (amt < 1) {
+                            setWithdrawError('Minimum payout threshold is $1.00 USD.');
                             return;
                           }
                           if (amt > walletBalance) {

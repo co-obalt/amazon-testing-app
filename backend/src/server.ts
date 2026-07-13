@@ -17,6 +17,8 @@ import adminRouter from './routes/admin.js';
 dotenv.config();
 
 const app = express();
+import helmet from 'helmet';
+
 const PORT = process.env.PORT || 5000;
 
 // Rate limiting middleware to prevent brute-force attacks and optimize throughput
@@ -28,7 +30,49 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, rate limit exceeded.' }
 });
 
-app.use(cors());
+// Stricter rate limiter specifically for security-sensitive authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 authentication requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login or registration attempts from this IP. Please try again after 15 minutes.' }
+});
+
+// Enable Helmet security headers with Content-Security-Policy (CSP) configured
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      connectSrc: ["'self'", "wss:", "ws:", "https:", "http:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    }
+  }
+}));
+
+// Configure production-ready CORS (read from FRONTEND_URL environment variable or fallback to localhost dev ports)
+const allowedOrigins = process.env.FRONTEND_URL 
+  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/api', apiLimiter);
@@ -37,6 +81,9 @@ app.use('/api', apiLimiter);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
+app.get('/super-admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/super.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // Global API Healthcheck
@@ -45,6 +92,11 @@ app.get('/api/health', (req, res) => {
 });
 
 // Router mounts
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/admin/login', authLimiter);
+app.use('/api/auth/admin/register', authLimiter);
+
 app.use('/api/auth', authRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/reviews', reviewsRouter);

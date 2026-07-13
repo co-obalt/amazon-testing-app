@@ -132,6 +132,8 @@ router.post('/send', authenticateToken, async (req, res) => {
         if (error) {
             return res.status(500).json({ error: 'Failed to save message: ' + error.message });
         }
+        // Broadcast new message alert to admin panel via WebSocket
+        broadcastToAdmins('new_chat_message', { userId, text: userMsg.text, time: userMsg.time });
         // Check history to verify if the admin initiated the chat or has already custom-replied
         const { data: threadMsgs } = await supabase
             .from('chat_messages')

@@ -23,12 +23,20 @@ export default function RegisterPage({
   const [referralCode, setReferralCode] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refParam = params.get('ref');
+    if (refParam) {
+      setReferralCode(refParam.toUpperCase());
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
     // Validations
-    if (!username.trim() || !email.trim() || !loginPassword || !withdrawalPassword || !referralCode.trim()) {
+    if (!username.trim() || !email.trim() || !loginPassword || !withdrawalPassword) {
       setErrorMessage('Please fill in all mandatory fields.');
       return;
     }
@@ -43,18 +51,18 @@ export default function RegisterPage({
       return;
     }
 
-    if (withdrawalPassword.length < 8) {
-      setErrorMessage('Withdrawal Password must be at least 8 characters.');
+    if (!/^\d{4}$/.test(withdrawalPassword)) {
+      setErrorMessage('Withdrawal PIN must be exactly 4 digits.');
       return;
     }
 
     if (withdrawalPassword !== confirmWithdrawal) {
-      setErrorMessage('Withdrawal passwords do not match.');
+      setErrorMessage('Withdrawal PINs do not match.');
       return;
     }
 
     const normalizedReferralCode = referralCode.trim().toUpperCase();
-    if (!/^[A-Z0-9]{6}$/.test(normalizedReferralCode)) {
+    if (normalizedReferralCode && !/^[A-Z0-9]{6}$/.test(normalizedReferralCode)) {
       setErrorMessage('Referral code must be a 6-character alphanumeric invite code (e.g. XE6G22).');
       return;
     }
@@ -184,31 +192,31 @@ export default function RegisterPage({
               </div>
             </div>
 
-            {/* Withdrawal Password */}
+            {/* Withdrawal PIN */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-700 flex items-center space-x-1">
                   <Key className="h-3.5 w-3.5 text-gray-400" />
-                  <span>Withdrawal Password *</span>
+                  <span>Withdrawal PIN *</span>
                 </label>
                 <input
                   type="password"
                   required
                   value={withdrawalPassword}
                   onChange={(e) => setWithdrawalPassword(e.target.value)}
-                  placeholder="Min 8 chars"
+                  placeholder="4 digits"
                   className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold focus:border-amazon-gold text-gray-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-700">Confirm Withdrawal *</label>
+                <label className="text-xs font-bold text-gray-700">Confirm Withdrawal PIN *</label>
                 <input
                   type="password"
                   required
                   value={confirmWithdrawal}
                   onChange={(e) => setConfirmWithdrawal(e.target.value)}
-                  placeholder="Confirm password"
+                  placeholder="Confirm PIN"
                   className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold focus:border-amazon-gold text-gray-900"
                 />
               </div>
@@ -218,14 +226,13 @@ export default function RegisterPage({
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-700 flex items-center space-x-1">
                 <Award className="h-3.5 w-3.5 text-gray-400" />
-                <span>Referral Code * (Mandatory)</span>
+                <span>Referral Invitation Code (Optional)</span>
               </label>
               <input
                 type="text"
-                required
                 value={referralCode}
                 onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                placeholder="Enter 6-char invite code (e.g. XE6G22)"
+                placeholder="Enter 6-char invite code if you have one"
                 className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold focus:border-amazon-gold text-gray-900 font-mono tracking-wider"
               />
             </div>
