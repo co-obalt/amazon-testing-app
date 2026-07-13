@@ -278,6 +278,14 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
       query = query.in('id', assignedUserIds);
     }
 
+    // Apply optional pagination
+    const pageVal = parseInt(req.query.page as string);
+    const limitVal = parseInt(req.query.limit as string);
+    if (!isNaN(pageVal) && !isNaN(limitVal) && pageVal > 0 && limitVal > 0) {
+      const offset = (pageVal - 1) * limitVal;
+      query = query.range(offset, offset + limitVal - 1);
+    }
+
     const { data: users, error } = await query;
     if (error) {
       return res.status(500).json({ error: error.message });
@@ -600,6 +608,14 @@ router.get('/deposits', async (req: AuthenticatedRequest, res: Response) => {
       query = query.in('user_id', assignedUserIds);
     }
 
+    // Apply optional pagination
+    const pageVal = parseInt(req.query.page as string);
+    const limitVal = parseInt(req.query.limit as string);
+    if (!isNaN(pageVal) && !isNaN(limitVal) && pageVal > 0 && limitVal > 0) {
+      const offset = (pageVal - 1) * limitVal;
+      query = query.range(offset, offset + limitVal - 1);
+    }
+
     const { data: list, error } = await query;
 
     if (error) {
@@ -743,6 +759,14 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response) => {
         return res.json([]);
       }
       query = query.in('user_id', assignedUserIds);
+    }
+
+    // Apply optional pagination
+    const pageVal = parseInt(req.query.page as string);
+    const limitVal = parseInt(req.query.limit as string);
+    if (!isNaN(pageVal) && !isNaN(limitVal) && pageVal > 0 && limitVal > 0) {
+      const offset = (pageVal - 1) * limitVal;
+      query = query.range(offset, offset + limitVal - 1);
     }
 
     const { data: list, error } = await query;

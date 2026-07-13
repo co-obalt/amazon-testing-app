@@ -57,6 +57,15 @@ router.post('/register', async (req, res) => {
         if (!username || !password) {
             return res.status(400).json({ error: 'Username and password are required' });
         }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Login Password must be at least 8 characters.' });
+        }
+        if (!withdrawalPassword) {
+            return res.status(400).json({ error: 'Withdrawal PIN is required.' });
+        }
+        if (!/^\d{4}$/.test(withdrawalPassword)) {
+            return res.status(400).json({ error: 'Withdrawal PIN must be exactly 4 digits.' });
+        }
         let referrerCodeToSave = null;
         if (normalizedReferralCode) {
             const { data: referrer, error: referralError } = await supabase

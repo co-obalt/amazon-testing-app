@@ -16,6 +16,15 @@ import adminRouter from './routes/admin.js';
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ CRITICAL ERROR: JWT_SECRET environment variable is not defined in production mode. Terminating process...');
+    process.exit(1);
+  } else {
+    console.warn('⚠️ WARNING: JWT_SECRET environment variable is not defined. Falling back to default secret (UNSECURE).');
+  }
+}
+
 const app = express();
 import helmet from 'helmet';
 
@@ -96,6 +105,7 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/admin/login', authLimiter);
 app.use('/api/auth/admin/register', authLimiter);
+app.use('/api/auth/super/login', authLimiter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/transactions', transactionsRouter);
