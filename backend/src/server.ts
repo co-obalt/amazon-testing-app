@@ -26,6 +26,8 @@ if (!process.env.JWT_SECRET) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Render load balancer/Cloudflare) to enable rate-limiting tracking
+
 import helmet from 'helmet';
 
 const PORT = process.env.PORT || 5000;
@@ -73,7 +75,8 @@ const allowedOrigins = process.env.FRONTEND_URL
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow same-origin, allowed origins list, or Render backend domains
+    if (!origin || allowedOrigins.includes(origin) || origin.includes('onrender.com')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

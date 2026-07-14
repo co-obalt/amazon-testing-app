@@ -311,27 +311,35 @@ router.post('/submit', authenticateToken, async (req, res) => {
         if (insertError) {
             return res.status(500).json({ error: 'Failed to record review: ' + insertError.message });
         }
-        // Auto-approve: Update user platform balance immediately
-        const { data: balanceRecord } = await supabase
-            .from('platform_balances')
-            .select('wallet_balance, reviews_count, current_position')
-            .eq('user_id', userId)
-            .eq('platform', platform)
-            .single();
-        const currentBalance = parseFloat(balanceRecord?.wallet_balance) || 0.0;
-        const currentReviews = balanceRecord?.reviews_count || 0;
-        const nextPos = (balanceRecord?.current_position || 0) + 1;
-        const updates = {
-            wallet_balance: Number((currentBalance + payoutEarned).toFixed(2)),
-            reviews_count: currentReviews + 1,
-            current_position: nextPos
-            // NOTE: last_completed_batch_at is only set when admin APPROVES withdrawal, not here
-        };
-        await supabase
-            .from('platform_balances')
-            .update(updates)
-            .eq('user_id', userId)
-            .eq('platform', platform);
+        // Auto-approve: Update user platform balance atomically via database RPC (concurrency protection)
+        const { error: rpcError } = await supabase.rpc('increment_user_review_progress', {
+            target_user_id: userId,
+            target_platform: platform,
+            payout_amount: payoutEarned
+        });
+        if (rpcError) {
+            console.warn("RPC increment_user_review_progress failed, falling back to non-atomic update:", rpcError.message);
+            // Fallback non-atomic update logic
+            const { data: balanceRecord } = await supabase
+                .from('platform_balances')
+                .select('wallet_balance, reviews_count, current_position')
+                .eq('user_id', userId)
+                .eq('platform', platform)
+                .single();
+            const currentBalance = parseFloat(balanceRecord?.wallet_balance) || 0.0;
+            const currentReviews = balanceRecord?.reviews_count || 0;
+            const nextPos = (balanceRecord?.current_position || 0) + 1;
+            const updates = {
+                wallet_balance: Number((currentBalance + payoutEarned).toFixed(2)),
+                reviews_count: currentReviews + 1,
+                current_position: nextPos
+            };
+            await supabase
+                .from('platform_balances')
+                .update(updates)
+                .eq('user_id', userId)
+                .eq('platform', platform);
+        }
         // Also check referral bonus
         const { count: completedReviewCount } = await supabase
             .from('review_submissions')

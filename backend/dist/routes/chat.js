@@ -187,11 +187,31 @@ router.post('/upload', authenticateToken, async (req, res) => {
         const imageExtension = matches[1];
         const base64Data = matches[2];
         const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `chat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${imageExtension}`;
+        const mimeType = `image/${imageExtension === 'jpg' ? 'jpeg' : imageExtension}`;
+        if (isDbConfigured) {
+            // Try to upload to Supabase Storage Bucket 'chat-attachments' first
+            const { error: uploadError } = await supabase.storage
+                .from('chat-attachments')
+                .upload(filename, buffer, {
+                contentType: mimeType,
+                upsert: true
+            });
+            if (!uploadError) {
+                const { data: urlData } = supabase.storage
+                    .from('chat-attachments')
+                    .getPublicUrl(filename);
+                if (urlData?.publicUrl) {
+                    return res.json({ imageUrl: urlData.publicUrl });
+                }
+            }
+            console.warn("Supabase Storage bucket upload failed, falling back to local disk storage:", uploadError?.message);
+        }
+        // Fallback: local disk storage
         const uploadsDir = path.join(__dirname, '../../public/uploads');
         if (!fs.existsSync(uploadsDir)) {
             fs.mkdirSync(uploadsDir, { recursive: true });
         }
-        const filename = `chat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${imageExtension}`;
         const filePath = path.join(uploadsDir, filename);
         fs.writeFileSync(filePath, buffer);
         res.json({ imageUrl: `/uploads/${filename}` });

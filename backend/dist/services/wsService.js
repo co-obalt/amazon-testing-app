@@ -23,6 +23,33 @@ export function initializeWebSocket(server) {
             socket.destroy();
         }
     });
+    // Start heartbeat interval to clean up dead connections (prevents memory leak of orphaned sockets)
+    const heartbeatInterval = setInterval(() => {
+        for (let i = activeClients.length - 1; i >= 0; i--) {
+            const client = activeClients[i];
+            const ws = client.ws;
+            if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                activeClients.splice(i, 1);
+                continue;
+            }
+            if (ws.isAlive === false) {
+                ws.terminate();
+                activeClients.splice(i, 1);
+                continue;
+            }
+            ws.isAlive = false;
+            try {
+                ws.ping();
+            }
+            catch (err) {
+                ws.terminate();
+                activeClients.splice(i, 1);
+            }
+        }
+    }, 30000);
+    wss.on('close', () => {
+        clearInterval(heartbeatInterval);
+    });
     wss.on('connection', (ws, user) => {
         const client = {
             userId: user.id,
@@ -30,6 +57,11 @@ export function initializeWebSocket(server) {
             ws
         };
         activeClients.push(client);
+        // Setup heartbeat status flags
+        ws.isAlive = true;
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
         ws.on('close', () => {
             const idx = activeClients.indexOf(client);
             if (idx !== -1) {

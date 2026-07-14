@@ -182,15 +182,35 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
                 remainingOrders: remaining
             });
         }
-        // Perform immediate balance subtraction to prevent double spend
-        const updatedBalance = Number((currentBalance - numericAmount).toFixed(2));
-        const { error: updateError } = await supabase
-            .from('platform_balances')
-            .update({ wallet_balance: updatedBalance })
-            .eq('user_id', userId)
-            .eq('platform', platform);
-        if (updateError) {
-            return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
+        // Try to perform atomic balance subtraction via database RPC first (concurrency protection)
+        let updatedBalance;
+        const { data: rpcData, error: rpcError } = await supabase.rpc('decrement_platform_balance', {
+            target_user_id: userId,
+            target_platform: platform,
+            amount_to_subtract: numericAmount
+        });
+        if (rpcError) {
+            if (rpcError.message?.includes('Insufficient balance') || rpcError.message?.includes('new_balance < 0')) {
+                return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
+            }
+            // Log warning and use fallback non-atomic subtraction if RPC is not deployed yet
+            console.warn("RPC decrement_platform_balance failed, falling back to non-atomic update:", rpcError.message);
+            const updatedBal = Number((currentBalance - numericAmount).toFixed(2));
+            if (updatedBal < 0) {
+                return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
+            }
+            const { error: updateError } = await supabase
+                .from('platform_balances')
+                .update({ wallet_balance: updatedBal })
+                .eq('user_id', userId)
+                .eq('platform', platform);
+            if (updateError) {
+                return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
+            }
+            updatedBalance = updatedBal;
+        }
+        else {
+            updatedBalance = parseFloat(rpcData);
         }
         // Queue withdrawal request
         const { data: newWithdrawal, error: insertError } = await supabase
