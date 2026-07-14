@@ -195,6 +195,7 @@ router.post('/submit', authenticateToken, async (req, res) => {
             process.env.SUPABASE_KEY && !process.env.SUPABASE_KEY.includes('your-supabase-anon-key');
         let nextPosition = 1;
         let payoutEarned = parseFloat(product.payout) || 1.00;
+        let checkpoint = null;
         if (userId !== 'user-dev-uuid' && userId !== 'admin-dev-uuid' && isDbConfigured) {
             // 1. Fetch user's current progress position on the active platform
             const { data: balanceRecord, error: balanceFetchError } = await supabase
@@ -206,42 +207,53 @@ router.post('/submit', authenticateToken, async (req, res) => {
             if (balanceFetchError || !balanceRecord) {
                 return res.status(400).json({ error: `Could not verify balance details for platform ${platform}.` });
             }
-            // 2. Check 24-hour auto reset rules
-            if (balanceRecord.current_position >= 25 || balanceRecord.last_completed_batch_at) {
-                const completedTime = balanceRecord.last_completed_batch_at ? new Date(balanceRecord.last_completed_batch_at).getTime() : 0;
+            // 2. Batch lock rules:
+            // - If last_completed_batch_at is set: a withdrawal was approved. Lock until 24h has elapsed.
+            // - If current_position >= 25 but no withdrawal yet: user must submit withdrawal to continue.
+            // - Partial batches (1-24) are NEVER auto-reset — progress is frozen until user resumes.
+            if (balanceRecord.last_completed_batch_at) {
+                const completedTime = new Date(balanceRecord.last_completed_batch_at).getTime();
                 const hoursElapsed = (Date.now() - completedTime) / (1000 * 60 * 60);
                 if (hoursElapsed < 24) {
+                    const hoursLeft = Math.max(0, Math.ceil(24 - hoursElapsed));
+                    const minutesLeft = Math.max(0, Math.ceil((24 - hoursElapsed) * 60) % 60);
                     return res.status(400).json({
-                        error: `Today's review quota completed. A new batch will automatically unlock 24 hours after completion. Time remaining: ${Math.max(0, Math.ceil(24 - hoursElapsed))} hours.`
+                        error: `Your withdrawal has been processed. You can start the next batch in ${hoursLeft}h ${minutesLeft}m. Please check back later.`,
+                        cooldownActive: true,
+                        hoursRemaining: hoursLeft,
+                        minutesRemaining: minutesLeft
                     });
                 }
                 else {
-                    // Auto reset batch
-                    const { error: resetError } = await supabase
+                    // 24h has elapsed — clear the cooldown flag and allow work
+                    await supabase
                         .from('platform_balances')
                         .update({
-                        current_position: 0,
                         last_completed_batch_at: null,
                         last_reset_at: new Date().toISOString()
                     })
                         .eq('user_id', userId)
                         .eq('platform', platform);
-                    if (resetError) {
-                        return res.status(500).json({ error: 'Failed to auto-reset your 24-hour review batch: ' + resetError.message });
-                    }
-                    balanceRecord.current_position = 0;
                     balanceRecord.last_completed_batch_at = null;
                 }
             }
+            // If 25 orders are complete but withdrawal has not been approved yet — block new orders
+            if (balanceRecord.current_position >= 25) {
+                return res.status(400).json({
+                    error: 'You have completed all 25 orders for this batch. Please submit a withdrawal request to begin a new batch.',
+                    batchComplete: true
+                });
+            }
             nextPosition = balanceRecord.current_position + 1;
             // 3. Verify combo checkpoints triggers
-            const { data: checkpoint } = await supabase
+            const { data: checkpointData } = await supabase
                 .from('combo_checkpoints')
                 .select('*')
                 .eq('user_id', userId)
                 .eq('platform', platform)
                 .eq('position', nextPosition)
                 .maybeSingle();
+            checkpoint = checkpointData;
             if (checkpoint) {
                 const activeBalance = parseFloat(balanceRecord.wallet_balance) || 0.0;
                 const triggerThreshold = parseFloat(checkpoint.trigger_balance);
@@ -313,10 +325,8 @@ router.post('/submit', authenticateToken, async (req, res) => {
             wallet_balance: Number((currentBalance + payoutEarned).toFixed(2)),
             reviews_count: currentReviews + 1,
             current_position: nextPos
+            // NOTE: last_completed_batch_at is only set when admin APPROVES withdrawal, not here
         };
-        if (nextPos >= 25) {
-            updates.last_completed_batch_at = new Date().toISOString();
-        }
         await supabase
             .from('platform_balances')
             .update(updates)
@@ -333,7 +343,10 @@ router.post('/submit', authenticateToken, async (req, res) => {
         }
         res.status(201).json({
             message: 'Review successfully submitted and commission credited to your account.',
-            submission
+            submission,
+            isCombo: !!checkpoint,
+            checkpointAmount: checkpoint ? parseFloat(checkpoint.trigger_balance) : 0,
+            payoutEarned: payoutEarned
         });
     }
     catch (error) {
@@ -416,10 +429,8 @@ router.post('/override-approve', authenticateToken, async (req, res) => {
                 wallet_balance: Number((currentBalance + payout).toFixed(2)),
                 reviews_count: currentReviews + 1,
                 current_position: nextPosition
+                // NOTE: last_completed_batch_at is only set when admin APPROVES withdrawal
             };
-            if (nextPosition >= 25) {
-                updates.last_completed_batch_at = new Date().toISOString();
-            }
             await supabase
                 .from('platform_balances')
                 .update(updates)

@@ -11,11 +11,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
     rel="stylesheet">
   <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js"></script>
   <!-- html2canvas library for PDF/JPG image captures -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -29,10 +29,13 @@
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
+
     /* Hide scrollbar for IE, Edge and Firefox */
     .no-scrollbar {
-      -ms-overflow-style: none;  /* IE and Edge */
-      scrollbar-width: none;  /* Firefox */
+      -ms-overflow-style: none;
+      /* IE and Edge */
+      scrollbar-width: none;
+      /* Firefox */
     }
   </style>
   <script>
@@ -127,7 +130,7 @@
           </div>
           <div class="space-y-1">
             <label class="text-[10px] text-gray-300 font-bold uppercase tracking-wider">Phone</label>
-            <input type="tel" id="regPhone" placeholder="+92 300 0000000"
+            <input type="tel" id="regPhone" placeholder="+1 (555) 019-2831"
               class="w-full bg-white/5 border border-white/15 px-4 py-2.5 rounded-xl text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
           </div>
           <div class="space-y-1">
@@ -149,15 +152,21 @@
   <!-- ================= MAIN LAYOUT SCREEN ================= -->
   <div id="mainDashboard" class="flex-1 flex overflow-hidden hidden">
     <!-- Collapsible Sidebar -->
-    <aside class="bg-amazon-dark text-white w-64 border-r border-gray-800 flex flex-col justify-between flex-shrink-0">
+    <aside id="adminSidebar" class="bg-amazon-dark text-white w-0 -translate-x-full md:w-64 md:translate-x-0 border-r-0 md:border-r border-gray-800 flex flex-col justify-between flex-shrink-0 transition-all duration-300 fixed md:static inset-y-0 left-0 z-50 overflow-hidden">
       <div class="py-4 flex-1 overflow-y-auto min-h-0 space-y-4 no-scrollbar">
         <!-- Logo block -->
-        <div class="px-6 pb-2 border-b border-gray-800">
+        <div class="px-6 pb-2 border-b border-gray-800 flex items-center justify-between">
           <div class="flex flex-col">
             <span class="text-white text-sm font-black uppercase tracking-widest">Amazon Vine</span>
-            <span class="text-amazon-gold text-[9px] font-bold uppercase tracking-widest mt-0.5">Admin Control
-              Panel</span>
+            <span class="text-amazon-gold text-[9px] font-bold uppercase tracking-widest mt-0.5 font-serif">Admin Control Panel</span>
           </div>
+          <button 
+            onclick="toggleSidebar()"
+            class="md:hidden p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition cursor-pointer border-0 bg-transparent flex items-center"
+            aria-label="Collapse Sidebar"
+          >
+            <i data-lucide="x" class="h-4.5 w-4.5"></i>
+          </button>
         </div>
 
         <!-- Navigation Menu -->
@@ -210,9 +219,13 @@
               class="hidden bg-rose-600 text-white text-[9px] font-black font-mono px-1.5 py-0.5 rounded-full">0</span>
           </button>
           <button onclick="switchTab('chats')" id="tab-chats"
-            class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white">
-            <i data-lucide="message-square" class="h-4.5 w-4.5"></i>
-            <span>Customer Support</span>
+            class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white">
+            <div class="flex items-center space-x-3">
+              <i data-lucide="message-square" class="h-4.5 w-4.5"></i>
+              <span>Customer Support</span>
+            </div>
+            <span id="badge-chats"
+              class="hidden bg-rose-600 text-white text-[9px] font-black font-mono px-1.5 py-0.5 rounded-full">0</span>
           </button>
           <button onclick="switchTab('bonus')" id="tab-bonus"
             class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left text-gray-300 hover:bg-gray-800 hover:text-white">
@@ -242,16 +255,25 @@
       </div>
     </aside>
 
+    <!-- Sidebar Backdrop for Mobile -->
+    <div id="sidebarBackdrop" class="md:hidden fixed inset-0 bg-black/50 z-40 hidden" onclick="toggleSidebar()"></div>
 
     <!-- Main Workspace Frame -->
     <main class="flex-1 flex flex-col overflow-hidden bg-gray-50 text-left">
       <!-- Navbar header -->
-      <header class="bg-white h-14 border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0">
+      <header class="bg-white h-14 border-b border-gray-200 px-4 md:px-6 flex items-center space-x-3 flex-shrink-0">
+        <button 
+          onclick="toggleSidebar()"
+          class="p-1.5 rounded hover:bg-gray-150 transition focus:outline-none md:hidden cursor-pointer"
+          aria-label="Toggle Sidebar"
+        >
+          <i data-lucide="menu" class="h-5 w-5 text-gray-600"></i>
+        </button>
         <h2 id="currentTabTitle" class="text-sm font-black text-gray-800 uppercase tracking-wider">Metrics Overview</h2>
       </header>
 
       <!-- Scrollable workspace viewport -->
-      <div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+      <div class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8">
 
         <!-- ================= TAB: OVERVIEW ================= -->
         <div id="view-overview" class="space-y-6">
@@ -350,22 +372,24 @@
 
           <!-- User Directory List -->
           <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
-                  <th class="p-4">Username</th>
-                  <th class="p-4">Email</th>
-                  <th class="p-4">Location</th>
-                  <th class="p-4">Login / Withdrawal Password</th>
-                  <th class="p-4">Referred By</th>
-                  <th class="p-4">Balance (USDT)</th>
-                  <th class="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="userTableBody" class="divide-y divide-gray-200">
-                <!-- Data loaded dynamically -->
-              </tbody>
-            </table>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                    <th class="p-4">Username</th>
+                    <th class="p-4">Email</th>
+                    <th class="p-4">Location</th>
+                    <th class="p-4">Login / Withdrawal Password</th>
+                    <th class="p-4">Referred By</th>
+                    <th class="p-4">Balance (USDT)</th>
+                    <th class="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="userTableBody" class="divide-y divide-gray-200">
+                  <!-- Data loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -386,19 +410,21 @@
 
             <!-- Users List Table -->
             <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-              <table class="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
-                    <th class="p-4">Username</th>
-                    <th class="p-4">Email</th>
-                    <th class="p-4">Active VIP Workspaces</th>
-                    <th class="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="vipUsersTableBody" class="divide-y divide-gray-200">
-                  <!-- Users loaded dynamically -->
-                </tbody>
-              </table>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                      <th class="p-4">Username</th>
+                      <th class="p-4">Email</th>
+                      <th class="p-4">Active VIP Workspaces</th>
+                      <th class="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vipUsersTableBody" class="divide-y divide-gray-200">
+                    <!-- Users loaded dynamically -->
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -530,12 +556,13 @@
                     </button>
                   </div>
                   <div
-                    class="flex-1 border border-gray-200 rounded-xl bg-white p-3.5 overflow-hidden flex flex-col max-h-[350px]">
+                    class="flex-1 border border-gray-200 rounded-xl bg-white p-3.5 overflow-auto flex flex-col max-h-[350px]">
                     <table class="w-full text-left text-[10px] border-collapse">
                       <thead>
-                        <tr class="bg-gray-50 border-b border-gray-200 text-gray-450 uppercase font-black">
-                          <th class="p-2 w-5/12">Position (#)</th>
-                          <th class="p-2 w-5/12">Amount ($)</th>
+                        <tr class="bg-gray-55 border-b border-gray-200 text-gray-450 uppercase font-black">
+                          <th class="p-2 w-4/12">Position (#)</th>
+                          <th class="p-2 w-3/12">Amount ($)</th>
+                          <th class="p-2 w-3/12">Profit ($)</th>
                           <th class="p-2 w-2/12 text-right">Delete</th>
                         </tr>
                       </thead>
@@ -668,10 +695,10 @@
             </div>
 
             <!-- Page Border Wrap (for rendering layout nicely) -->
-            <div class="overflow-x-auto py-8 bg-gray-150 rounded-2xl border border-gray-200 flex justify-center">
+            <div class="overflow-x-auto py-8 bg-gray-150 rounded-2xl border border-gray-200">
               <!-- A4 Report Sheet element to capture -->
               <div id="auditReportA4"
-                class="w-[210mm] min-h-[297mm] bg-white text-gray-800 p-16 shadow-2xl border border-gray-250 font-sans relative flex flex-col justify-between"
+                class="w-[210mm] min-h-[297mm] mx-auto bg-white text-gray-800 p-16 shadow-2xl border border-gray-250 font-sans relative flex flex-col justify-between"
                 style="box-sizing: border-box;">
 
                 <div class="space-y-8 text-left">
@@ -837,20 +864,22 @@
               <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending User Registration Approvals
               </h4>
             </div>
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
-                  <th class="p-4">Username</th>
-                  <th class="p-4">Email</th>
-                  <th class="p-4">Location</th>
-                  <th class="p-4">Registration Date</th>
-                  <th class="p-4 text-right">Audits</th>
-                </tr>
-              </thead>
-              <tbody id="registrationApprovalBody" class="divide-y divide-gray-150">
-                <!-- Data loaded dynamically -->
-              </tbody>
-            </table>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                    <th class="p-4">Username</th>
+                    <th class="p-4">Email</th>
+                    <th class="p-4">Location</th>
+                    <th class="p-4">Registration Date</th>
+                    <th class="p-4 text-right">Audits</th>
+                  </tr>
+                </thead>
+                <tbody id="registrationApprovalBody" class="divide-y divide-gray-150">
+                  <!-- Data loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -861,21 +890,23 @@
             <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
               <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending Deposits Approvals</h4>
             </div>
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
-                  <th class="p-4">User</th>
-                  <th class="p-4">Platform</th>
-                  <th class="p-4">Protocol</th>
-                  <th class="p-4">Amount</th>
-                  <th class="p-4">TxHash (Hash ID)</th>
-                  <th class="p-4 text-right">Audits</th>
-                </tr>
-              </thead>
-              <tbody id="depositApprovalBody" class="divide-y divide-gray-150">
-                <!-- Data loaded dynamically -->
-              </tbody>
-            </table>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                    <th class="p-4">User</th>
+                    <th class="p-4">Platform</th>
+                    <th class="p-4">Protocol</th>
+                    <th class="p-4">Amount</th>
+                    <th class="p-4">TxHash (Hash ID)</th>
+                    <th class="p-4 text-right">Audits</th>
+                  </tr>
+                </thead>
+                <tbody id="depositApprovalBody" class="divide-y divide-gray-150">
+                  <!-- Data loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -886,21 +917,23 @@
             <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
               <h4 class="text-xs font-black uppercase text-gray-800 tracking-wider">Pending Payout Withdrawals</h4>
             </div>
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
-                  <th class="p-4">User</th>
-                  <th class="p-4">Platform</th>
-                  <th class="p-4">Amount Requested</th>
-                  <th class="p-4">USDT Wallet Address</th>
-                  <th class="p-4">Request Date</th>
-                  <th class="p-4 text-right">Audits</th>
-                </tr>
-              </thead>
-              <tbody id="withdrawApprovalBody" class="divide-y divide-gray-150">
-                <!-- Data loaded dynamically -->
-              </tbody>
-            </table>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
+                    <th class="p-4">User</th>
+                    <th class="p-4">Platform</th>
+                    <th class="p-4">Amount Requested</th>
+                    <th class="p-4">USDT Wallet Address</th>
+                    <th class="p-4">Request Date</th>
+                    <th class="p-4 text-right">Audits</th>
+                  </tr>
+                </thead>
+                <tbody id="withdrawApprovalBody" class="divide-y divide-gray-150">
+                  <!-- Data loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -910,7 +943,7 @@
         <div id="view-chats"
           class="bg-white rounded-xl border border-gray-200 shadow-sm h-[calc(100vh-8rem)] flex overflow-hidden hidden text-xs">
           <!-- Sidebar: Conversations List -->
-          <div class="w-80 border-r border-gray-200 flex flex-col flex-shrink-0 bg-gray-50/50">
+          <div id="supportSidebar" class="w-full md:w-80 md:min-w-[320px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-gray-50/50">
             <div class="p-4 border-b border-gray-200 bg-white">
               <h4 class="font-black text-gray-800 uppercase tracking-wider">Support Inbox</h4>
               <p class="text-[10px] text-gray-400 mt-1">Real-time operator chat feeds</p>
@@ -933,10 +966,15 @@
           </div>
 
           <!-- Main Pane: Current Thread Workspace -->
-          <div class="flex-1 flex flex-col bg-white">
+          <div id="supportChatPane" class="flex-1 min-w-0 flex flex-col bg-white hidden md:flex">
             <div id="supportChatHeader"
-              class="h-14 border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0 bg-gray-50/10">
+              class="h-14 border-b border-gray-200 px-4 md:px-6 flex items-center justify-between flex-shrink-0 bg-gray-50/10">
               <div class="flex items-center space-x-2">
+                <!-- Back Button for Mobile Chat -->
+                <button onclick="backToChatList()"
+                  class="md:hidden p-1.5 hover:bg-gray-150 rounded-lg text-gray-500 hover:text-gray-700 transition cursor-pointer flex-shrink-0 border border-gray-200 mr-1.5">
+                  <i data-lucide="arrow-left" class="h-4 w-4"></i>
+                </button>
                 <span class="h-2.5 w-2.5 bg-gray-300 rounded-full inline-block" id="activeSupportUserStatusIcon"></span>
                 <span class="font-black text-gray-800 uppercase tracking-wider" id="activeSupportUser">No Active Chat
                   Selected</span>
@@ -965,7 +1003,7 @@
               <input type="text" id="supportMsgField"
                 placeholder="Type your support message reply... (Use Shift+Enter for multiline)"
                 onkeydown="handleSupportFieldKey(event)"
-                class="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white" />
+                class="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white" />
               <button onclick="sendSupportReply()"
                 class="bg-[#131921] hover:bg-black text-white font-black px-5 py-2.5 rounded-lg transition cursor-pointer flex-shrink-0 text-[10px] uppercase tracking-wider">
                 Send Message
@@ -993,7 +1031,7 @@
 
             <!-- Users List Table -->
             <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-              <div class="max-h-[500px] overflow-y-auto">
+              <div class="max-h-[500px] overflow-auto">
                 <table class="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr
@@ -1139,6 +1177,8 @@
 
       </div>
     </main>
+
+
   </div>
 
   <!-- User Details Bada Section / Slideout Modal panel -->
@@ -1403,7 +1443,7 @@
                 </button>
               </div>
               <div
-                class="flex-1 border border-gray-200 rounded-xl bg-white p-3 overflow-hidden flex flex-col max-h-[350px]">
+                class="flex-1 border border-gray-200 rounded-xl bg-white p-3 overflow-auto flex flex-col max-h-[350px]">
                 <table class="w-full text-left text-[10px] border-collapse">
                   <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-450 uppercase font-black">
@@ -1598,6 +1638,46 @@
     let adminToken = sessionStorage.getItem('adminToken') || '';
     let selectedUserDetailId = null;
     let selectedSupportUserId = null;
+    let isSidebarCollapsed = true;
+
+    window.toggleSidebar = function() {
+      const sidebar = document.getElementById('adminSidebar');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      if (sidebar) {
+        if (sidebar.classList.contains('-translate-x-full')) {
+          sidebar.classList.remove('-translate-x-full', 'w-0', 'border-r-0');
+          sidebar.classList.add('translate-x-0', 'w-64');
+          isSidebarCollapsed = false;
+          if (backdrop) backdrop.classList.remove('hidden');
+        } else {
+          sidebar.classList.remove('translate-x-0', 'w-64');
+          sidebar.classList.add('-translate-x-full', 'w-0', 'border-r-0');
+          isSidebarCollapsed = true;
+          if (backdrop) backdrop.classList.add('hidden');
+        }
+      }
+    };
+
+    // Persist read timestamps across page reloads using sessionStorage
+    // Format: { [userId]: lastReadTimestamp (ISO string) }
+    function getChatReadMap() {
+      try {
+        return JSON.parse(sessionStorage.getItem('chatReadMap') || '{}');
+      } catch { return {}; }
+    }
+    function markChatRead(userId, timestamp) {
+      const map = getChatReadMap();
+      map[userId] = timestamp || new Date().toISOString();
+      sessionStorage.setItem('chatReadMap', JSON.stringify(map));
+    }
+    function isChatUnread(thread) {
+      if (thread.sender !== 'user') return false;
+      const map = getChatReadMap();
+      const lastRead = map[thread.userId];
+      if (!lastRead) return true;
+      return new Date(thread.created_at).getTime() > new Date(lastRead).getTime();
+    }
+
     let supportChatPollInterval = null;
     let lastCheckedActivityTime = null;
     let lastCheckedChatTime = null;
@@ -1773,26 +1853,17 @@
       }
     }
 
-    const lockedTabs = ['overview', 'approval-registrations', 'reports', 'settings'];
+    const lockedTabs = ['overview', 'users', 'vip', 'products', 'approval-registrations', 'chats', 'bonus', 'reports', 'settings'];
 
     function configureRestrictedAdminUI() {
-      // Loop over locked tabs and add locks if restricted
+      // Loop over locked tabs and hide if restricted
       lockedTabs.forEach(tabId => {
         const btn = document.getElementById(`tab-${tabId}`);
         if (btn) {
-          const span = btn.querySelector('span');
           if (isAdminRestricted) {
-            if (span && !span.innerHTML.includes('🔒')) {
-              span.innerHTML = span.textContent + ' <span class="ml-1 text-[10px]">🔒</span>';
-            }
-            btn.classList.add('opacity-60', 'cursor-not-allowed');
-            btn.title = "Access Locked: Restricted Operator Privilege";
+            btn.classList.add('hidden');
           } else {
-            if (span && span.innerHTML.includes('🔒')) {
-              span.innerHTML = span.textContent.replace('🔒', '').trim();
-            }
-            btn.classList.remove('opacity-60', 'cursor-not-allowed');
-            btn.title = "";
+            btn.classList.remove('hidden');
           }
         }
       });
@@ -1800,6 +1871,18 @@
 
     // Toggle Workspace Views
     function switchTab(tabId) {
+      // Auto collapse sidebar on mobile after clicking a tab
+      if (window.innerWidth < 768) {
+        const sidebar = document.getElementById('adminSidebar');
+        const backdrop = document.getElementById('sidebarBackdrop');
+        if (sidebar && !sidebar.classList.contains('-translate-x-full')) {
+          sidebar.classList.remove('translate-x-0', 'w-64');
+          sidebar.classList.add('-translate-x-full', 'w-0', 'border-r-0');
+          isSidebarCollapsed = true;
+          if (backdrop) backdrop.classList.add('hidden');
+        }
+      }
+
       if (isAdminRestricted && lockedTabs.includes(tabId)) {
         showToast('Access Denied: Restricted operator privileges locked.', 'error');
         return;
@@ -1829,7 +1912,10 @@
       if (tabId === 'vip') loadVipUsersTab();
       if (tabId === 'products') fetchProducts();
       if (tabId === 'bonus') fetchBonusUsers();
-      if (tabId === 'chats') fetchSupportChats();
+      if (tabId === 'chats') {
+        fetchSupportChats();
+        updateResponsiveChatLayout();
+      }
       if (tabId === 'approval-registrations') fetchLedgers();
       if (tabId === 'approval-deposits') fetchLedgers();
       if (tabId === 'approval-withdrawals') fetchLedgers();
@@ -1924,10 +2010,13 @@
           }
 
           if (message.type === 'new_chat_message') {
-            fetchSupportChats(true);
-            if (selectedSupportUserId === message.data.userId) {
+            const senderUserId = message.data.userId;
+            if (selectedSupportUserId === senderUserId) {
+              // Admin is actively viewing this thread — mark as read immediately
+              markChatRead(senderUserId, message.data.created_at || new Date().toISOString());
               fetchSupportHistory(selectedSupportUserId, true);
             }
+            fetchSupportChats(true);
 
             const notifyChat = document.getElementById('prefNotifyChat').checked;
             if (notifyChat && 'Notification' in window && Notification.permission === 'granted') {
@@ -1956,13 +2045,19 @@
       isAdminRestricted = payload && payload.isRestricted === true;
 
       configureRestrictedAdminUI();
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
       loadNotifyPrefs();
       requestNotificationPermission();
       connectAdminWebSocket();
+      fetchLedgers();
+      if (!isAdminRestricted) {
+        fetchSupportChats(true);
+      }
 
       const savedTab = localStorage.getItem('admin_active_tab') || 'overview';
-      const activeTabToLoad = (isAdminRestricted && lockedTabs.includes(savedTab)) ? 'users' : savedTab;
+      const activeTabToLoad = (isAdminRestricted && lockedTabs.includes(savedTab)) ? 'approval-deposits' : savedTab;
       switchTab(activeTabToLoad);
 
       // Low frequency fallback poll (60 seconds instead of high frequency 5s) if not restricted
@@ -2468,6 +2563,18 @@
         const threads = await res.json();
         supportThreadsList = threads;
 
+        // Update Customer Support badge count on sidebar
+        const unreadCount = threads.filter(t => isChatUnread(t)).length;
+        const chatBadge = document.getElementById('badge-chats');
+        if (chatBadge) {
+          if (unreadCount > 0) {
+            chatBadge.textContent = unreadCount;
+            chatBadge.classList.remove('hidden');
+          } else {
+            chatBadge.classList.add('hidden');
+          }
+        }
+
         const userListEl = document.getElementById('supportUserList');
         if (threads.length === 0) {
           userListEl.innerHTML = `<p class="text-gray-455 italic p-6 text-center">No active chats in support feed</p>`;
@@ -2478,7 +2585,8 @@
           const isSelected = selectedSupportUserId === t.userId;
           const isImage = t.text.startsWith('/uploads/') || t.text.startsWith('data:image/');
           const previewText = isImage ? '🖼️ [Attachment Image]' : t.text;
-          const unreadDot = t.sender === 'user' ? `<span class="h-2 w-2 bg-amazon-orange rounded-full inline-block"></span>` : '';
+          const isUnread = isChatUnread(t);
+          const unreadDot = isUnread ? `<span class="h-2 w-2 bg-yellow-400 rounded-full border-2 border-red-500 inline-block"></span>` : '';
 
           return `
             <div 
@@ -2544,7 +2652,10 @@
     async function selectChatUser(userId, username) {
       selectedSupportUserId = userId;
 
+      // Mark thread as read — store the latest message timestamp from this thread
       const thread = supportThreadsList.find(t => t.userId === userId);
+      markChatRead(userId, thread?.created_at || new Date().toISOString());
+      fetchSupportChats(true);
       const assigned = thread ? thread.assignedAdmin : null;
 
       const headerEl = document.getElementById('activeSupportUser');
@@ -2562,9 +2673,43 @@
         div.classList.add('bg-white');
       });
 
+      // Responsive layout toggle
+      updateResponsiveChatLayout();
+
       // Fetch thread log history
       fetchSupportHistory(userId);
     }
+
+    function backToChatList() {
+      selectedSupportUserId = null;
+      updateResponsiveChatLayout();
+
+      // Update styling highlight inside sidebar
+      document.querySelectorAll('#supportUserList > div').forEach(div => {
+        div.classList.remove('bg-amber-50/70', 'border-l-4', 'border-amazon-orange');
+        div.classList.add('bg-white');
+      });
+    }
+
+    function updateResponsiveChatLayout() {
+      const sidebar = document.getElementById('supportSidebar');
+      const pane = document.getElementById('supportChatPane');
+      if (!sidebar || !pane) return;
+
+      if (window.innerWidth < 768) {
+        if (selectedSupportUserId) {
+          sidebar.classList.add('hidden');
+          pane.classList.remove('hidden');
+        } else {
+          sidebar.classList.remove('hidden');
+          pane.classList.add('hidden');
+        }
+      } else {
+        sidebar.classList.remove('hidden');
+        pane.classList.remove('hidden');
+      }
+    }
+    window.addEventListener('resize', updateResponsiveChatLayout);
 
     async function fetchSupportHistory(userId, silent = false) {
       try {
@@ -2584,12 +2729,12 @@
         streamEl.innerHTML = messages.map(m => {
           const isImage = m.text.startsWith('/uploads/') || m.text.startsWith('data:image/');
           const content = isImage
-            ? `<img src="${m.text}" class="max-w-xs rounded-lg border shadow-3xs cursor-zoom-in mt-1 hover:brightness-95 transition-all" onclick="window.open('${m.text}', '_blank')"/>`
-            : `<p class="leading-relaxed font-medium whitespace-pre-wrap">${m.text}</p>`;
+            ? `<img src="${m.text}" class="max-w-full rounded-lg border shadow-3xs cursor-zoom-in mt-1 hover:brightness-95 transition-all" onclick="window.open('${m.text}', '_blank')"/>`
+            : `<p class="leading-relaxed font-medium whitespace-pre-wrap break-words">${m.text}</p>`;
 
           return `
             <div class="flex flex-col ${m.sender === 'admin' ? 'items-end' : 'items-start'} mt-3">
-              <div class="max-w-md p-3.5 rounded-2xl shadow-3xs text-[11px] ${m.sender === 'admin' ? 'bg-amazon-dark text-white rounded-br-none' : 'bg-gray-150 text-gray-800 rounded-bl-none'}">
+              <div class="max-w-[85%] md:max-w-md p-3.5 rounded-2xl shadow-3xs text-[11px] ${m.sender === 'admin' ? 'bg-amazon-dark text-white rounded-br-none' : 'bg-gray-150 text-gray-800 rounded-bl-none'}">
                 ${content}
               </div>
               <span class="text-[9px] text-gray-400 font-mono mt-1 px-1.5">${m.time}</span>
@@ -2874,7 +3019,8 @@
         const res = await fetch('/api/admin/products', {
           headers: { 'Authorization': `Bearer ${adminToken}` }
         });
-        allCampaignProducts = await res.json();
+        const rawProducts = await res.json();
+        allCampaignProducts = Array.isArray(rawProducts) ? rawProducts : [];
 
         // Update all filter tab counts on fetch
         const amz = allCampaignProducts.filter(p => p.platform === 'Amazon').length;
@@ -2970,7 +3116,9 @@
             <p class="text-[11px] text-gray-400 mt-1">Create your first product campaign to display it here.</p>
           </div>
         `;
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
         return;
       }
 
@@ -3022,7 +3170,9 @@
           </div>
         `;
       }).join('');
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
     }
 
     // Fetch Ledgers Lists
@@ -3035,11 +3185,15 @@
           fetch('/api/admin/withdrawals', { headers: { 'Authorization': `Bearer ${adminToken}` } })
         ]);
 
-        const [pendingUsers, deposits, withdrawals] = await Promise.all([
+        const [rawPendingUsers, rawDeposits, rawWithdrawals] = await Promise.all([
           regRes.json(),
           depRes.json(),
           wRes.json()
         ]);
+
+        const pendingUsers = Array.isArray(rawPendingUsers) ? rawPendingUsers : [];
+        const deposits = Array.isArray(rawDeposits) ? rawDeposits : [];
+        const withdrawals = Array.isArray(rawWithdrawals) ? rawWithdrawals : [];
 
         // Render registrations
         const regBody = document.getElementById('registrationApprovalBody');
@@ -3477,25 +3631,28 @@
       document.getElementById('vipStep2').classList.remove('hidden');
       hideVipPageConfigurator();
 
+      // Render immediate loading state inside card action areas
+      document.getElementById('vipPageActions-Amazon').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
+      document.getElementById('vipPageActions-Alibaba').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
+      document.getElementById('vipPageActions-Shopify').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
+
       try {
-        // Fetch current user VIP configuration
-        const vipRes = await fetch(`/api/admin/users/${userId}/vip`, {
-          headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
-        currentVipConfig = await vipRes.json();
+        // Fetch user VIP configs, products pool, and review logs in parallel
+        const [vipRes, prodRes, userDetailsRes] = await Promise.all([
+          fetch(`/api/admin/users/${userId}/vip`, { headers: { 'Authorization': `Bearer ${adminToken}` } }),
+          fetch('/api/admin/products', { headers: { 'Authorization': `Bearer ${adminToken}` } }),
+          fetch(`/api/admin/users/${userId}`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
+        ]);
 
-        // Fetch products
-        const prodRes = await fetch('/api/admin/products', {
-          headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
-        allVipProducts = await prodRes.json();
+        const [vipData, prodData, userDetailsData] = await Promise.all([
+          vipRes.json(),
+          prodRes.json(),
+          userDetailsRes.json()
+        ]);
 
-        // Fetch user reviews/history to know which products are already claimed/completed
-        const userDetailsRes = await fetch(`/api/admin/users/${userId}`, {
-          headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
-        const userDetails = await userDetailsRes.json();
-        completedProductIds = (userDetails.reviews || []).map(r => r.product_id);
+        currentVipConfig = vipData;
+        allVipProducts = prodData;
+        completedProductIds = (userDetailsData.reviews || []).map(r => r.product_id);
 
         renderVipPageCards();
       } catch (err) {
@@ -3569,7 +3726,9 @@
           `;
         }
       });
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
     }
 
     function unlockVipPagePlatform(platform) {
@@ -3606,11 +3765,13 @@
       const combosList = document.getElementById('vipPageCombosList');
       combosList.innerHTML = '';
       currentVipConfig[platform].combos.forEach(c => {
-        addVipPageComboRow(c.position, c.amount);
+        addVipPageComboRow(c.position, c.amount, c.profit);
       });
 
       updateSelectedPageProductsCount();
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
     }
 
     function editVipPagePlatform(platform) {
@@ -3623,25 +3784,30 @@
       document.getElementById('vipPageConfigSelectedCount').textContent = `${count} product${count === 1 ? '' : 's'} selected`;
     }
 
-    function addVipPageComboRow(position = '', amount = '') {
+    function addVipPageComboRow(position = '', amount = '', profit = '') {
       const combosList = document.getElementById('vipPageCombosList');
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50';
       tr.innerHTML = `
-        <td class="p-2">
-          <input type="number" required placeholder="e.g. 8" value="${position}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amazon-gold font-bold"/>
+        <td class="p-2 w-4/12">
+          <input type="number" required placeholder="e.g. 8" value="${position}" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amazon-gold font-bold"/>
         </td>
-        <td class="p-2">
-          <input type="number" step="any" required placeholder="e.g. 18.00" value="${amount}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono font-bold text-green-600"/>
+        <td class="p-2 w-3/12">
+          <input type="number" step="any" required placeholder="e.g. 18.00" value="${amount}" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono font-bold text-green-600"/>
         </td>
-        <td class="p-2 text-right">
-          <button type="button" onclick="removeVipPageComboRow(this)" class="p-2 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-lg cursor-pointer transition">
-            <i data-lucide="trash" class="h-4 w-4"></i>
+        <td class="p-2 w-3/12">
+          <input type="number" step="any" required placeholder="e.g. 10.00" value="${profit}" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono font-bold text-emerald-600"/>
+        </td>
+        <td class="p-2 w-2/12 text-right">
+          <button type="button" onclick="removeVipPageComboRow(this)" class="p-1.5 bg-red-50 hover:bg-red-100 text-red-655 border border-red-200 rounded-lg cursor-pointer transition">
+            <i data-lucide="trash" class="h-3.5 w-3.5"></i>
           </button>
         </td>
       `;
       combosList.appendChild(tr);
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
     }
 
     function removeVipPageComboRow(btn) {
@@ -3668,14 +3834,15 @@
       const combos = [];
       for (const row of comboRows) {
         const inputs = row.querySelectorAll('input');
-        if (inputs.length < 2) continue;
+        if (inputs.length < 3) continue;
         const position = parseInt(inputs[0].value);
         const amount = parseFloat(inputs[1].value);
-        if (isNaN(position) || isNaN(amount)) {
+        const profit = parseFloat(inputs[2].value || 0.00);
+        if (isNaN(position) || isNaN(amount) || isNaN(profit)) {
           showToast('Please fill out all combo rows completely or delete empty rows.', 'error');
           return;
         }
-        combos.push({ position, amount });
+        combos.push({ position, amount, profit });
       }
 
       try {
@@ -3793,7 +3960,9 @@
           </tr>
         `;
       }).join('');
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
     }
 
     function goBackToReportsUsers() {
@@ -3847,7 +4016,7 @@
         document.getElementById('reportGenDateVal').textContent = new Date().toLocaleString();
 
         // 2. Load Balances
-        const balances = data.balances || [];
+        const balances = Array.isArray(data.balances) ? data.balances : [];
         const amazonBal = balances.find(b => b.platform === 'Amazon') || { wallet_balance: 0, reviews_count: 0 };
         const alibabaBal = balances.find(b => b.platform === 'Alibaba') || { wallet_balance: 0, reviews_count: 0 };
         const shopifyBal = balances.find(b => b.platform === 'Shopify') || { wallet_balance: 0, reviews_count: 0 };
@@ -3871,7 +4040,7 @@
         `;
 
         // 3. Load Deposits
-        const deposits = data.deposits || [];
+        const deposits = Array.isArray(data.deposits) ? data.deposits : [];
         document.getElementById('reportDepositsTableBody').innerHTML = deposits.length === 0
           ? `<tr><td colspan="5" class="p-4 text-center text-gray-400 italic">No collateral deposits recorded</td></tr>`
           : deposits.map(d => `
@@ -3885,7 +4054,7 @@
           `).join('');
 
         // 4. Load Withdrawals
-        const withdrawals = data.withdrawals || [];
+        const withdrawals = Array.isArray(data.withdrawals) ? data.withdrawals : [];
         document.getElementById('reportWithdrawalsTableBody').innerHTML = withdrawals.length === 0
           ? `<tr><td colspan="4" class="p-4 text-center text-gray-400 italic">No withdrawal settlements recorded</td></tr>`
           : withdrawals.map(w => `
@@ -3901,7 +4070,8 @@
         const bonusRes = await fetch(`/api/admin/users/${userId}/bonus-grants`, {
           headers: { 'Authorization': `Bearer ${adminToken}` }
         });
-        const bonusGrants = bonusRes.ok ? await bonusRes.json() : [];
+        const rawBonusGrants = bonusRes.ok ? await bonusRes.json() : [];
+        const bonusGrants = Array.isArray(rawBonusGrants) ? rawBonusGrants : [];
         document.getElementById('reportBonusesTableBody').innerHTML = bonusGrants.length === 0
           ? `<tr><td colspan="3" class="p-4 text-center text-gray-400 italic">No direct bonus incentives granted</td></tr>`
           : bonusGrants.map(b => `
@@ -3912,7 +4082,9 @@
             </tr>
           `).join('');
 
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
       } catch (err) {
         console.error(err);
         showToast('Failed to generate reviewer audit report details.', 'error');

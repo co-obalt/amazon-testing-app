@@ -35,14 +35,51 @@ export function initializeWebSocket(server: any) {
     }
   });
 
+  // Start heartbeat interval to clean up dead connections (prevents memory leak of orphaned sockets)
+  const heartbeatInterval = setInterval(() => {
+    for (let i = activeClients.length - 1; i >= 0; i--) {
+      const client = activeClients[i];
+      const ws = client.ws as any;
+
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        activeClients.splice(i, 1);
+        continue;
+      }
+
+      if (ws.isAlive === false) {
+        ws.terminate();
+        activeClients.splice(i, 1);
+        continue;
+      }
+
+      ws.isAlive = false;
+      try {
+        ws.ping();
+      } catch (err) {
+        ws.terminate();
+        activeClients.splice(i, 1);
+      }
+    }
+  }, 30000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
+
   wss.on('connection', (ws: WebSocket, user: { id: string; role?: string }) => {
     const client: ClientSocket = {
       userId: user.id,
-      role: (user.role === 'admin' || user.id === 'admin-dev-uuid') ? 'admin' : 'user',
+      role: (user.role === 'admin' || user.role === 'super_admin' || user.id === 'admin-dev-uuid') ? 'admin' : 'user',
       ws
     };
 
     activeClients.push(client);
+
+    // Setup heartbeat status flags
+    (ws as any).isAlive = true;
+    ws.on('pong', () => {
+      (ws as any).isAlive = true;
+    });
 
     ws.on('close', () => {
       const idx = activeClients.indexOf(client);

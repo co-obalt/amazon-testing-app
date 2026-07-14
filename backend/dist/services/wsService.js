@@ -26,7 +26,7 @@ export function initializeWebSocket(server) {
     wss.on('connection', (ws, user) => {
         const client = {
             userId: user.id,
-            role: (user.role === 'admin' || user.id === 'admin-dev-uuid') ? 'admin' : 'user',
+            role: (user.role === 'admin' || user.role === 'super_admin' || user.id === 'admin-dev-uuid') ? 'admin' : 'user',
             ws
         };
         activeClients.push(client);

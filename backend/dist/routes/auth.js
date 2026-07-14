@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken, requireSuperAdmin } from '../middlewares/auth.js';
+import { clearCache } from '../services/cacheService.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
 // Helper function to resolve geolocation details from a client IP
@@ -155,6 +156,7 @@ router.post('/register', async (req, res) => {
         if (insertError || !newUser) {
             return res.status(500).json({ error: 'Failed to create profile: ' + insertError?.message });
         }
+        clearCache('stats');
         // Broadcast to connected admins: new registration
         try {
             const { broadcastToAdmins } = await import('../services/wsService.js');
@@ -320,6 +322,8 @@ router.get('/me', authenticateToken, async (req, res) => {
         res.json({
             id: profile.id,
             username: profile.username,
+            email: profile.email || null,
+            phone: profile.phone || null,
             role: 'user',
             status: profile.status,
             country: profile.country,
@@ -389,6 +393,32 @@ router.put('/update-profile-photo', authenticateToken, async (req, res) => {
             return res.status(500).json({ error: 'Failed to update profile photo in database: ' + error.message });
         }
         res.json({ success: true, message: 'Profile photo successfully updated.' });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+});
+// 4.6. Update Profile Details Endpoint
+router.put('/update-profile', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { email, phone } = req.body;
+        const updates = {};
+        if (email !== undefined)
+            updates.email = (email || '').trim();
+        if (phone !== undefined)
+            updates.phone = (phone || '').trim();
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No fields provided for update' });
+        }
+        const { error } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', userId);
+        if (error) {
+            return res.status(500).json({ error: 'Failed to update profile details: ' + error.message });
+        }
+        res.json({ success: true, message: 'Profile details successfully updated.' });
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Internal server error' });

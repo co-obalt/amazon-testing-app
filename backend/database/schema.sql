@@ -279,4 +279,74 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_target_user ON admin_audit(target_use
 
 ALTER TABLE admin_audit DISABLE ROW LEVEL SECURITY;
 
+-- ========================================
+-- 15. Concurrency Integrity & RPC Functions
+-- ========================================
+
+-- Enforce database-level check constraint to prevent balance underflows (race conditions)
+ALTER TABLE platform_balances DROP CONSTRAINT IF EXISTS check_positive_balance;
+ALTER TABLE platform_balances ADD CONSTRAINT check_positive_balance CHECK (wallet_balance >= 0.00);
+
+-- RPC stored procedure for atomic balance decrement on withdrawal requests
+CREATE OR REPLACE FUNCTION decrement_platform_balance(
+  target_user_id UUID,
+  target_platform TEXT,
+  amount_to_subtract NUMERIC
+) RETURNS NUMERIC AS $$
+DECLARE
+  new_balance NUMERIC;
+BEGIN
+  UPDATE platform_balances
+  SET wallet_balance = wallet_balance - amount_to_subtract
+  WHERE user_id = target_user_id AND platform = target_platform
+  RETURNING wallet_balance INTO new_balance;
+
+  IF new_balance < 0.00 THEN
+    RAISE EXCEPTION 'Insufficient balance';
+  END IF;
+
+  RETURN new_balance;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC stored procedure for atomic user review verification progress increments
+CREATE OR REPLACE FUNCTION increment_user_review_progress(
+  target_user_id UUID,
+  target_platform TEXT,
+  payout_amount NUMERIC
+) RETURNS TABLE (
+  wallet_balance NUMERIC,
+  current_position INT
+) AS $$
+BEGIN
+  RETURN QUERY
+  UPDATE platform_balances
+  SET wallet_balance = platform_balances.wallet_balance + payout_amount,
+      reviews_count = platform_balances.reviews_count + 1,
+      current_position = platform_balances.current_position + 1
+  WHERE user_id = target_user_id AND platform = target_platform
+  RETURNING platform_balances.wallet_balance, platform_balances.current_position;
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC stored procedure for atomic balance adjustments (e.g. withdrawal refunds or bonus grants)
+CREATE OR REPLACE FUNCTION adjust_platform_balance(
+  target_user_id UUID,
+  target_platform TEXT,
+  amount_to_add NUMERIC
+) RETURNS NUMERIC AS $$
+DECLARE
+  new_balance NUMERIC;
+BEGIN
+  UPDATE platform_balances
+  SET wallet_balance = wallet_balance + amount_to_add
+  WHERE user_id = target_user_id AND platform = target_platform
+  RETURNING wallet_balance INTO new_balance;
+
+  RETURN new_balance;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
 

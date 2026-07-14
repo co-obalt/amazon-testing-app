@@ -34,6 +34,9 @@ async function logAdminAction(adminId, action, targetUserId, details, req) {
 router.use(authenticateToken);
 router.use(requireAdmin);
 router.get('/stats', async (req, res) => {
+    if (req.user?.isRestricted) {
+        return res.status(403).json({ error: 'Access Denied: Restricted operator privileges locked.' });
+    }
     try {
         const cachedStats = getCache('stats');
         if (cachedStats) {
@@ -407,6 +410,7 @@ router.delete('/users/:id', async (req, res) => {
         }
         // Also try deleting from admins table (does nothing if it's not an admin profile ID)
         await supabase.from('admins').delete().eq('id', id);
+        clearCache('stats');
         res.json({ success: true, message: 'User account and all associated data permanently deleted.' });
     }
     catch (error) {
@@ -415,6 +419,9 @@ router.delete('/users/:id', async (req, res) => {
 });
 // 4. Update User Account Status (Approve/Restrict User Profile)
 router.put('/users/:id/status', async (req, res) => {
+    if (req.user?.isRestricted) {
+        return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify user accounts.' });
+    }
     try {
         const { id } = req.params;
         const { status } = req.body; // 'active' | 'restricted' | 'pending'
@@ -432,6 +439,7 @@ router.put('/users/:id/status', async (req, res) => {
             if (delErr) {
                 return res.status(500).json({ error: delErr.message });
             }
+            clearCache('stats');
             const adminId = req.user?.id || 'unknown-admin';
             await logAdminAction(adminId, 'REJECT_AND_DELETE_USER', id, `Rejected and deleted user account`, req);
             return res.json({ message: 'User successfully rejected and deleted.' });
@@ -448,6 +456,7 @@ router.put('/users/:id/status', async (req, res) => {
         if (error) {
             return res.status(500).json({ error: error.message });
         }
+        clearCache('stats');
         const adminId = req.user?.id || 'unknown-admin';
         await logAdminAction(adminId, 'UPDATE_USER_STATUS', id, `Changed user status to ${status}`, req);
         res.json({ message: `User status changed to ${status}`, user: updated });
@@ -458,6 +467,9 @@ router.put('/users/:id/status', async (req, res) => {
 });
 // 5. Add / Subtract User Balance directly
 router.put('/users/:id/balance', async (req, res) => {
+    if (req.user?.isRestricted) {
+        return res.status(403).json({ error: 'Access Denied: Restricted operators cannot adjust user balances.' });
+    }
     try {
         const { id } = req.params;
         const { platform, amount } = req.body; // e.g. amount: 15.50 (adds) or -10.00 (subtracts)
@@ -721,6 +733,20 @@ router.put('/withdrawals/:id/status', async (req, res) => {
             .from('withdrawals')
             .update({ status })
             .eq('id', id);
+        // If approved, reset user's order progress and start the 24h cooldown
+        if (status === 'Approved') {
+            const targetPlatform = wRecord.platform || platform;
+            if (targetPlatform) {
+                await supabase
+                    .from('platform_balances')
+                    .update({
+                    current_position: 0,
+                    last_completed_batch_at: new Date().toISOString()
+                })
+                    .eq('user_id', wRecord.user_id)
+                    .eq('platform', targetPlatform);
+            }
+        }
         if (updateError) {
             return res.status(500).json({ error: 'Failed to update status: ' + updateError.message });
         }
@@ -968,6 +994,9 @@ router.post('/users/:id/reset-batch', async (req, res) => {
 });
 // 17. Grant Direct Bonus Endpoint
 router.post('/users/:id/bonus', async (req, res) => {
+    if (req.user?.isRestricted) {
+        return res.status(403).json({ error: 'Access Denied: Restricted operators cannot grant bonuses.' });
+    }
     try {
         const { id } = req.params;
         const { platform, amount, note } = req.body;
@@ -1159,6 +1188,9 @@ router.post('/scrape-amazon', async (req, res) => {
 });
 // 19. Retrieve Support Chat Threads
 router.get('/chats', async (req, res) => {
+    if (req.user?.isRestricted) {
+        return res.status(403).json({ error: 'Access Denied: Restricted operators cannot access support chats.' });
+    }
     try {
         let isRestricted = false;
         let assignedUserIds = [];
@@ -1374,7 +1406,7 @@ router.get('/users/:id/vip', async (req, res) => {
         try {
             const { data: cpData, error: cpErr } = await supabase
                 .from('combo_checkpoints')
-                .select('platform, position, trigger_balance')
+                .select('id, platform, position, trigger_balance, profit_override')
                 .eq('user_id', id)
                 .order('position', { ascending: true });
             if (!cpErr && cpData) {
@@ -1401,8 +1433,10 @@ router.get('/users/:id/vip', async (req, res) => {
             checkpoints.forEach((cp) => {
                 if (result[cp.platform]) {
                     result[cp.platform].combos.push({
+                        id: cp.id,
                         position: cp.position,
-                        amount: parseFloat(cp.trigger_balance)
+                        amount: parseFloat(cp.trigger_balance),
+                        profit: parseFloat(cp.profit_override) || 0.00
                     });
                 }
             });
@@ -1460,7 +1494,7 @@ router.post('/users/:id/vip', async (req, res) => {
                 platform,
                 position: parseInt(c.position),
                 trigger_balance: parseFloat(c.amount),
-                profit_override: 0.00
+                profit_override: parseFloat(c.profit ?? c.profitOverride ?? 0.00)
             }));
             const { error: insCpErr } = await supabase
                 .from('combo_checkpoints')

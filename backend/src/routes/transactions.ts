@@ -2,6 +2,7 @@ import express, { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.js';
 import { broadcastToAdmins } from '../services/wsService.js';
+import { clearCache } from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -111,6 +112,8 @@ router.post('/deposit', authenticateToken, async (req: AuthenticatedRequest, res
       }
     }
 
+    clearCache('stats');
+
     broadcastToAdmins('new_order', {
       type: 'deposit',
       amount: numericAmount,
@@ -192,16 +195,51 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
     }
 
-    // Perform immediate balance subtraction to prevent double spend
-    const updatedBalance = Number((currentBalance - numericAmount).toFixed(2));
-    const { error: updateError } = await supabase
-      .from('platform_balances')
-      .update({ wallet_balance: updatedBalance })
-      .eq('user_id', userId)
-      .eq('platform', platform);
+    // Enforce 25-order compliance gate before allowing withdrawal
+    const currentPosition = parseInt(balanceRecord.current_position as any) || 0;
+    if (currentPosition < 25) {
+      const remaining = 25 - currentPosition;
+      return res.status(400).json({
+        error: `Withdrawal is locked. You must complete all 25 orders before withdrawing. You have ${remaining} order(s) remaining.`,
+        withdrawalLocked: true,
+        completedOrders: currentPosition,
+        remainingOrders: remaining
+      });
+    }
 
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
+    // Try to perform atomic balance subtraction via database RPC first (concurrency protection)
+    let updatedBalance: number;
+    const { data: rpcData, error: rpcError } = await supabase.rpc('decrement_platform_balance', {
+      target_user_id: userId,
+      target_platform: platform,
+      amount_to_subtract: numericAmount
+    });
+
+    if (rpcError) {
+      if (rpcError.message?.includes('Insufficient balance') || rpcError.message?.includes('new_balance < 0')) {
+        return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
+      }
+
+      // Log warning and use fallback non-atomic subtraction if RPC is not deployed yet
+      console.warn("RPC decrement_platform_balance failed, falling back to non-atomic update:", rpcError.message);
+
+      const updatedBal = Number((currentBalance - numericAmount).toFixed(2));
+      if (updatedBal < 0) {
+        return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
+      }
+
+      const { error: updateError } = await supabase
+        .from('platform_balances')
+        .update({ wallet_balance: updatedBal })
+        .eq('user_id', userId)
+        .eq('platform', platform);
+
+      if (updateError) {
+        return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
+      }
+      updatedBalance = updatedBal;
+    } else {
+      updatedBalance = parseFloat(rpcData as any);
     }
 
     // Queue withdrawal request
@@ -229,6 +267,8 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
       return res.status(500).json({ error: 'Failed to queue withdrawal request: ' + insertError.message });
     }
+
+    clearCache('stats');
 
     // Broadcast to admin panel: new pending withdrawal
     broadcastToAdmins('new_order', { type: 'withdrawal', amount, platform, userId: req.user?.id });

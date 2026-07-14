@@ -38,6 +38,9 @@ router.use(authenticateToken);
 router.use(requireAdmin);
 
 router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operator privileges locked.' });
+  }
   try {
     const cachedStats = getCache('stats');
     if (cachedStats) {
@@ -460,6 +463,8 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => 
     // Also try deleting from admins table (does nothing if it's not an admin profile ID)
     await supabase.from('admins').delete().eq('id', id);
 
+    clearCache('stats');
+
     res.json({ success: true, message: 'User account and all associated data permanently deleted.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -468,6 +473,9 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => 
 
 // 4. Update User Account Status (Approve/Restrict User Profile)
 router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify user accounts.' });
+  }
   try {
     const { id } = req.params;
     const { status } = req.body; // 'active' | 'restricted' | 'pending'
@@ -488,6 +496,7 @@ router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response)
       if (delErr) {
         return res.status(500).json({ error: delErr.message });
       }
+      clearCache('stats');
       const adminId = req.user?.id || 'unknown-admin';
       await logAdminAction(adminId, 'REJECT_AND_DELETE_USER', id, `Rejected and deleted user account`, req);
       return res.json({ message: 'User successfully rejected and deleted.' });
@@ -508,6 +517,7 @@ router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response)
       return res.status(500).json({ error: error.message });
     }
 
+    clearCache('stats');
     const adminId = req.user?.id || 'unknown-admin';
     await logAdminAction(adminId, 'UPDATE_USER_STATUS', id, `Changed user status to ${status}`, req);
 
@@ -519,6 +529,9 @@ router.put('/users/:id/status', async (req: AuthenticatedRequest, res: Response)
 
 // 5. Add / Subtract User Balance directly
 router.put('/users/:id/balance', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot adjust user balances.' });
+  }
   try {
     const { id } = req.params;
     const { platform, amount } = req.body; // e.g. amount: 15.50 (adds) or -10.00 (subtracts)
@@ -833,6 +846,21 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       .update({ status })
       .eq('id', id);
 
+    // If approved, reset user's order progress and start the 24h cooldown
+    if (status === 'Approved') {
+      const targetPlatform = wRecord.platform || platform;
+      if (targetPlatform) {
+        await supabase
+          .from('platform_balances')
+          .update({
+            current_position: 0,
+            last_completed_batch_at: new Date().toISOString()
+          })
+          .eq('user_id', wRecord.user_id)
+          .eq('platform', targetPlatform);
+      }
+    }
+
     if (updateError) {
       return res.status(500).json({ error: 'Failed to update status: ' + updateError.message });
     }
@@ -844,21 +872,33 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
         return res.status(400).json({ error: 'Platform identifier is required to process refund logs' });
       }
 
-      const { data: balanceRecord } = await supabase
-        .from('platform_balances')
-        .select('wallet_balance')
-        .eq('user_id', wRecord.user_id)
-        .eq('platform', refundPlatform)
-        .single();
+      // Try to atomically refund balance using database RPC
+      const { error: refundError } = await supabase.rpc('adjust_platform_balance', {
+        target_user_id: wRecord.user_id,
+        target_platform: refundPlatform,
+        amount_to_add: parseFloat(wRecord.amount)
+      });
 
-      const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-      const finalBalance = Number((currentBalance + parseFloat(wRecord.amount)).toFixed(2));
+      if (refundError) {
+        console.warn("RPC adjust_platform_balance failed, falling back to non-atomic update:", refundError.message);
 
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: finalBalance })
-        .eq('user_id', wRecord.user_id)
-        .eq('platform', refundPlatform);
+        // Fallback non-atomic logic
+        const { data: balanceRecord } = await supabase
+          .from('platform_balances')
+          .select('wallet_balance')
+          .eq('user_id', wRecord.user_id)
+          .eq('platform', refundPlatform)
+          .single();
+
+        const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
+        const finalBalance = Number((currentBalance + parseFloat(wRecord.amount)).toFixed(2));
+
+        await supabase
+          .from('platform_balances')
+          .update({ wallet_balance: finalBalance })
+          .eq('user_id', wRecord.user_id)
+          .eq('platform', refundPlatform);
+      }
     }
 
     // Broadcast real-time withdrawal status to the withdrawing user
@@ -902,6 +942,9 @@ router.get('/products', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify global campaigns.' });
+  }
   try {
     const { platform, title, imageUrl, price, payout, externalLink } = req.body;
 
@@ -936,6 +979,9 @@ router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.put('/products/:id', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify global campaigns.' });
+  }
   try {
     const { id } = req.params;
     const { platform, title, imageUrl, price, payout, externalLink } = req.body;
@@ -972,6 +1018,9 @@ router.put('/products/:id', async (req: AuthenticatedRequest, res: Response) => 
 });
 
 router.delete('/products/:id', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify global campaigns.' });
+  }
   try {
     const { id } = req.params;
     const { error } = await supabase.from('products').delete().eq('id', id);
@@ -1009,6 +1058,9 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.put('/settings', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify global system configurations.' });
+  }
   try {
     const { settings } = req.body; // e.g. { trc20_address: '...', telegram_link: '...' }
 
@@ -1031,6 +1083,19 @@ router.put('/settings', async (req: AuthenticatedRequest, res: Response) => {
 
 // 14. Configure Combo Checkpoint Rule
 router.post('/users/:id/combos', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    // Restricted operators can only configure combos for their assigned users
+    const adminId = req.user.id;
+    const { count } = await supabase
+      .from('admin_assigned_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('admin_id', adminId)
+      .eq('user_id', req.params.id);
+
+    if (!count || count === 0) {
+      return res.status(403).json({ error: 'Access Denied: You do not have permission to moderate combo checkpoints for this reviewer.' });
+    }
+  }
   try {
     const { id } = req.params;
     const { platform, position, triggerBalance, profitOverride } = req.body;
@@ -1068,6 +1133,19 @@ router.post('/users/:id/combos', async (req: AuthenticatedRequest, res: Response
 
 // 15. Delete Combo Checkpoint Rule
 router.delete('/users/:id/combos/:comboId', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    // Restricted operators can only moderate combos for their assigned users
+    const adminId = req.user.id;
+    const { count } = await supabase
+      .from('admin_assigned_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('admin_id', adminId)
+      .eq('user_id', req.params.id);
+
+    if (!count || count === 0) {
+      return res.status(403).json({ error: 'Access Denied: You do not have permission to moderate combo checkpoints for this reviewer.' });
+    }
+  }
   try {
     const { comboId } = req.params;
     const { error } = await supabase
@@ -1123,6 +1201,9 @@ router.post('/users/:id/reset-batch', async (req: AuthenticatedRequest, res: Res
 
 // 17. Grant Direct Bonus Endpoint
 router.post('/users/:id/bonus', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot grant bonuses.' });
+  }
   try {
     const { id } = req.params;
     const { platform, amount, note } = req.body;
@@ -1338,6 +1419,9 @@ router.post('/scrape-amazon', async (req: AuthenticatedRequest, res: Response) =
 
 // 19. Retrieve Support Chat Threads
 router.get('/chats', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot access support chats.' });
+  }
   try {
     let isRestricted = false;
     let assignedUserIds: string[] = [];
@@ -1580,7 +1664,7 @@ router.get('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =>
     try {
       const { data: cpData, error: cpErr } = await supabase
         .from('combo_checkpoints')
-        .select('platform, position, trigger_balance')
+        .select('id, platform, position, trigger_balance, profit_override')
         .eq('user_id', id)
         .order('position', { ascending: true });
       if (!cpErr && cpData) {
@@ -1609,8 +1693,10 @@ router.get('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =>
       checkpoints.forEach((cp: any) => {
         if (result[cp.platform]) {
           result[cp.platform].combos.push({
+            id: cp.id,
             position: cp.position,
-            amount: parseFloat(cp.trigger_balance as any)
+            amount: parseFloat(cp.trigger_balance as any),
+            profit: parseFloat(cp.profit_override as any) || 0.00
           });
         }
       });
@@ -1677,7 +1763,7 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
         platform,
         position: parseInt(c.position),
         trigger_balance: parseFloat(c.amount),
-        profit_override: 0.00
+        profit_override: parseFloat(c.profit ?? c.profitOverride ?? 0.00)
       }));
       const { error: insCpErr } = await supabase
         .from('combo_checkpoints')

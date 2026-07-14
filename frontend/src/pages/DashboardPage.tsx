@@ -101,8 +101,16 @@ export default function DashboardPage({
   }
 
   // Navigation & Layout states
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  });
   const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'orders' | 'withdraw' | 'profile' | 'invitation' | 'customer-service' | 'terms' | 'about-us' | 'faq'>('home');
+  const handleTabSwitch = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (window.innerWidth < 768) {
+      setIsSidebarCollapsed(true);
+    }
+  };
   const [activePlatform, setActivePlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [enabledPlatform, setEnabledPlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
@@ -260,29 +268,33 @@ export default function DashboardPage({
         return;
       }
       const userData = await userRes.json();
+      if (!userData) {
+        onLogout();
+        return;
+      }
 
       // Update balances state
       if (userData.balances) {
         setPlatformsData({
           Amazon: {
-            walletBalance: userData.balances.Amazon.walletBalance,
-            completedOrders: userData.balances.Amazon.completedReviewsCount,
+            walletBalance: userData.balances.Amazon?.walletBalance || 0,
+            completedOrders: userData.balances.Amazon?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number((userData.balances.Amazon.completedReviewsCount * 1.5).toFixed(2)),
+            profitEarned: Number(((userData.balances.Amazon?.completedReviewsCount || 0) * 1.5).toFixed(2)),
             orders: []
           },
           Alibaba: {
-            walletBalance: userData.balances.Alibaba.walletBalance,
-            completedOrders: userData.balances.Alibaba.completedReviewsCount,
+            walletBalance: userData.balances.Alibaba?.walletBalance || 0,
+            completedOrders: userData.balances.Alibaba?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number((userData.balances.Alibaba.completedReviewsCount * 1.5).toFixed(2)),
+            profitEarned: Number(((userData.balances.Alibaba?.completedReviewsCount || 0) * 1.5).toFixed(2)),
             orders: []
           },
           Shopify: {
-            walletBalance: userData.balances.Shopify.walletBalance,
-            completedOrders: userData.balances.Shopify.completedReviewsCount,
+            walletBalance: userData.balances.Shopify?.walletBalance || 0,
+            completedOrders: userData.balances.Shopify?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number((userData.balances.Shopify.completedReviewsCount * 1.5).toFixed(2)),
+            profitEarned: Number(((userData.balances.Shopify?.completedReviewsCount || 0) * 1.5).toFixed(2)),
             orders: []
           }
         });
@@ -327,6 +339,13 @@ export default function DashboardPage({
         }
       }
 
+      if (userData.email) {
+        setProfileEmail(userData.email);
+      }
+      if (userData.phone) {
+        setProfilePhone(userData.phone);
+      }
+
       // Update profile photo state from database
       if (userData.profile_photo) {
         setProfile_photo(userData.profile_photo);
@@ -338,9 +357,10 @@ export default function DashboardPage({
 
       // 2. Process transaction logs (Deposits & Withdrawals)
       if (historyRes.ok) {
-        const historyData = await historyRes.json();
-        const deps = historyData.filter((x: any) => x.type === 'Deposit');
-        const withs = historyData.filter((x: any) => x.type === 'Withdrawal');
+        const rawHistoryData = await historyRes.json();
+        const historyData = Array.isArray(rawHistoryData) ? rawHistoryData : [];
+        const deps = historyData.filter((x: any) => x && x.type === 'Deposit');
+        const withs = historyData.filter((x: any) => x && x.type === 'Withdrawal');
         setDepositRequests(deps.map((dep: any) => ({
           id: dep.id,
           protocol: dep.protocol || 'TRC-20',
@@ -359,29 +379,32 @@ export default function DashboardPage({
 
       // 3. Process review submissions history to merge in platform logs
       if (subsRes.ok) {
-        const subsData = await subsRes.json();
+        const rawSubsData = await subsRes.json();
+        const subsData = Array.isArray(rawSubsData) ? rawSubsData : [];
         setPlatformsData(prev => {
-          const amzOrders = subsData.filter((x: any) => x.platform === 'Amazon');
-          const aliOrders = subsData.filter((x: any) => x.platform === 'Alibaba');
-          const shoOrders = subsData.filter((x: any) => x.platform === 'Shopify');
+          const amzOrders = subsData.filter((x: any) => x && x.platform === 'Amazon');
+          const aliOrders = subsData.filter((x: any) => x && x.platform === 'Alibaba');
+          const shoOrders = subsData.filter((x: any) => x && x.platform === 'Shopify');
 
           return {
-            Amazon: { ...prev.Amazon, orders: amzOrders, pendingReviews: amzOrders.filter((o: any) => o.status === 'Pending').length },
-            Alibaba: { ...prev.Alibaba, orders: aliOrders, pendingReviews: aliOrders.filter((o: any) => o.status === 'Pending').length },
-            Shopify: { ...prev.Shopify, orders: shoOrders, pendingReviews: shoOrders.filter((o: any) => o.status === 'Pending').length }
+            Amazon: { ...prev.Amazon, orders: amzOrders, pendingReviews: amzOrders.filter((o: any) => o && o.status === 'Pending').length },
+            Alibaba: { ...prev.Alibaba, orders: aliOrders, pendingReviews: aliOrders.filter((o: any) => o && o.status === 'Pending').length },
+            Shopify: { ...prev.Shopify, orders: shoOrders, pendingReviews: shoOrders.filter((o: any) => o && o.status === 'Pending').length }
           };
         });
       }
 
       // 4. Process chat logs
       if (chatRes.ok) {
-        const chatData = await chatRes.json();
+        const rawChatData = await chatRes.json();
+        const chatData = Array.isArray(rawChatData) ? rawChatData : [];
         setChatMessages(chatData);
       }
 
       // 5. Process all campaigns for available campaigns pool slider
       if (allRes.ok) {
-        const allData = await allRes.json();
+        const rawAllData = await allRes.json();
+        const allData = Array.isArray(rawAllData) ? rawAllData : [];
         setAllCampaigns(allData.map((p: any) => ({
           id: p.id,
           title: p.title,
@@ -406,44 +429,120 @@ export default function DashboardPage({
   }, [activePlatform]);
 
   useEffect(() => {
-    const token = localStorage.getItem('reviewer_auth_token');
-    if (!token) return;
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+    let isCleanCleanup = false;
 
-    // Dynamically calculate WS endpoint from REST API base
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = API_BASE.includes('localhost') 
-      ? 'localhost:5000' 
-      : window.location.host;
-    
-    const wsUrl = `${wsProto}//${wsHost}?token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(wsUrl);
+    function connectWS() {
+      const token = localStorage.getItem('reviewer_auth_token');
+      if (!token) return;
 
-    ws.onmessage = (event) => {
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      let wsHost = 'localhost:5000';
       try {
-        const message = JSON.parse(event.data);
-        if (
-          message.type === 'balance_update' || 
-          message.type === 'approval_notice' ||
-          message.type === 'vip_unlocked' ||
-          message.type === 'vip_locked' ||
-          message.type === 'vip_configured'
-        ) {
-          fetchAllData();
-          showToast(`⚡ Real-time workspace updates synchronized successfully.`);
+        if (API_BASE.startsWith('http')) {
+          const urlObj = new URL(API_BASE);
+          wsHost = urlObj.host;
+        } else {
+          wsHost = window.location.host;
         }
-      } catch (err) {
-        console.error("Error handling real-time socket packet:", err);
+      } catch (e) {
+        if (API_BASE.includes('localhost')) {
+          wsHost = 'localhost:5000';
+        } else {
+          wsHost = window.location.host;
+        }
       }
-    };
 
-    ws.onerror = (err) => {
-      console.warn("Real-time WebSocket connection error:", err);
-    };
+      const wsUrl = `${wsProto}//${wsHost}?token=${encodeURIComponent(token)}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (
+            message.type === 'balance_update' || 
+            message.type === 'approval_notice' ||
+            message.type === 'vip_unlocked' ||
+            message.type === 'vip_locked' ||
+            message.type === 'vip_configured'
+          ) {
+            fetchAllData();
+
+            let notifText = '';
+            let notifType = 'system';
+
+            if (message.type === 'balance_update') {
+              const payload = message.data;
+              notifType = payload.type || 'bonus';
+              if (payload.type === 'bonus') {
+                notifText = `🎉 Admin granted you a $${parseFloat(payload.amount).toFixed(2)} bonus on platform ${payload.platform}!`;
+              } else if (payload.type === 'deposit') {
+                notifText = `💰 Your deposit of $${parseFloat(payload.amount).toFixed(2)} on platform ${payload.platform} was ${payload.status}!`;
+              } else if (payload.type === 'withdrawal') {
+                if (payload.status === 'Approved') {
+                  notifText = `✅ Your withdrawal request of $${parseFloat(payload.amount).toFixed(2)} was Approved!`;
+                } else {
+                  notifText = `❌ Your withdrawal request of $${parseFloat(payload.amount).toFixed(2)} was Rejected. Balance refunded.`;
+                }
+              }
+            } else if (message.type === 'vip_unlocked') {
+              notifText = `🔓 Category ${message.data.platform} has been Unlocked for you!`;
+              notifType = 'vip';
+            } else if (message.type === 'vip_locked') {
+              notifText = `🔒 Category ${message.data.platform} has been Locked by the Admin.`;
+              notifType = 'vip';
+            } else if (message.type === 'vip_configured') {
+              notifText = `⚙️ New campaigns have been configured for you on platform ${message.data.platform}.`;
+              notifType = 'vip';
+            }
+
+            if (notifText) {
+              setNotifications(prev => [
+                {
+                  id: Date.now(),
+                  text: notifText,
+                  type: notifType,
+                  status: 'unread',
+                  date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                },
+                ...prev
+              ]);
+              showToast(notifText);
+            } else {
+              showToast(`⚡ Real-time workspace updates synchronized successfully.`);
+            }
+          }
+        } catch (err) {
+          console.error("Error handling real-time socket packet:", err);
+        }
+      };
+
+      ws.onerror = (err) => {
+        if (!isCleanCleanup) {
+          console.warn("Real-time WebSocket connection temporarily offline. Retrying...");
+        }
+      };
+
+      ws.onclose = () => {
+        if (!isCleanCleanup) {
+          reconnectTimeout = setTimeout(connectWS, 5000);
+        }
+      };
+    }
+
+    connectWS();
 
     return () => {
-      ws.close();
+      isCleanCleanup = true;
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
+      }
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [activePlatform]);
+  }, []);
 
   // Shuffling effect for Available Campaigns Pool marquee
   useEffect(() => {
@@ -947,7 +1046,12 @@ export default function DashboardPage({
         return;
       }
 
-      showToast(`✓ Evaluation submitted successfully! +$${activeReviewProduct.payout.toFixed(2)} USD credited.`);
+      const actualPayout = data.payoutEarned !== undefined ? data.payoutEarned : activeReviewProduct.payout;
+      if (data.isCombo) {
+        showToast(`🎉 Congratulations! You cleared a Combo checkpoint ($${data.checkpointAmount.toFixed(2)}) and received a profit bonus of $${actualPayout.toFixed(2)} USD!`);
+      } else {
+        showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
+      }
       
       // Clear input state parameters
       setReviewStars(0);
@@ -1328,12 +1432,20 @@ export default function DashboardPage({
 
 
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         
+        {/* Sidebar Backdrop for Mobile view */}
+        {!isSidebarCollapsed && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+            onClick={() => setIsSidebarCollapsed(true)}
+          />
+        )}
+
         {/* Left Collapsible Sidebar */}
         <aside 
-          className={`bg-[#131921] text-white border-r border-gray-800 transition-all duration-300 flex flex-col justify-between ${
-            isSidebarCollapsed ? 'w-16' : 'w-64'
+          className={`bg-[#131921] text-white border-r border-gray-800 transition-all duration-300 flex flex-col justify-between overflow-hidden fixed md:static inset-y-0 left-0 z-50 ${
+            isSidebarCollapsed ? 'w-0 -translate-x-full md:w-16 md:translate-x-0 border-r-0 md:border-r' : 'w-64 translate-x-0'
           }`}
         >
           {/* Main Navigation Items */}
@@ -1347,7 +1459,7 @@ export default function DashboardPage({
             <nav className="space-y-1.5 px-2">
               {/* Home */}
               <button
-                onClick={() => setActiveTab('home')}
+                onClick={() => handleTabSwitch('home')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'home'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1360,7 +1472,7 @@ export default function DashboardPage({
 
               {/* Deposit */}
               <button
-                onClick={() => setActiveTab('deposit')}
+                onClick={() => handleTabSwitch('deposit')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'deposit'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1373,7 +1485,7 @@ export default function DashboardPage({
 
               {/* Orders */}
               <button
-                onClick={() => setActiveTab('orders')}
+                onClick={() => handleTabSwitch('orders')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'orders'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1386,7 +1498,7 @@ export default function DashboardPage({
 
               {/* Withdraw */}
               <button
-                onClick={() => setActiveTab('withdraw')}
+                onClick={() => handleTabSwitch('withdraw')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'withdraw'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1399,7 +1511,7 @@ export default function DashboardPage({
 
               {/* Profile */}
               <button
-                onClick={() => setActiveTab('profile')}
+                onClick={() => handleTabSwitch('profile')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'profile'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1412,7 +1524,7 @@ export default function DashboardPage({
 
               {/* Invitation */}
               <button
-                onClick={() => setActiveTab('invitation')}
+                onClick={() => handleTabSwitch('invitation')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'invitation'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1425,7 +1537,7 @@ export default function DashboardPage({
 
               {/* Customer Service */}
               <button
-                onClick={() => setActiveTab('customer-service')}
+                onClick={() => handleTabSwitch('customer-service')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'customer-service'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1438,7 +1550,7 @@ export default function DashboardPage({
 
               {/* Terms */}
               <button
-                onClick={() => setActiveTab('terms')}
+                onClick={() => handleTabSwitch('terms')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'terms'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1451,7 +1563,7 @@ export default function DashboardPage({
 
               {/* About Us */}
               <button
-                onClick={() => setActiveTab('about-us')}
+                onClick={() => handleTabSwitch('about-us')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'about-us'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1464,7 +1576,7 @@ export default function DashboardPage({
 
               {/* FAQ */}
               <button
-                onClick={() => setActiveTab('faq')}
+                onClick={() => handleTabSwitch('faq')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
                   activeTab === 'faq'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
@@ -1492,7 +1604,7 @@ export default function DashboardPage({
         </aside>
 
         {/* Main Content Dashboard Frame */}
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col justify-between">
+        <main className="flex-1 p-3 md:p-8 pb-20 md:pb-8 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col justify-between">
           
           {/* Tab Content Router */}
           <div className="flex-1 space-y-6">
@@ -1524,50 +1636,50 @@ export default function DashboardPage({
                   /* Case 2: Fully unlocked and active */
                   <div className="space-y-6 animate-fadeIn">
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                       {/* Card 1: Total Balance */}
-                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
                         <div>
-                          <p className="text-xxs text-gray-400 uppercase font-black tracking-wider">Available Balance</p>
-                          <h3 className="text-2xl font-mono font-black text-green-600 mt-1">${currentPlatformData.walletBalance.toFixed(2)}</h3>
+                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Available Balance</p>
+                          <h3 className="text-lg md:text-2xl font-mono font-black text-green-600 mt-0.5 md:mt-1">${currentPlatformData.walletBalance.toFixed(2)}</h3>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-100 pt-2 font-mono">
-                          USDT Release Address ready
+                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-mono">
+                          USDT Address ready
                         </p>
                       </div>
 
                       {/* Card 2: Completed Orders */}
-                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
                         <div>
-                          <p className="text-xxs text-gray-400 uppercase font-black tracking-wider">Completed Orders</p>
-                          <h3 className="text-2xl font-mono font-black text-gray-900 mt-1">{currentPlatformData.completedOrders}</h3>
+                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Completed Orders</p>
+                          <h3 className="text-lg md:text-2xl font-mono font-black text-gray-900 mt-0.5 md:mt-1">{currentPlatformData.completedOrders}</h3>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-100 pt-2 font-semibold">
+                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-semibold truncate" title={25 - currentPlatformData.completedOrders > 0 ? `${25 - currentPlatformData.completedOrders} remaining` : "✓ Unlocked!"}>
                           {25 - currentPlatformData.completedOrders > 0 
-                            ? `${25 - currentPlatformData.completedOrders} remaining for Withdrawal`
-                            : "✓ Withdrawal Unlocked!"}
+                            ? `${25 - currentPlatformData.completedOrders} remaining`
+                            : "✓ Unlocked!"}
                         </p>
                       </div>
 
                       {/* Card 3: Pending Reviews */}
-                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
                         <div>
-                          <p className="text-xxs text-gray-400 uppercase font-black tracking-wider">Pending Verification</p>
-                          <h3 className="text-2xl font-mono font-black text-amber-500 mt-1">{currentPlatformData.pendingReviews}</h3>
+                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Pending Verification</p>
+                          <h3 className="text-lg md:text-2xl font-mono font-black text-amber-500 mt-0.5 md:mt-1">{currentPlatformData.pendingReviews}</h3>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-100 pt-2">
-                          Awaiting merchant approval
+                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                          Awaiting approval
                         </p>
                       </div>
 
                       {/* Card 4: Profit Earned */}
-                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
                         <div>
-                          <p className="text-xxs text-gray-400 uppercase font-black tracking-wider">Total Profit Earned</p>
-                          <h3 className="text-2xl font-mono font-black text-amazon-blue mt-1">${currentPlatformData.profitEarned.toFixed(2)}</h3>
+                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Total Profit Earned</p>
+                          <h3 className="text-lg md:text-2xl font-mono font-black text-amazon-blue mt-0.5 md:mt-1">${currentPlatformData.profitEarned.toFixed(2)}</h3>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-100 pt-2">
-                          Cumulative {activePlatform} payout
+                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                          Cumulative payout
                         </p>
                       </div>
                     </div>
@@ -2567,7 +2679,7 @@ export default function DashboardPage({
                 </div>
 
                 {/* Profile Sub-Section Tab Navigation */}
-                <div className="flex space-x-1 border-b border-gray-200 overflow-x-auto scrollbar-none pb-0.5">
+                <div className="flex flex-col sm:flex-row border-b border-gray-200 sm:space-x-1 space-y-1 sm:space-y-0 pb-1 sm:pb-0.5">
                   {([
                     { key: 'details', label: '👤 Identity & Persona' },
                     { key: 'wallet', label: '💳 Payout Wallet Setup' },
@@ -2576,7 +2688,7 @@ export default function DashboardPage({
                     <button
                       key={sec.key}
                       onClick={() => setProfileActiveSection(sec.key)}
-                      className={`pb-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-b-2 whitespace-nowrap cursor-pointer ${
+                      className={`py-2 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center ${
                         profileActiveSection === sec.key
                           ? 'border-amazon-gold text-[#a88734] font-black'
                           : 'border-transparent text-gray-400 hover:text-gray-700'
@@ -2672,9 +2784,28 @@ export default function DashboardPage({
                         </div>
 
                         <form
-                          onSubmit={(e) => {
+                          onSubmit={async (e) => {
                             e.preventDefault();
-                            showToast("✓ Profile identity credentials saved successfully.");
+                            const token = localStorage.getItem('reviewer_auth_token');
+                            try {
+                              const res = await fetch(`${API_BASE}/auth/update-profile`, {
+                                method: 'PUT',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ email: profileEmail, phone: profilePhone })
+                              });
+                              const data = await res.json();
+                              if (res.ok) {
+                                showToast("✓ Profile identity credentials saved successfully.");
+                                fetchAllData();
+                              } else {
+                                showToast(data.error || "Failed to update profile details.");
+                              }
+                            } catch (err) {
+                              showToast("Server connection error. Failed to save details.");
+                            }
                           }}
                           className="space-y-4 text-xs"
                         >
@@ -2749,9 +2880,29 @@ export default function DashboardPage({
                         </div>
 
                         <form
-                          onSubmit={(e) => {
+                          onSubmit={async (e) => {
                             e.preventDefault();
-                            showToast("✓ Receipt wallet details saved successfully.");
+                            const token = localStorage.getItem('reviewer_auth_token');
+                            try {
+                              const res = await fetch(`${API_BASE}/auth/bind-usdt`, {
+                                method: 'PUT',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ address: defaultWalletAddress })
+                              });
+                              const data = await res.json();
+                              if (res.ok) {
+                                showToast("✓ Receipt wallet address bound and locked successfully!");
+                                setIsAddressBound(true);
+                                fetchAllData();
+                              } else {
+                                showToast(data.error || "Failed to bind wallet address.");
+                              }
+                            } catch (err) {
+                              showToast("Server connection error. Failed to save address.");
+                            }
                           }}
                           className="space-y-4 text-xs"
                         >
@@ -3045,11 +3196,11 @@ export default function DashboardPage({
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   {/* Left Column: Live chat widget */}
-                  <div className="lg:col-span-8 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+                  <div className="lg:col-span-8 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[380px] md:min-h-[500px]">
                     {/* Chat Box Header */}
-                    <div className="bg-[#131921] px-5 py-4 flex items-center space-x-3 text-white border-b border-gray-800">
+                    <div className="bg-[#131921] px-4 py-3 md:px-5 md:py-4 flex items-center space-x-3 text-white border-b border-gray-800">
                       <div className="relative flex-shrink-0">
-                        <div className="h-10 w-10 bg-gray-700 rounded-full flex items-center justify-center font-black text-xs text-amazon-gold border border-gray-600">
+                        <div className="h-9 w-9 md:h-10 md:w-10 bg-gray-700 rounded-full flex items-center justify-center font-black text-xs text-amazon-gold border border-gray-600">
                           CS
                         </div>
                         <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-[#131921]" />
@@ -3061,17 +3212,17 @@ export default function DashboardPage({
                     </div>
 
                     {/* Message Container Area */}
-                    <div className="flex-1 p-4 bg-gray-50 overflow-y-auto space-y-4 max-h-[360px] min-h-[320px] flex flex-col justify-between">
+                    <div className="flex-1 p-3 md:p-4 bg-gray-50 overflow-y-auto space-y-3.5 max-h-[260px] md:max-h-[360px] min-h-[220px] md:min-h-[320px] flex flex-col justify-between">
                       <div className="space-y-4 flex-1">
                         {chatMessages.map((msg) => (
                           <div
                             key={msg.id}
                             className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                           >
-                            <div className={`max-w-[85%] rounded-xl px-4 py-2.5 text-xs shadow-xxs border ${
-                              msg.sender === 'user'
-                                ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
-                                : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
+                            <div className={`max-w-[85%] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-xs shadow-xxs border ${
+                                msg.sender === 'user'
+                                  ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
+                                  : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
                             }`}>
                               {msg.text.startsWith('data:image/') || msg.text.startsWith('/uploads/') ? (
                                 <img 
@@ -3109,7 +3260,7 @@ export default function DashboardPage({
                     </div>
 
                     {/* Input Form Box */}
-                    <form onSubmit={handleSendChatMessage} className="bg-white p-3 border-t border-gray-200 flex items-center space-x-2">
+                    <form onSubmit={handleSendChatMessage} className="bg-white p-2 md:p-3 border-t border-gray-200 flex items-center space-x-1.5 md:space-x-2">
                       <button 
                         type="button" 
                         onClick={triggerUserImageAttach}
@@ -3131,19 +3282,19 @@ export default function DashboardPage({
                         value={chatInputText}
                         onChange={(e) => setChatInputText(e.target.value)}
                         placeholder="Ask support about deposits, task locks, or payouts..."
-                        className="flex-1 px-4 py-2.5 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
+                        className="flex-1 px-3 py-2 md:px-4 md:py-2.5 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
                       />
                       <button
                         type="submit"
                         disabled={!chatInputText.trim()}
-                        className="p-2.5 bg-[#F7CA00] hover:bg-[#E2B600] disabled:bg-gray-100 text-amazon-dark disabled:text-gray-400 border border-[#a88734] disabled:border-gray-200 rounded-xl transition cursor-pointer flex-shrink-0"
+                        className="p-2 md:p-2.5 bg-[#F7CA00] hover:bg-[#E2B600] disabled:bg-gray-100 text-amazon-dark disabled:text-gray-400 border border-[#a88734] disabled:border-gray-200 rounded-xl transition cursor-pointer flex-shrink-0"
                       >
                         <Send className="h-4 w-4" />
                       </button>
                     </form>
 
                     {/* Browser Session Note */}
-                    <div className="bg-gray-100 border-t border-gray-200 px-4 py-2.5 text-[9px] text-gray-500 italic text-center font-medium font-sans">
+                    <div className="bg-gray-100 border-t border-gray-200 px-4 py-2 text-[9px] text-gray-500 italic text-center font-medium font-sans">
                       Note: Support chat transcripts are securely archived on remote synchronization channels.
                     </div>
                   </div>
@@ -3586,6 +3737,26 @@ export default function DashboardPage({
                       id: 4,
                       q: "How do I secure and confirm crypto deposit transactions?",
                       a: "Each user accounts for a private cryptographic deposit key. When sending USDT, allow up to 5 minutes for Tron/Ethereum block confirmations before clicking 'Sync Balance' inside your dashboard panel."
+                    },
+                    {
+                      id: 5,
+                      q: "Why can I not start a new batch immediately after completing 25 orders?",
+                      a: "To maintain system integrity, a 24-hour cooldown period starts as soon as your withdrawal request is approved by the administrator. The platform will unlock the next campaign pool automatically once this timer expires."
+                    },
+                    {
+                      id: 6,
+                      q: "Can I change my bound USDT withdrawal address?",
+                      a: "No, once a USDT address is bound to your account, it is locked permanently for security purposes. This protocol ensures that your earnings cannot be hijacked or redirected to another destination."
+                    },
+                    {
+                      id: 7,
+                      q: "What happens to my order progress if I stop midway through a batch?",
+                      a: "Your progress is permanently frozen. If you stop at order 15 of 25, your progress will remain at 15 indefinitely until you return to complete the remaining reviews. There are no automatic resets for partial batches."
+                    },
+                    {
+                      id: 8,
+                      q: "Can I review the same product multiple times in a single batch?",
+                      a: "No. To comply with authentic review guidelines, you cannot submit multiple reviews for the same product in a single 25-order batch. Each campaign must represent a unique product evaluation."
                     }
                   ] as const)
                     .filter(item => 
@@ -4084,6 +4255,74 @@ export default function DashboardPage({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <div className="md:hidden bg-white border-t border-gray-200 fixed bottom-0 left-0 right-0 h-16 flex items-center justify-around px-2 z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+        <button
+          onClick={() => {
+            setActiveTab('home');
+            setIsSidebarCollapsed(true);
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
+            activeTab === 'home' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Home className="h-5 w-5" />
+          <span className="text-[10px] font-bold mt-0.5">Home</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('deposit');
+            setIsSidebarCollapsed(true);
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
+            activeTab === 'deposit' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Wallet className="h-5 w-5" />
+          <span className="text-[10px] font-bold mt-0.5">Deposit</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('orders');
+            setIsSidebarCollapsed(true);
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
+            activeTab === 'orders' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <FileText className="h-5 w-5" />
+          <span className="text-[10px] font-bold mt-0.5">Orders</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('profile');
+            setIsSidebarCollapsed(true);
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
+            activeTab === 'profile' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <User className="h-5 w-5" />
+          <span className="text-[10px] font-bold mt-0.5">Profile</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('customer-service');
+            setIsSidebarCollapsed(true);
+          }}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
+            activeTab === 'customer-service' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <MessageSquare className="h-5 w-5" />
+          <span className="text-[10px] font-bold mt-0.5">Support</span>
+        </button>
+      </div>
 
     </div>
   );

@@ -90,9 +90,10 @@ export default function Navbar({
     <>
       <header className="sticky top-0 z-50 w-full shadow-md bg-amazon-dark text-white font-sans">
         {/* Top bar (Amazon Primary header) */}
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          {/* Logo */}
-          <div className="flex items-center space-x-6">
+        <div className="mx-auto flex flex-col lg:flex-row h-auto lg:h-16 max-w-7xl items-center justify-between px-4 sm:px-6 py-3 lg:py-0 gap-3 lg:gap-0">
+          {/* Logo and Mobile controls (Row 1 on mobile) */}
+          <div className="flex w-full lg:w-auto items-center justify-between lg:justify-start lg:space-x-6">
+            {/* Logo */}
             <a href="#" className="flex items-center group relative py-1 px-2 border border-transparent hover:border-white rounded-sm transition">
               <span className="font-display text-xl font-extrabold tracking-tight">
                 amazon<span className="text-amazon-gold">ecommercehub</span>
@@ -106,13 +107,13 @@ export default function Navbar({
               </div>
             </a>
 
-            {/* Delivery address */}
+            {/* Delivery address (Desktop only) */}
             <button
               onClick={() => {
                 setTempLocation(userLocation);
                 setIsLocationModalOpen(true);
               }}
-              className="hidden md:flex items-center space-x-1.5 py-1 px-2 border border-transparent hover:border-white rounded-sm text-left transition cursor-pointer"
+              className="hidden lg:flex items-center space-x-1.5 py-1 px-2 border border-transparent hover:border-white rounded-sm text-left transition cursor-pointer"
             >
               <MapPin className="h-5 w-5 text-gray-300" />
               <div className="text-xs">
@@ -120,10 +121,45 @@ export default function Navbar({
                 <p className="font-bold leading-tight line-clamp-1 text-amazon-gold">{userLocation}</p>
               </div>
             </button>
+
+            {/* Mobile Actions and Hamburger (Row 1 right-side on mobile) */}
+            <div className="lg:hidden flex items-center space-x-2">
+              {!isLoggedIn ? (
+                <>
+                  <button
+                    onClick={onOpenLogin}
+                    className="bg-transparent hover:bg-white/10 text-white border border-white/30 font-bold text-xs px-2.5 py-1.5 rounded-lg transition duration-200 cursor-pointer"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={onOpenRegister}
+                    className="bg-gradient-to-r from-[#f7ca00] to-[#f0c14b] hover:from-[#e2b600] hover:to-[#e79e3b] text-amazon-dark border border-[#a88734] font-extrabold text-xs px-3 py-1.5 rounded-lg shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
+                  >
+                    Get Started
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setIsWalletOpen(true)}
+                  className="relative flex items-center space-x-1.5 py-1 px-2.5 bg-white/5 rounded-lg border border-white/15"
+                >
+                  <Wallet className="h-5 w-5 text-amazon-gold" />
+                  <span className="text-xs font-black text-white">${walletBalance.toFixed(2)}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-1.5 hover:bg-white/10 rounded transition ml-1"
+              >
+                {isMobileMenuOpen ? <X className="h-5.5 w-5.5" /> : <Menu className="h-5.5 w-5.5" />}
+              </button>
+            </div>
           </div>
 
           {/* Expanded Search Bar */}
-          <div className="relative mx-4 flex flex-1 max-w-xl">
+          <div className="relative w-full lg:mx-4 flex lg:flex-1 lg:max-w-xl">
             <div className="flex w-full items-center bg-white rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-amazon-gold text-gray-900 shadow-sm">
               <div className="relative inline-block text-left bg-gray-100 border-r border-gray-300 h-10">
                 <select
@@ -228,13 +264,13 @@ export default function Navbar({
                 <>
                   <button
                     onClick={onOpenLogin}
-                    className="bg-transparent hover:bg-white/10 text-white border border-gray-400 font-medium text-xs px-3.5 py-1.5 rounded-full transition cursor-pointer"
+                    className="bg-transparent hover:bg-white/10 text-white border border-white/30 font-bold text-xs px-3.5 py-1.5 rounded-lg transition duration-200 cursor-pointer"
                   >
                     Login
                   </button>
                   <button
                     onClick={onOpenRegister}
-                    className="bg-amazon-gold hover:bg-[#f3a847] text-amazon-dark border border-transparent font-semibold text-xs px-4 py-1.5 rounded-full shadow-sm transition cursor-pointer"
+                    className="bg-gradient-to-r from-[#f7ca00] to-[#f0c14b] hover:from-[#e2b600] hover:to-[#e79e3b] text-amazon-dark border border-[#a88734] font-extrabold text-xs px-4 py-1.5 rounded-lg shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
                   >
                     Get Started
                   </button>
@@ -269,31 +305,31 @@ export default function Navbar({
             )}
           </div>
 
-          {/* Mobile elements */}
-          <div className="lg:hidden flex items-center space-x-4">
-            {isLoggedIn && (
-              <button
-                onClick={() => setIsWalletOpen(true)}
-                className="relative flex items-center space-x-1.5 py-1 px-2.5 bg-white/5 rounded-lg border border-white/15"
-              >
-                <Wallet className="h-5 w-5 text-amazon-gold" />
-                <span className="text-xs font-black text-white">${walletBalance.toFixed(2)}</span>
-              </button>
-            )}
+        </div>
 
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-1 hover:bg-white/10 rounded transition"
-            >
-              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+        {/* Mobile Delivery & Greeting Bar */}
+        <div className="lg:hidden bg-[#1f2a37] px-4 py-2 flex items-center justify-between text-[10px] border-t border-white/5">
+          <button
+            onClick={() => {
+              setTempLocation(userLocation);
+              setIsLocationModalOpen(true);
+            }}
+            className="flex items-center space-x-1.5 text-gray-300 hover:text-white transition cursor-pointer"
+          >
+            <MapPin className="h-3.5 w-3.5 text-amazon-gold flex-shrink-0" />
+            <span className="font-mono text-gray-400">Proxy IP:</span>
+            <span className="font-bold text-amazon-gold line-clamp-1">{userLocation}</span>
+          </button>
+          <div className="text-gray-300 flex items-center space-x-1 flex-shrink-0">
+            <span>{isLoggedIn ? `Hello, ${username}` : 'Hello, Sign in'}</span>
+            <ChevronDown className="h-3 w-3 text-gray-450" />
           </div>
         </div>
 
         {/* Sub navbar (Amazon sub-bar) */}
         <div className="bg-amazon-navy text-xs py-2 px-4 sm:px-6 border-t border-white/5">
           <div className="mx-auto max-w-7xl flex items-center justify-between">
-            <div className="flex items-center space-x-4 overflow-x-auto no-scrollbar py-0.5 font-medium">
+            <div className="flex items-center space-x-4 overflow-x-auto no-scrollbar py-0.5 font-medium w-full">
               <button className="flex items-center space-x-1.5 text-white hover:text-amazon-orange transition cursor-pointer flex-shrink-0 font-bold">
                 <Menu className="h-4.5 w-4.5" />
                 <span>Live Gigs</span>
@@ -302,11 +338,8 @@ export default function Navbar({
               <a href="#how-it-works" className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Earning Flow</a>
               <a href="#stats" className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Earnings Ledger</a>
               <a href="#testimonials" className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Community Reviews</a>
-              <span className="h-3.5 w-px bg-white/20 hidden sm:inline" />
-            </div>
-            <div className="hidden sm:flex items-center space-x-4 font-semibold text-gray-300">
-              <a href="#" onClick={onOpenLogin} className="hover:text-white transition">Leaderboard</a>
-              <a href="#" onClick={onOpenLogin} className="hover:text-white transition">FAQ Hub</a>
+              <a href="#" onClick={onOpenLogin} className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">Leaderboard</a>
+              <a href="#" onClick={onOpenLogin} className="hover:text-amazon-orange transition flex-shrink-0 text-gray-300 hover:text-white">FAQ Hub</a>
             </div>
           </div>
         </div>
@@ -640,19 +673,26 @@ export default function Navbar({
                   <User className="h-6 w-6 text-amazon-orange" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold">Welcome Guest</p>
-                  <button onClick={() => { setIsMobileMenuOpen(false); onOpenLogin(); }} className="text-xxs text-amazon-orange hover:underline font-bold">Sign In to Account</button>
+                  <p className="text-sm font-bold">{isLoggedIn ? `Welcome, ${username}` : 'Welcome Guest'}</p>
+                  {isLoggedIn ? (
+                    <button onClick={() => { setIsMobileMenuOpen(false); onLogout(); }} className="text-xxs text-amazon-orange hover:underline font-bold">Sign Out of Account</button>
+                  ) : (
+                    <button onClick={() => { setIsMobileMenuOpen(false); onOpenLogin(); }} className="text-xxs text-amazon-orange hover:underline font-bold">Sign In to Account</button>
+                  )}
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 text-sm">
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase">App Navigation</h3>
-                  <div className="flex flex-col space-y-2">
-                    <a href="#categories" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Product Ecosystem</a>
-                    <a href="#how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">How It Works</a>
-                    <a href="#stats" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Stats & Reach</a>
-                    <a href="#testimonials" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Buyer Reviews</a>
+                  <div className="flex flex-col space-y-1.5">
+                    <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Live Gigs</a>
+                    <a href="#categories" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Review Board</a>
+                    <a href="#how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Earning Flow</a>
+                    <a href="#stats" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Earnings Ledger</a>
+                    <a href="#testimonials" onClick={() => setIsMobileMenuOpen(false)} className="py-2 hover:text-amazon-orange transition font-semibold">Community Reviews</a>
+                    <a href="#" onClick={() => { setIsMobileMenuOpen(false); if (!isLoggedIn) onOpenLogin(); }} className="py-2 hover:text-amazon-orange transition font-semibold">Leaderboard</a>
+                    <a href="#" onClick={() => { setIsMobileMenuOpen(false); if (!isLoggedIn) onOpenLogin(); }} className="py-2 hover:text-amazon-orange transition font-semibold">FAQ Hub</a>
                   </div>
                 </div>
 
@@ -665,7 +705,7 @@ export default function Navbar({
                       setIsMobileMenuOpen(false);
                       setIsLocationModalOpen(true);
                     }}
-                    className="flex items-center space-x-2 text-left bg-white/5 p-3 rounded-lg w-full"
+                    className="flex items-center space-x-2 text-left bg-white/5 p-3 rounded-lg w-full cursor-pointer"
                   >
                     <MapPin className="h-5 w-5 text-amazon-orange" />
                     <div>
@@ -675,15 +715,17 @@ export default function Navbar({
                   </button>
                 </div>
 
-                <div className="pt-4">
-                  <button
-                    onClick={() => { setIsMobileMenuOpen(false); onOpenRegister(); }}
-                    className="w-full bg-amazon-orange text-amazon-dark font-extrabold text-xs py-3 rounded-xl shadow-md text-center flex items-center justify-center space-x-2"
-                  >
-                    <span>Get Started Today</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
+                {!isLoggedIn && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => { setIsMobileMenuOpen(false); onOpenRegister(); }}
+                      className="w-full bg-amazon-orange text-amazon-dark font-extrabold text-xs py-3 rounded-xl shadow-md text-center flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>Get Started Today</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </>

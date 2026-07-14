@@ -6,7 +6,7 @@
   <title>Amazon Vine | Super Admin Controller</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .hidden { display: none !important; }
@@ -245,7 +245,9 @@
     async function initializeDashboard() {
       document.getElementById('authScreen').classList.add('hidden');
       document.getElementById('mainDashboard').classList.remove('hidden');
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
       fetchAdmins();
     }
 

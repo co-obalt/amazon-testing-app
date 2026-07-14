@@ -11,8 +11,18 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'landing' | 'register' | 'under-review' | 'login' | 'dashboard'>(() => {
+    const path = window.location.pathname;
+    const isLoggedIn = !!localStorage.getItem('reviewer_session_username');
+
+    if (path === '/login') return 'login';
+    if (path === '/register') return 'register';
+    if (path === '/under-review') return 'under-review';
+    if (path === '/dashboard') {
+      return isLoggedIn ? 'dashboard' : 'login';
+    }
+
     const savedView = localStorage.getItem('reviewer_session_view');
-    if (savedView === 'dashboard') {
+    if (savedView === 'dashboard' && isLoggedIn) {
       return 'dashboard';
     }
     return 'landing';
@@ -22,6 +32,39 @@ export default function App() {
   });
   const [email, setEmail] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sync state to URL path
+  React.useEffect(() => {
+    const path = window.location.pathname;
+    let targetPath = '/';
+    if (currentView === 'login') targetPath = '/login';
+    else if (currentView === 'register') targetPath = '/register';
+    else if (currentView === 'under-review') targetPath = '/under-review';
+    else if (currentView === 'dashboard') targetPath = '/dashboard';
+
+    if (path !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+  }, [currentView]);
+
+  // Handle browser back/forward buttons
+  React.useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const isLoggedIn = !!localStorage.getItem('reviewer_session_username');
+
+      if (path === '/login') setCurrentView('login');
+      else if (path === '/register') setCurrentView('register');
+      else if (path === '/under-review') setCurrentView('under-review');
+      else if (path === '/dashboard') {
+        setCurrentView(isLoggedIn ? 'dashboard' : 'login');
+      } else {
+        setCurrentView('landing');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -59,10 +102,10 @@ export default function App() {
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -60, x: "-50%", scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
-            exit={{ opacity: 0, y: -60, x: "-50%", scale: 0.95 }}
-            className="fixed top-6 left-1/2 z-100 max-w-sm w-full bg-[#131921] text-white p-4 rounded-lg shadow-2xl flex items-start space-x-3 border border-amazon-gold/50 text-left"
+            initial={{ opacity: 0, y: -60, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -60, scale: 0.95 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-2rem)] max-w-sm bg-[#131921] text-white p-4 rounded-lg shadow-2xl flex items-start space-x-3 border border-amazon-gold/50 text-left"
           >
             <div className="p-1 bg-amazon-gold text-amazon-dark rounded-full flex-shrink-0 font-extrabold text-xs mt-0.5">
               ✓

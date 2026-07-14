@@ -4,6 +4,7 @@ import bcryptjs from 'bcryptjs';
 import axios from 'axios';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken, AuthenticatedRequest, requireSuperAdmin } from '../middlewares/auth.js';
+import { clearCache } from '../services/cacheService.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
@@ -180,6 +181,8 @@ router.post('/register', async (req: Request, res: Response) => {
     if (insertError || !newUser) {
       return res.status(500).json({ error: 'Failed to create profile: ' + insertError?.message });
     }
+
+    clearCache('stats');
 
     // Broadcast to connected admins: new registration
     try {
@@ -373,6 +376,8 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     res.json({
       id: profile.id,
       username: profile.username,
+      email: profile.email || null,
+      phone: profile.phone || null,
       role: 'user',
       status: profile.status,
       country: profile.country,
@@ -453,6 +458,35 @@ router.put('/update-profile-photo', authenticateToken, async (req: Authenticated
     }
 
     res.json({ success: true, message: 'Profile photo successfully updated.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 4.6. Update Profile Details Endpoint
+router.put('/update-profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { email, phone } = req.body;
+
+    const updates: any = {};
+    if (email !== undefined) updates.email = (email || '').trim();
+    if (phone !== undefined) updates.phone = (phone || '').trim();
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields provided for update' });
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to update profile details: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Profile details successfully updated.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }

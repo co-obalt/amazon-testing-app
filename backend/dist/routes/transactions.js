@@ -2,6 +2,7 @@ import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken } from '../middlewares/auth.js';
 import { broadcastToAdmins } from '../services/wsService.js';
+import { clearCache } from '../services/cacheService.js';
 const router = express.Router();
 // 1. Submit Deposit Request
 router.post('/deposit', authenticateToken, async (req, res) => {
@@ -98,6 +99,7 @@ router.post('/deposit', authenticateToken, async (req, res) => {
                 return res.status(500).json({ error: 'Failed to process deposit: ' + error.message });
             }
         }
+        clearCache('stats');
         broadcastToAdmins('new_order', {
             type: 'deposit',
             amount: numericAmount,
@@ -169,6 +171,17 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
         if (currentBalance < numericAmount) {
             return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
         }
+        // Enforce 25-order compliance gate before allowing withdrawal
+        const currentPosition = parseInt(balanceRecord.current_position) || 0;
+        if (currentPosition < 25) {
+            const remaining = 25 - currentPosition;
+            return res.status(400).json({
+                error: `Withdrawal is locked. You must complete all 25 orders before withdrawing. You have ${remaining} order(s) remaining.`,
+                withdrawalLocked: true,
+                completedOrders: currentPosition,
+                remainingOrders: remaining
+            });
+        }
         // Perform immediate balance subtraction to prevent double spend
         const updatedBalance = Number((currentBalance - numericAmount).toFixed(2));
         const { error: updateError } = await supabase
@@ -202,6 +215,7 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
                 .eq('platform', platform);
             return res.status(500).json({ error: 'Failed to queue withdrawal request: ' + insertError.message });
         }
+        clearCache('stats');
         // Broadcast to admin panel: new pending withdrawal
         broadcastToAdmins('new_order', { type: 'withdrawal', amount, platform, userId: req.user?.id });
         res.status(201).json({

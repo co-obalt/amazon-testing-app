@@ -53,12 +53,22 @@ export default function LoginPage({
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between font-sans">
       {/* Sleek Minimal Header */}
       <header className="bg-[#131921] py-4 px-6 flex items-center justify-between border-b border-gray-800 shadow-sm">
-        <button 
-          onClick={onNavigateHome}
-          className="font-display text-xl font-black tracking-tight text-white focus:outline-none cursor-pointer flex items-center space-x-1.5"
-        >
-          <span>Amazon</span><span className="text-amazon-gold">E-Commerce Hub</span>
-        </button>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={onNavigateHome}
+            className="flex items-center space-x-1.5 text-xs font-semibold text-gray-300 hover:text-white transition bg-gray-850 hover:bg-gray-750 px-3 py-1.5 rounded-lg border border-gray-700 cursor-pointer"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-amazon-gold" />
+            <span>Back to main page</span>
+          </button>
+          
+          <button 
+            onClick={onNavigateHome}
+            className="hidden sm:flex font-display text-xl font-black tracking-tight text-white focus:outline-none cursor-pointer items-center space-x-1.5"
+          >
+            <span>Amazon</span><span className="text-amazon-gold">E-Commerce Hub</span>
+          </button>
+        </div>
         <button
           onClick={onNavigateToRegister}
           className="text-xs font-semibold text-gray-300 hover:text-amazon-gold transition"
