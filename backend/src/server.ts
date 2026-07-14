@@ -38,6 +38,7 @@ const apiLimiter = rateLimit({
   max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false, // Disable all internal validations to prevent load-balancer/proxy error crashes
   message: { error: 'Too many requests, rate limit exceeded.' }
 });
 
@@ -47,6 +48,7 @@ const authLimiter = rateLimit({
   max: 30, // Limit each IP to 30 authentication requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false, // Disable validations to ensure stable proxy routing
   message: { error: 'Too many login or registration attempts from this IP. Please try again after 15 minutes.' }
 });
 
