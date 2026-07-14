@@ -4,16 +4,18 @@ This guide details the step-by-step instructions to deploy the Amazon Vine Contr
 
 ---
 
-## 🗄️ Step 1: Database Setup (Supabase)
+## 🗄️ Step 1: Database & Storage Setup (Supabase)
 
 1. Log in to the [Supabase Dashboard](https://supabase.com/).
 2. Create a new project. Note your **Database Password** and region.
 3. Once the database is ready, go to the **SQL Editor** tab on the left navigation menu.
 4. Click on **New Query** (or **New Blank Query**).
 5. Copy the entire content of [backend/database/schema.sql](file:///c:/Users/Microsoft/Desktop/amazon-panel/backend/database/schema.sql) and paste it into the editor.
-6. Click **Run** at the bottom right. This will create all required tables (`profiles`, `products`, `transactions`, `reviews`, `chats`, `admins`, `admin_audit`, `admin_assigned_users`).
-7. Go to **Project Settings** > **API**.
-8. Copy the following credentials:
+6. Click **Run** at the bottom right. This will create all required tables, performance indexes, and database-level stored RPC procedures (`decrement_platform_balance`, `increment_user_review_progress`, `adjust_platform_balance`).
+7. Go to the **Storage** tab in the left sidebar of your Supabase console.
+8. Click **New Bucket**, name it exactly `chat-attachments`, toggle the **Public** bucket setting to enabled, and click save.
+9. Go to **Project Settings** > **API**.
+10. Copy the following credentials:
    - **Project URL** (e.g., `https://xxxxxx.supabase.co`)
    - **API Key** (Copy the `anon` / `public` key)
 

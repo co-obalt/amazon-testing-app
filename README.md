@@ -83,20 +83,27 @@ amazon-panel/
 
 ```mermaid
 graph TD
-    A[User Registers] -->|Enter Referral| B[Onboarding Complete]
-    B --> C[Submit Review Task]
-    C -->|Screenshots Uploaded| D[Admin Approves/Rejects]
-    D -->|Approved| E[Balance Credited]
-    E --> F[Withdrawal Request]
-    F -->|Enters 4-digit PIN| G[Admin Approves Withdrawal]
-    G -->|Confirmed| H[Balance Debited]
+    A[User Registers] -->|Pending Status| B[Admin Approves Registration]
+    B --> C[User Onboarded & Deposits Funds]
+    C --> D[Admin Verifies Deposit]
+    D -->|From Admin VIP Panel| E[Admin Assigns Products Pool]
+    E --> F[User Submits Reviews for Products]
+    F -->|Review Auto-Approved Instantly| G[Progress & Balances Updated]
+    G -->|Under 25 Reviews| F
+    G -->|Complete 25 Reviews Batch| H[User Submits Withdrawal Request]
+    H --> I[Admin Audits Withdrawal Request]
+    I -->|Approved| J[Withdrawal Completed & Payout Processed]
+    I -->|Rejected| K[Withdrawal Rejected & Funds Refunded]
 ```
 
 ### 1. Verification & Wallet Flow
-1. **Submit Reviews:** Users upload screenshots to claim rewards. Submissions enter a **Pending** queue.
-2. **Review Approval:** Administrators inspect the screenshots from the Admin dashboard and approve/reject. Approvals add rewards directly to the user's ledger.
-3. **Withdrawal Requests:** Users request a withdrawal by entering their exact **4-digit withdrawal PIN**.
-4. **Approval & Payout:** Admins verify the withdrawal request, deduct the amount, and process the payout.
+1. **User Registration:** New users sign up and enter a **Pending** status, which blocks dashboard access.
+2. **Registration Approval:** Administrative operators inspect and approve registrations, onboarding the users.
+3. **Deposit Request & Audit:** Onboarded users request a deposit. Administrators audit the payment details and approve it, crediting the funds to the platform balance.
+4. **VIP Products Assignment:** Administrators open the VIP panel and assign specific campaign products (VIP 1/2/3) to the user's account.
+5. **Product Reviews:** Users review their assigned products. Submissions are auto-approved instantly, crediting commissions and updating their progress positions.
+6. **Withdrawal Request:** Once all 25 products are complete, the user requests a withdrawal.
+7. **Withdrawal Audit:** Administrators verify the withdrawal request (ensuring sufficient balance and valid logs). If approved, the payout is processed; if rejected, the balance is refunded.
 
 ### 2. Live Support Chat Workflow
 1. A user sends a message via the support chat widget.
@@ -110,11 +117,36 @@ graph TD
 
 ---
 
+## 🔒 Production-Grade Lifetime Robustness Features
+
+We have audited and upgraded the system architectures to guarantee long-term stability and resilience under production traffic:
+
+1. **Concurrency Protection (No Double-Spends/Overwrites):**
+   - **Check Constraint:** Enforces `check_positive_balance` directly at the PostgreSQL layer, preventing `wallet_balance` from ever dropping below zero.
+   - **Stored RPC Procedures:** All balance adjustments (withdrawals, task commissions, administrative adjustments, and rejection refunds) run atomically inside Supabase stored database functions (`decrement_platform_balance`, `increment_user_review_progress`, `adjust_platform_balance`). This guarantees thread-safety against rapid clicks and automated API spam.
+   - **Defensive Fallbacks:** The API endpoints check for the existence of RPC functions, logging clean fallback warnings and executing manual updates if migrations are not fully populated.
+
+2. **WebSocket Memory leak Prevention (Heartbeat Ping-Pong):**
+   - A background heartbeat interval runs every 30 seconds inside [wsService.ts](file:///c:/Users/Microsoft/Desktop/amazon-panel/backend/src/services/wsService.ts).
+   - Any client sockets that disconnect abruptly (e.g. signal drops, dead batteries) without a clean TCP handshake are automatically terminated and clean-spliced out, avoiding memory and file descriptor leakages.
+
+3. **Stateless Image Storage (Supabase Storage Buckets):**
+   - File uploads in support chats and payment proof receipts upload directly to the public Supabase Storage bucket `chat-attachments` instead of the local filesystem.
+   - Keeps backend instances stateless and compatible with modern ephemeral hostings (Vercel, Render, Heroku).
+   - Automatically falls back to local disk storage if the storage bucket is offline or unconfigured.
+
+4. **Strict Operator Roles & Permission Checks:**
+   - Restricted operator administrative accounts are strictly gated.
+   - Restricted admins can only view stats and manage users assigned directly to them. Global campaigns (adding/editing/deleting products), settings changes, and combo checkpoint setups are strictly unauthorized and protected via endpoint permission checks.
+
+---
+
 ## 🚀 Running Locally
 
-### 1. Database Setup
+### 1. Database & Storage Setup
 1. Create a PostgreSQL Database on [Supabase](https://supabase.com/).
-2. Run the queries inside `backend/database/schema.sql` in the **SQL Editor** on your Supabase dashboard to create the tables.
+2. Run the queries inside `backend/database/schema.sql` in the **SQL Editor** on your Supabase dashboard to create the tables and stored RPC procedures.
+3. Go to **Storage** in Supabase, create a new public bucket named exactly `chat-attachments` to store support screenshots.
 
 ### 2. Run Backend
 1. Go into the backend directory:
@@ -145,3 +177,4 @@ graph TD
    npm run dev
    ```
 4. Access the web app at `http://localhost:3000`.
+
