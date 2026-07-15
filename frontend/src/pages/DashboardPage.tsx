@@ -1354,17 +1354,17 @@ export default function DashboardPage({
     <div className="h-screen bg-[#F3F4F6] flex flex-col font-sans text-gray-900 overflow-hidden">
 
       {/* Sleek Top Header Dashboard Navbar */}
-      <header className="bg-[#131921] text-white h-14 px-4 flex items-center justify-between sticky top-0 z-40 border-b border-gray-800">
-        <div className="flex items-center space-x-3">
+      <header className="bg-[#131921] text-white h-14 px-2 md:px-4 flex items-center justify-between sticky top-0 z-40 border-b border-gray-800">
+        <div className="flex items-center space-x-1.5 md:space-x-3">
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="p-1.5 rounded hover:bg-gray-800 transition focus:outline-none"
+            className="p-1 md:p-1.5 rounded hover:bg-gray-800 transition focus:outline-none"
             aria-label="Toggle Sidebar"
           >
-            <Menu className="h-5 w-5 text-gray-300 hover:text-white" />
+            <Menu className="h-4.5 w-4.5 md:h-5 md:w-5 text-gray-300 hover:text-white" />
           </button>
 
-          <div className="flex items-center space-x-2 select-none">
+          <div className="flex items-center space-x-1 md:space-x-2 select-none">
             <div className="flex flex-col items-center pt-0.5">
               <div className="flex items-baseline text-white font-black text-sm italic tracking-tight font-sans">
                 <span className="text-white text-base lowercase">amazon</span>
@@ -1379,11 +1379,11 @@ export default function DashboardPage({
         </div>
 
         {/* Network & Active Wallet Info Dropdown */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2.5">
+        <div className="flex items-center space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-1.5 md:space-x-2.5">
             {activePlatform && (
-              <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-left text-white relative">
-                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Network</p>
+              <div className="bg-amazon-dark border border-gray-800 rounded px-1.5 py-0.5 md:px-3 md:py-1 text-left text-white relative">
+                <p className="text-[7px] md:text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Network</p>
                 {unlockedPlatforms.length > 1 ? (
                   <select
                     value={activePlatform}
@@ -1405,9 +1405,9 @@ export default function DashboardPage({
               </div>
             )}
 
-            <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-right min-w-[70px]">
-              <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Wallet</p>
-              <p className="text-xs font-mono font-black text-green-500 mt-0.5 leading-none">
+            <div className="bg-amazon-dark border border-gray-800 rounded px-1.5 py-0.5 md:px-3 md:py-1 text-right min-w-[55px] md:min-w-[70px]">
+              <p className="text-[7px] md:text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Wallet</p>
+              <p className="text-[10px] md:text-xs font-mono font-black text-green-500 mt-0.5 leading-none">
                 ${activePlatform ? currentPlatformData.walletBalance.toFixed(2) : '0.00'}
               </p>
             </div>
@@ -1511,8 +1511,8 @@ export default function DashboardPage({
           </div>
 
           {/* User Profile photo */}
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
-            <div className="h-8 w-8 rounded-full overflow-hidden border border-gray-700 bg-gray-900 flex items-center justify-center shadow-inner cursor-pointer" title="Go to Profile Settings">
+          <div className="flex items-center space-x-1 md:space-x-2 cursor-pointer" onClick={() => setActiveTab('profile')}>
+            <div className="h-7.5 w-7.5 md:h-8 md:w-8 rounded-full overflow-hidden border border-gray-700 bg-gray-900 flex items-center justify-center shadow-inner cursor-pointer" title="Go to Profile Settings">
               {profile_photo ? (
                 <img src={profile_photo} alt="Profile" className="h-full w-full object-cover" />
               ) : (
@@ -1521,7 +1521,7 @@ export default function DashboardPage({
             </div>
             <button
               onClick={onLogout}
-              className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg transition"
+              className="p-1 md:p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg transition"
               title="Logout"
             >
               <LogOut className="h-4.5 w-4.5" />
@@ -1781,34 +1781,8 @@ export default function DashboardPage({
                     </div>
                   </div>
 
-                  {/* Real-time sync & Withdrawal progress section */}
+                  {/* Withdrawal progress section */}
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs text-left space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-sm font-black text-gray-900 flex items-center space-x-1.5 uppercase tracking-wide">
-                          <span>📦 Withdrawal Progress</span>
-                        </h3>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Verify and synchronize account balances with blockchain evaluation nodes.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center space-x-3 self-start sm:self-center">
-                        <div className="text-right">
-                          <p className="text-[9px] text-gray-400 font-bold uppercase">Ledger Sync Status</p>
-                          <p className="text-[10px] font-mono text-gray-600 mt-0.5">{lastRefreshed === 'Never synced' ? 'Not synced' : `Synced at ${lastRefreshed}`}</p>
-                        </div>
-                        <button
-                          onClick={handleRefreshBalance}
-                          disabled={isRefreshing}
-                          className="px-3.5 py-2 bg-[#131921] hover:bg-black disabled:bg-gray-200 text-white disabled:text-gray-400 text-xs font-bold rounded-lg transition-colors flex items-center space-x-1.5 cursor-pointer"
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                          <span>{isRefreshing ? 'Syncing...' : 'Sync Balance'}</span>
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Dynamic Progress Bar Block */}
                     {(() => {
                       const completedCount = currentPlatformData.completedOrders;
@@ -1817,7 +1791,7 @@ export default function DashboardPage({
                       const remainingReviews = Math.max(0, targetCount - completedCount);
 
                       return (
-                        <div className="space-y-3.5 border-t border-gray-150 pt-4">
+                        <div className="space-y-3.5">
                           <div className="flex justify-between items-baseline text-xs">
                             <span className="font-bold text-gray-800">Compliance Threshold Progress</span>
                             <span className="font-mono font-black text-amazon-orange">{completedCount}/{targetCount} ({progressPercentage}%)</span>
@@ -2179,12 +2153,12 @@ export default function DashboardPage({
                   <div className="space-y-6 animate-fadeIn">
                     <div className="text-center max-w-xl mx-auto space-y-2 py-4">
                       <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Select Platform Network</h2>
-                      <p className="text-xs text-gray-500 font-sans">
+                      <p className="text-xs text-gray-550 font-sans">
                         Please select your assigned VIP category to view and perform order evaluations.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                    <div className="grid grid-cols-3 gap-2 md:gap-6 max-w-4xl mx-auto px-1 md:px-0">
                       {/* VIP 1: Amazon */}
                       <button
                         onClick={() => {
@@ -2193,23 +2167,30 @@ export default function DashboardPage({
                             handleSelectPlatform('Amazon');
                           }
                         }}
-                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
+                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
                       >
-                        <div className="h-12 w-12 bg-amazon-orange/10 text-amazon-orange rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                        <span className="absolute top-0 left-0 bg-amazon-orange text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 1
+                        </span>
+                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                          <img
+                            src="/amazon-logo.svg"
+                            alt="Amazon"
+                            className="h-5 md:h-8 w-auto object-contain"
+                          />
                         </div>
-                        <div className="space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase">Amazon</h3>
-                          <span className="inline-block bg-orange-50 text-amazon-orange text-[10px] font-black uppercase px-2 py-0.5 rounded border border-orange-100">
+                        <div className="space-y-0.5 md:space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Amazon</h3>
+                          <span className="inline-block bg-orange-50 text-amazon-orange text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-orange-100">
                             4% Commission
                           </span>
                         </div>
-                        <p className="text-xxs text-gray-550 font-sans">
+                        <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Standard e-commerce workspace for beginner tier reviewers.
                         </p>
-                        <div className="text-xs font-black text-amazon-orange flex items-center space-x-1 pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-amazon-orange flex items-center space-x-1 pt-1 md:pt-2">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
 
@@ -2221,23 +2202,30 @@ export default function DashboardPage({
                             handleSelectPlatform('Alibaba');
                           }
                         }}
-                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
+                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
                       >
-                        <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                        <span className="absolute top-0 left-0 bg-blue-600 text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 2
+                        </span>
+                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                          <img
+                            src="/alibaba-logo.svg"
+                            alt="Alibaba"
+                            className="h-6 md:h-10 w-auto object-contain"
+                          />
                         </div>
-                        <div className="space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase">Alibaba</h3>
-                          <span className="inline-block bg-blue-50 text-blue-600 text-[10px] font-black uppercase px-2 py-0.5 rounded border border-blue-100">
+                        <div className="space-y-0.5 md:space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Alibaba</h3>
+                          <span className="inline-block bg-blue-50 text-blue-600 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-blue-100">
                             8% Commission
                           </span>
                         </div>
-                        <p className="text-xxs text-gray-555 font-sans">
+                        <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Advanced wholesale workspace with higher micro-commissions.
                         </p>
-                        <div className="text-xs font-black text-blue-600 flex items-center space-x-1 pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-blue-600 flex items-center space-x-1 pt-1 md:pt-2">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
 
@@ -2249,23 +2237,30 @@ export default function DashboardPage({
                             handleSelectPlatform('Shopify');
                           }
                         }}
-                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
+                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
                       >
-                        <div className="h-12 w-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                        <span className="absolute top-0 left-0 bg-green-600 text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 3
+                        </span>
+                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                          <img
+                            src="/shopify-logo.svg"
+                            alt="Shopify"
+                            className="h-6 md:h-10 w-auto object-contain"
+                          />
                         </div>
-                        <div className="space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase">Shopify</h3>
-                          <span className="inline-block bg-green-50 text-green-700 text-[10px] font-black uppercase px-2 py-0.5 rounded border border-green-100">
+                        <div className="space-y-0.5 md:space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Shopify</h3>
+                          <span className="inline-block bg-green-50 text-green-700 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-green-100">
                             12% Commission
                           </span>
                         </div>
-                        <p className="text-xxs text-gray-555 font-sans">
+                        <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Premium storefront evaluations with maximum reward multiplier.
                         </p>
-                        <div className="text-xs font-black text-green-600 flex items-center space-x-1 pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-green-600 flex items-center space-x-1 pt-1 md:pt-2">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
                     </div>
@@ -2475,12 +2470,16 @@ export default function DashboardPage({
                             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
                               <p className="font-bold text-gray-500">
                                 {ordersSubTab === 'pending'
-                                  ? "All assigned campaign tasks have been completed!"
+                                  ? (currentPlatformData.completedOrders >= 25
+                                      ? "Today's 25 campaign tasks have been completed!"
+                                      : "All assigned campaign tasks have been completed!")
                                   : "You have not completed any campaign tasks yet."}
                               </p>
                               <p className="text-[11px] text-gray-400 mt-1">
                                 {ordersSubTab === 'pending'
-                                  ? "Check back later or wait for administrators to unlock new batches."
+                                  ? (currentPlatformData.completedOrders >= 25
+                                      ? "The next batch will unlock in 24 hours. Your task count will reset to 1/25 on the next daily routine session."
+                                      : "Check back later or wait for administrators to unlock new batches.")
                                   : "Select pending campaigns to complete evaluation compliance tasks."}
                               </p>
                             </div>
@@ -2717,14 +2716,6 @@ export default function DashboardPage({
                           <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
                             Minimum compliance threshold requires 25 completed reviews. Currently completed: <strong className="text-red-655 font-mono">{currentPlatformData.completedOrders}/25</strong>.
                           </p>
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-center mt-2">
-                            <p className="text-xs text-amber-800 font-bold font-sans">
-                              "Aap order mein 25 order complete karoge toh us ke baad aapka ye unlock ho jayega"
-                            </p>
-                            <p className="text-[10px] text-gray-400 font-bold mt-1 font-mono">
-                              (Complete 25 task evaluations to automatically authorize withdrawal operations)
-                            </p>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -3453,9 +3444,11 @@ export default function DashboardPage({
                     {/* Chat Box Header */}
                     <div className="bg-[#131921] px-4 py-3 md:px-5 md:py-4 flex items-center space-x-3 text-white border-b border-gray-800">
                       <div className="relative flex-shrink-0">
-                        <div className="h-9 w-9 md:h-10 md:w-10 bg-gray-700 rounded-full flex items-center justify-center font-black text-xs text-amazon-gold border border-gray-600">
-                          CS
-                        </div>
+                        <img
+                          src="/pic.jpeg"
+                          alt="CS Logo"
+                          className="h-9 w-9 md:h-10 md:w-10 rounded-full object-cover border border-gray-600"
+                        />
                         <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-[#131921]" />
                       </div>
                       <div>

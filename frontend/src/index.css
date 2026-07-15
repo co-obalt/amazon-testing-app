@@ -28,6 +28,10 @@
   background: #a8a8a8;
 }
 
+html, body {
+  touch-action: manipulation;
+}
+
 body {
   font-family: var(--font-sans);
   color: #111111;
