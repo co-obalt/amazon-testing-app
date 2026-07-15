@@ -2158,7 +2158,7 @@ export default function DashboardPage({
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 md:gap-6 max-w-4xl mx-auto px-1 md:px-0">
+                    <div className="flex flex-col md:grid md:grid-cols-3 gap-3 md:gap-6 max-w-4xl mx-auto px-1 md:px-0">
                       {/* VIP 1: Amazon */}
                       <button
                         onClick={() => {
@@ -2167,28 +2167,28 @@ export default function DashboardPage({
                             handleSelectPlatform('Amazon');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
                       >
-                        <span className="absolute top-0 left-0 bg-amazon-orange text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
+                        <span className="absolute top-0 left-0 bg-amazon-orange text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 1
                         </span>
-                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                           <img
                             src="/amazon-logo.svg"
                             alt="Amazon"
-                            className="h-5 md:h-8 w-auto object-contain"
+                            className="h-4 md:h-8 w-auto object-contain"
                           />
                         </div>
-                        <div className="space-y-0.5 md:space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Amazon</h3>
-                          <span className="inline-block bg-orange-50 text-amazon-orange text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-orange-100">
+                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
+                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Amazon</h3>
+                          <span className="inline-block bg-orange-50 text-amazon-orange text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-orange-100 flex-shrink-0">
                             4% Commission
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Standard e-commerce workspace for beginner tier reviewers.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-amazon-orange flex items-center space-x-1 pt-1 md:pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-amazon-orange flex items-center space-x-1 flex-shrink-0">
                           <span>Enter Panel</span>
                           <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
@@ -2202,28 +2202,28 @@ export default function DashboardPage({
                             handleSelectPlatform('Alibaba');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
                       >
-                        <span className="absolute top-0 left-0 bg-blue-600 text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
+                        <span className="absolute top-0 left-0 bg-blue-600 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 2
                         </span>
-                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                           <img
                             src="/alibaba-logo.svg"
                             alt="Alibaba"
-                            className="h-6 md:h-10 w-auto object-contain"
+                            className="h-5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="space-y-0.5 md:space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Alibaba</h3>
-                          <span className="inline-block bg-blue-50 text-blue-600 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-blue-100">
+                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
+                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Alibaba</h3>
+                          <span className="inline-block bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-blue-100 flex-shrink-0">
                             8% Commission
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Advanced wholesale workspace with higher micro-commissions.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-blue-600 flex items-center space-x-1 pt-1 md:pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-blue-600 flex items-center space-x-1 flex-shrink-0">
                           <span>Enter Panel</span>
                           <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
@@ -2237,28 +2237,28 @@ export default function DashboardPage({
                             handleSelectPlatform('Shopify');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-2xl border border-gray-200 p-2 sm:p-4 md:p-6 text-center space-y-2 md:space-y-4 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[140px] sm:min-h-[190px] md:min-h-[240px]"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
                       >
-                        <span className="absolute top-0 left-0 bg-green-600 text-white text-[7px] md:text-[9px] font-black uppercase px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-tl-2xl rounded-br-lg shadow-xxs">
+                        <span className="absolute top-0 left-0 bg-green-600 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 3
                         </span>
-                        <div className="h-10 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform mt-1 md:mt-2">
+                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                           <img
                             src="/shopify-logo.svg"
                             alt="Shopify"
-                            className="h-6 md:h-10 w-auto object-contain"
+                            className="h-5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="space-y-0.5 md:space-y-1">
-                          <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Shopify</h3>
-                          <span className="inline-block bg-green-50 text-green-700 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-green-100">
+                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
+                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Shopify</h3>
+                          <span className="inline-block bg-green-50 text-green-700 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-green-100 flex-shrink-0">
                             12% Commission
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Premium storefront evaluations with maximum reward multiplier.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-green-600 flex items-center space-x-1 pt-1 md:pt-2">
+                        <div className="text-[9px] md:text-xs font-black text-green-600 flex items-center space-x-1 flex-shrink-0">
                           <span>Enter Panel</span>
                           <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
@@ -2924,7 +2924,7 @@ export default function DashboardPage({
                 </div>
 
                 {/* Profile Sub-Section Tab Navigation */}
-                <div className="flex flex-col sm:flex-row border-b border-gray-200 sm:space-x-1 space-y-1 sm:space-y-0 pb-1 sm:pb-0.5">
+                <div className="flex flex-col sm:flex-row border-b border-gray-200 sm:space-x-1 space-y-1.5 sm:space-y-0 pb-1 sm:pb-0.5">
                   {([
                     { key: 'details', label: '👤 Identity & Persona' },
                     { key: 'wallet', label: '💳 Payout Wallet Setup' },
@@ -2933,12 +2933,13 @@ export default function DashboardPage({
                     <button
                       key={sec.key}
                       onClick={() => setProfileActiveSection(sec.key)}
-                      className={`py-2 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center ${profileActiveSection === sec.key
-                          ? 'border-amazon-gold text-[#a88734] font-black'
-                          : 'border-transparent text-gray-400 hover:text-gray-700'
+                      className={`py-2.5 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center flex items-center justify-between sm:justify-center w-full sm:w-auto rounded-lg sm:rounded-none bg-gray-50/50 sm:bg-transparent ${profileActiveSection === sec.key
+                          ? 'border-amazon-gold text-[#a88734] font-black bg-[#fcf8e3]/30 sm:bg-transparent'
+                          : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-100/50 sm:hover:bg-transparent'
                         }`}
                     >
-                      {sec.label}
+                      <span>{sec.label}</span>
+                      <ChevronRight className="h-3.5 w-3.5 block sm:hidden text-gray-400" />
                     </button>
                   ))}
                 </div>
@@ -4113,67 +4114,87 @@ export default function DashboardPage({
               className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-2xl w-full z-50 overflow-hidden relative flex flex-col max-h-[90vh] text-left"
             >
               {/* Modal Top Header */}
-              <div className="px-6 py-4 border-b border-gray-150 flex items-center justify-between bg-gray-50">
-                <div className="space-y-0.5">
-                  <h3 className="text-sm font-black text-gray-900 flex items-center space-x-2">
+              <div className="px-4 py-2.5 md:px-6 md:py-4 border-b border-gray-150 flex items-center justify-between bg-gray-50 flex-shrink-0">
+                <div>
+                  <h3 className="text-xs md:text-sm font-black text-gray-900 flex items-center space-x-2">
                     <span className="bg-[#131921] text-white font-mono text-[9px] px-2 py-0.5 rounded tracking-wider uppercase">{activePlatform} Campaign</span>
-                    <span>Evaluation Feedback Workflow</span>
                   </h3>
-                  <p className="text-[10px] text-gray-400 leading-tight">Complete the 2-step evaluation form below to credit your commission balance.</p>
                 </div>
                 <button
                   onClick={() => setActiveReviewProduct(null)}
-                  className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-black transition"
+                  className="p-1 rounded-full hover:bg-gray-200 text-gray-400 hover:text-black transition"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4.5 w-4.5 md:h-5 md:w-5" />
                 </button>
               </div>
 
               {/* Modal Body / Scrollable Content */}
-              <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              <div className="p-4 md:p-6 overflow-y-auto space-y-4 md:space-y-5 flex-1">
 
                 {/* Product Details Section */}
-                <div className="flex items-start space-x-4 bg-gray-50 p-4 rounded-xl border border-gray-150">
-                  <img src={activeReviewProduct.image} alt={activeReviewProduct.title} className="h-16 w-16 object-contain rounded border border-gray-200 bg-white p-1 flex-shrink-0" />
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black text-gray-900 leading-snug">{activeReviewProduct.title}</h4>
-                    <div className="flex space-x-4 text-[10px] text-gray-400 font-bold">
+                <div className="flex items-center space-x-3 bg-gray-50 p-2.5 md:p-4 rounded-xl border border-gray-150 flex-shrink-0">
+                  <img src={activeReviewProduct.image} alt={activeReviewProduct.title} className="h-10 w-10 md:h-16 md:w-16 object-contain rounded border border-gray-200 bg-white p-0.5 flex-shrink-0" />
+                  <div className="space-y-0.5 min-w-0">
+                    <h4 className="text-[10px] md:text-xs font-black text-gray-900 leading-snug truncate md:whitespace-normal" title={activeReviewProduct.title}>{activeReviewProduct.title}</h4>
+                    <div className="flex space-x-3 md:space-x-4 text-[9px] md:text-[10px] text-gray-400 font-bold">
                       <span>Price: <strong className="text-gray-800">${parseFloat(activeReviewProduct.price as any).toFixed(2)}</strong></span>
                       <span>Commission: <strong className="text-green-600">${activeReviewProduct.payout.toFixed(2)} USD</strong></span>
                     </div>
                   </div>
                 </div>
 
-                <form onSubmit={handleStep3Complete} className="space-y-5">
+                <form onSubmit={handleStep3Complete} className="space-y-4 md:space-y-5">
                   {/* Step 1: Star Rating */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5">
-                      <span className="h-4.5 w-4.5 bg-[#131921] text-white text-[10px] rounded-full flex items-center justify-center font-bold">1</span>
+                  <div className="flex flex-row items-center justify-between md:flex-col md:items-start md:space-y-2 py-1 md:py-0 border-b border-gray-100 md:border-0 pb-2.5 md:pb-0">
+                    <label className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5 flex-shrink-0">
+                      <span className="h-4 w-4 md:h-4.5 md:w-4.5 bg-[#131921] text-white text-[9px] md:text-[10px] rounded-full flex items-center justify-center font-bold">1</span>
                       <span>Select Rating</span>
                     </label>
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-1 md:space-x-2">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           type="button"
                           key={star}
                           onClick={() => setReviewStars(star)}
-                          className="focus:outline-none focus:ring-0 p-1 hover:scale-110 transition-transform cursor-pointer"
+                          className="focus:outline-none focus:ring-0 p-0.5 hover:scale-110 transition-transform cursor-pointer"
                         >
-                          <Star className={`h-7 w-7 ${star <= reviewStars ? 'fill-amazon-gold text-amazon-gold' : 'text-gray-300'}`} />
+                          <Star className={`h-6 w-6 md:h-7 md:w-7 ${star <= reviewStars ? 'fill-amazon-gold text-amazon-gold' : 'text-gray-300'}`} />
                         </button>
                       ))}
                     </div>
-                    <p className="text-[10px] text-gray-400 font-medium">Choose a star rating for this product campaign.</p>
+                    <p className="text-[10px] text-gray-400 font-medium hidden md:block">Choose a star rating for this product campaign.</p>
                   </div>
 
                   {/* Step 2: Feedback Templates Selection */}
-                  <div className="space-y-2.5">
-                    <label className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5">
-                      <span className="h-4.5 w-4.5 bg-[#131921] text-white text-[10px] rounded-full flex items-center justify-center font-bold">2</span>
+                  <div className="space-y-2 md:space-y-2.5">
+                    <label className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-wide flex items-center space-x-1.5">
+                      <span className="h-4 w-4 md:h-4.5 md:w-4.5 bg-[#131921] text-white text-[9px] md:text-[10px] rounded-full flex items-center justify-center font-bold">2</span>
                       <span>Choose Feedback Template</span>
                     </label>
 
-                    <div className="grid grid-cols-1 gap-2.5">
+                    {/* Mobile dropdown select list */}
+                    <div className="block md:hidden">
+                      <select
+                        value={selectedTextCode || ''}
+                        onChange={(e) => setSelectedTextCode(e.target.value ? e.target.value : null)}
+                        className="w-full p-2.5 text-xs bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
+                      >
+                        <option value="">-- Click to choose template --</option>
+                        <option value="01">Quality & Packaging (Template 1)</option>
+                        <option value="02">Performance & Build (Template 2)</option>
+                        <option value="03">Value & Support (Template 3)</option>
+                      </select>
+                      {selectedTextCode && (
+                        <div className="mt-2 p-2.5 bg-[#fcf8e3]/45 border border-amazon-gold/30 rounded-lg text-[10px] text-gray-700 italic leading-relaxed">
+                          "{selectedTextCode === '01' ? "Excellent product quality, fast delivery, and premium packaging. Highly satisfied!" :
+                             selectedTextCode === '02' ? "Works exactly as described. Reliable performance and durable build. Would recommend!" :
+                             "Great value for money. Very easy setup and outstanding customer support."}"
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Desktop options view */}
+                    <div className="hidden md:grid grid-cols-1 gap-2.5">
                       {[
                         { code: '01', text: "Excellent product quality, fast delivery, and premium packaging. Highly satisfied!" },
                         { code: '02', text: "Works exactly as described. Reliable performance and durable build. Would recommend!" },
@@ -4202,11 +4223,11 @@ export default function DashboardPage({
                   </div>
 
                   {/* Submit Button */}
-                  <div className="pt-2">
+                  <div className="pt-1.5 md:pt-2">
                     <button
                       type="submit"
                       disabled={reviewStars === 0 || selectedTextCode === null || isSubmittingReview}
-                      className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 border-0 text-amazon-dark disabled:cursor-not-allowed font-black text-xs rounded-lg transition-colors cursor-pointer text-center uppercase tracking-wider flex items-center justify-center space-x-2"
+                      className="w-full py-2.5 md:py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 border-0 text-amazon-dark disabled:cursor-not-allowed font-black text-xs rounded-lg transition-colors cursor-pointer text-center uppercase tracking-wider flex items-center justify-center space-x-2"
                     >
                       {isSubmittingReview ? (
                         <>
