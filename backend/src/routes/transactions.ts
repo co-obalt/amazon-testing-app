@@ -231,8 +231,7 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       const { error: updateError } = await supabase
         .from('platform_balances')
         .update({ wallet_balance: updatedBal })
-        .eq('user_id', userId)
-        .eq('platform', platform);
+        .eq('user_id', userId);
 
       if (updateError) {
         return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
@@ -262,8 +261,7 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       await supabase
         .from('platform_balances')
         .update({ wallet_balance: revertedBalance })
-        .eq('user_id', userId)
-        .eq('platform', platform);
+        .eq('user_id', userId);
 
       return res.status(500).json({ error: 'Failed to queue withdrawal request: ' + insertError.message });
     }
@@ -385,8 +383,7 @@ router.post('/override-approve-deposit', authenticateToken, async (req: Authenti
     await supabase
       .from('platform_balances')
       .update({ wallet_balance: finalBalance })
-      .eq('user_id', deposit.user_id)
-      .eq('platform', deposit.platform);
+      .eq('user_id', deposit.user_id);
 
     // Unlock profile status
     await supabase

@@ -390,7 +390,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       boundUsdtAddress: profile.bound_usdt_address || null,
       withdrawalPassword: profile.withdrawal_password || null,
       profile_photo: profile.profile_photo || null,
-      unlockedPlatforms: boundPlatform ? [boundPlatform] : []
+      unlockedPlatforms: unlockedPlatforms
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });

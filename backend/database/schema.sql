@@ -66,7 +66,6 @@ CREATE INDEX IF NOT EXISTS idx_balances_user ON platform_balances(user_id);
 -- 3. Products Table
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  platform TEXT NOT NULL, -- 'Amazon' | 'Alibaba' | 'Shopify'
   title TEXT NOT NULL,
   image_url TEXT NOT NULL,
   price NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
@@ -84,6 +83,7 @@ CREATE TABLE IF NOT EXISTS review_submissions (
   review_text TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'Pending', -- 'Pending' | 'Completed' | 'Rejected'
   payout_earned NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  platform TEXT NOT NULL DEFAULT 'Amazon', -- Captures platform context directly
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS user_assigned_products (
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   platform TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE(user_id, product_id)
+  UNIQUE(user_id, product_id, platform)
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_assigned_products_user ON user_assigned_products(user_id);
@@ -257,27 +257,11 @@ CREATE TABLE IF NOT EXISTS admin_assigned_users (
 CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_admin ON admin_assigned_users(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_user ON admin_assigned_users(user_id);
 
--- Disable Row Level Security on tables to allow admin anon key operations
+-- Disabled Row Level Security on tables to allow admin anon key operations
 ALTER TABLE user_assigned_products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE combo_checkpoints DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admins DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_assigned_users DISABLE ROW LEVEL SECURITY;
-
--- 14. Admin Mutation Audit Table
-CREATE TABLE IF NOT EXISTS admin_audit (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id UUID NOT NULL,
-  action TEXT NOT NULL,
-  target_user_id UUID,
-  details TEXT,
-  ip_address TEXT DEFAULT '127.0.0.1',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit(admin_id);
-CREATE INDEX IF NOT EXISTS idx_admin_audit_target_user ON admin_audit(target_user_id);
-
-ALTER TABLE admin_audit DISABLE ROW LEVEL SECURITY;
 
 -- ========================================
 -- 15. Concurrency Integrity & RPC Functions
@@ -287,7 +271,7 @@ ALTER TABLE admin_audit DISABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_balances DROP CONSTRAINT IF EXISTS check_positive_balance;
 ALTER TABLE platform_balances ADD CONSTRAINT check_positive_balance CHECK (wallet_balance >= 0.00);
 
--- RPC stored procedure for atomic balance decrement on withdrawal requests
+-- RPC stored procedure for atomic balance decrement on withdrawal requests (syncs to all platforms)
 CREATE OR REPLACE FUNCTION decrement_platform_balance(
   target_user_id UUID,
   target_platform TEXT,
@@ -296,20 +280,29 @@ CREATE OR REPLACE FUNCTION decrement_platform_balance(
 DECLARE
   new_balance NUMERIC;
 BEGIN
-  UPDATE platform_balances
-  SET wallet_balance = wallet_balance - amount_to_subtract
-  WHERE user_id = target_user_id AND platform = target_platform
-  RETURNING wallet_balance INTO new_balance;
+  -- Get the current balance first from target platform after subtraction
+  SELECT wallet_balance - amount_to_subtract INTO new_balance
+  FROM platform_balances
+  WHERE user_id = target_user_id AND platform = target_platform;
+
+  IF new_balance IS NULL THEN
+    RAISE EXCEPTION 'Platform balance record not found';
+  END IF;
 
   IF new_balance < 0.00 THEN
     RAISE EXCEPTION 'Insufficient balance';
   END IF;
 
+  -- Update all platforms for this user to have the same balance
+  UPDATE platform_balances
+  SET wallet_balance = new_balance
+  WHERE user_id = target_user_id;
+
   RETURN new_balance;
 END;
 $$ LANGUAGE plpgsql;
 
--- RPC stored procedure for atomic user review verification progress increments
+-- RPC stored procedure for atomic user review verification progress increments (syncs balance to all platforms)
 CREATE OR REPLACE FUNCTION increment_user_review_progress(
   target_user_id UUID,
   target_platform TEXT,
@@ -318,18 +311,28 @@ CREATE OR REPLACE FUNCTION increment_user_review_progress(
   wallet_balance NUMERIC,
   current_position INT
 ) AS $$
+DECLARE
+  new_balance NUMERIC;
+  new_position INT;
 BEGIN
-  RETURN QUERY
+  -- 1. Increment position/review count on target platform
   UPDATE platform_balances
-  SET wallet_balance = platform_balances.wallet_balance + payout_amount,
-      reviews_count = platform_balances.reviews_count + 1,
-      current_position = platform_balances.current_position + 1
+  SET reviews_count = reviews_count + 1,
+      current_position = current_position + 1
   WHERE user_id = target_user_id AND platform = target_platform
-  RETURNING platform_balances.wallet_balance, platform_balances.current_position;
+  RETURNING platform_balances.current_position INTO new_position;
+
+  -- 2. Update balance on ALL platforms of this user
+  UPDATE platform_balances
+  SET wallet_balance = wallet_balance + payout_amount
+  WHERE user_id = target_user_id
+  RETURNING platform_balances.wallet_balance INTO new_balance;
+
+  RETURN QUERY SELECT new_balance, new_position;
 END;
 $$ LANGUAGE plpgsql;
 
--- RPC stored procedure for atomic balance adjustments (e.g. withdrawal refunds or bonus grants)
+-- RPC stored procedure for atomic balance adjustments (syncs balance to all platforms)
 CREATE OR REPLACE FUNCTION adjust_platform_balance(
   target_user_id UUID,
   target_platform TEXT,
@@ -338,10 +341,15 @@ CREATE OR REPLACE FUNCTION adjust_platform_balance(
 DECLARE
   new_balance NUMERIC;
 BEGIN
+  -- Update all platforms
   UPDATE platform_balances
   SET wallet_balance = wallet_balance + amount_to_add
-  WHERE user_id = target_user_id AND platform = target_platform
-  RETURNING wallet_balance INTO new_balance;
+  WHERE user_id = target_user_id;
+
+  -- Retrieve the updated balance
+  SELECT wallet_balance INTO new_balance
+  FROM platform_balances
+  WHERE user_id = target_user_id AND platform = target_platform;
 
   RETURN new_balance;
 END;

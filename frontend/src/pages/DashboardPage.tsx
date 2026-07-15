@@ -78,6 +78,7 @@ interface AssignedProduct {
   image: string;
   payout: number;
   externalLink: string;
+  assignedAt?: string;
 }
 
 
@@ -113,8 +114,12 @@ export default function DashboardPage({
   };
   const [activePlatform, setActivePlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [enabledPlatform, setEnabledPlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
+  const [unlockedPlatforms, setUnlockedPlatforms] = useState<string[]>([]);
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isComboSuccessModalOpen, setIsComboSuccessModalOpen] = useState(false);
+  const [comboSuccessDetails, setComboSuccessDetails] = useState<{ position: number; payout: number; checkpointAmount: number } | null>(null);
 
   // Deposit Request and VIP Unlock States
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
@@ -135,9 +140,21 @@ export default function DashboardPage({
 
   // Notifications state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: "Welcome to Amazon Vine Portal!", type: "bonus", status: "unread", date: "Jul 10, 2026" },
-  ]);
+  const [notifications, setNotifications] = useState<{id: any, text: string, type: string, status: string, date: string}[]>(() => {
+    const saved = localStorage.getItem('user_notifications');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [
+      { id: 1, text: "Welcome to Amazon Vine Portal!", type: "bonus", status: "unread", date: "Jul 10, 2026" },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('user_notifications', JSON.stringify(notifications));
+  }, [notifications]);
 
   // Gigs Search and Filters
   const [gigsSearch, setGigsSearch] = useState('');
@@ -300,9 +317,19 @@ export default function DashboardPage({
         });
 
         // Resolve workspace locks dynamically
+        const unlocked = userData.unlockedPlatforms || [];
+        setUnlockedPlatforms(unlocked);
+
         if (userData.platform) {
-          setActivePlatform(userData.platform);
           setEnabledPlatform(userData.platform);
+          if (!activePlatform) {
+            setActivePlatform(userData.platform);
+          }
+        } else if (unlocked.length > 0) {
+          setEnabledPlatform(null);
+          if (!activePlatform) {
+            setActivePlatform(unlocked[0]);
+          }
         } else {
           setActivePlatform(null);
           setEnabledPlatform(null);
@@ -485,6 +512,18 @@ export default function DashboardPage({
                 } else {
                   notifText = `❌ Your withdrawal request of $${parseFloat(payload.amount).toFixed(2)} was Rejected. Balance refunded.`;
                 }
+              } else if (payload.type === 'vip_unlocked') {
+                notifText = `🔓 Category ${payload.platform} has been Unlocked for you!`;
+                notifType = 'vip';
+              } else if (payload.type === 'vip_locked') {
+                notifText = `🔒 Category ${payload.platform} has been Locked by the Admin.`;
+                notifType = 'vip';
+              } else if (payload.type === 'vip_configured') {
+                notifText = `⚙️ New campaigns have been configured for you on platform ${payload.platform}.`;
+                notifType = 'vip';
+              } else if (payload.type === 'balance_adjustment') {
+                notifText = `👛 Admin updated your wallet balance on platform ${payload.platform} to $${parseFloat(payload.balance).toFixed(2)} USD!`;
+                notifType = 'wallet';
               }
             } else if (message.type === 'vip_unlocked') {
               notifText = `🔓 Category ${message.data.platform} has been Unlocked for you!`;
@@ -649,7 +688,8 @@ export default function DashboardPage({
             title: p.title,
             image: p.image_url,
             payout: parseFloat(p.payout),
-            externalLink: p.external_link
+            externalLink: p.external_link,
+            assignedAt: p.assignedAt || new Date(0).toISOString()
           })));
         } else {
           setAssignedProducts([]);
@@ -759,7 +799,7 @@ export default function DashboardPage({
 
   // Handle active category selection
   const handleSelectPlatform = (platform: 'Amazon' | 'Alibaba' | 'Shopify') => {
-    if (enabledPlatform && enabledPlatform !== platform) {
+    if (unlockedPlatforms.length <= 1 && enabledPlatform && enabledPlatform !== platform) {
       showToast(`Workspace locked to ${enabledPlatform}. You cannot switch to another network.`);
       return;
     }
@@ -1013,6 +1053,7 @@ export default function DashboardPage({
       return;
     }
 
+    setIsSubmittingReview(true);
     try {
       const token = localStorage.getItem('reviewer_auth_token');
       // Generate a mock order ID
@@ -1032,6 +1073,7 @@ export default function DashboardPage({
       const data = await res.json();
 
       if (!res.ok) {
+        setIsSubmittingReview(false);
         if (data.error === 'COMBO_BLOCK' || res.status === 403) {
           setComboModalDetails({
             triggerBalance: data.triggerBalance || 0,
@@ -1048,7 +1090,29 @@ export default function DashboardPage({
 
       const actualPayout = data.payoutEarned !== undefined ? data.payoutEarned : activeReviewProduct.payout;
       if (data.isCombo) {
-        showToast(`🎉 Congratulations! You cleared a Combo checkpoint ($${data.checkpointAmount.toFixed(2)}) and received a profit bonus of $${actualPayout.toFixed(2)} USD!`);
+        const comboVal = data.checkpointAmount || 0;
+        const profitVal = Math.max(0, actualPayout - comboVal);
+        showToast(`🎉 Congratulations! You cleared a Special Combo checkpoint! Total reward of $${actualPayout.toFixed(2)} USD (Combo: $${comboVal.toFixed(2)} + Profit: $${profitVal.toFixed(2)}) credited to your wallet.`);
+        
+        // Add to notification center bell list
+        setNotifications(prev => [
+          {
+            id: Date.now(),
+            text: `🎉 Congratulations! You cleared a Special Combo checkpoint! Total reward of $${actualPayout.toFixed(2)} USD (Combo: $${comboVal.toFixed(2)} + Profit: $${profitVal.toFixed(2)}) credited to your wallet.`,
+            type: 'bonus',
+            status: 'unread',
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          },
+          ...prev
+        ]);
+
+        // Open congratulations success popup modal
+        setComboSuccessDetails({
+          position: currentPlatformData.completedOrders + 1,
+          payout: actualPayout,
+          checkpointAmount: comboVal
+        });
+        setIsComboSuccessModalOpen(true);
       } else {
         showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
       }
@@ -1057,14 +1121,19 @@ export default function DashboardPage({
       setReviewStars(0);
       setSelectedTextCode(null);
 
-      // Refresh all user data (balances, orders counts, etc.)
-      await fetchAllData();
-
       // Automatically find next campaign product to open (skip already completed or pending ones!)
       const remainingPending = assignedProducts.filter(p => {
         if (p.id === activeReviewProduct.id) return false;
-        const isCompleted = currentPlatformData.orders.some(o => o.productTitle === p.title && o.status === 'Completed');
-        const isPending = currentPlatformData.orders.some(o => o.productTitle === p.title && o.status === 'Pending');
+        const isCompleted = currentPlatformData.orders.some(o => 
+          o.productId === p.id && 
+          o.status === 'Completed' && 
+          new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
+        );
+        const isPending = currentPlatformData.orders.some(o => 
+          o.productId === p.id && 
+          o.status === 'Pending' && 
+          new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
+        );
         return !isCompleted && !isPending;
       });
 
@@ -1076,7 +1145,13 @@ export default function DashboardPage({
         setActiveReviewProduct(null);
         showToast("✓ All assigned campaigns for today have been completed!");
       }
+
+      setIsSubmittingReview(false);
+
+      // Refresh all user data in the background (non-blocking)
+      fetchAllData().catch(err => console.log('Background reload error:', err));
     } catch (err) {
+      setIsSubmittingReview(false);
       showToast('Server connection error. Failed to submit evaluation.');
     }
   };
@@ -1295,11 +1370,26 @@ export default function DashboardPage({
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2.5">
             {activePlatform && (
-              <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-left select-none text-white">
+              <div className="bg-amazon-dark border border-gray-800 rounded px-3 py-1 text-left text-white relative">
                 <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Network</p>
-                <p className="text-xs font-black text-amazon-gold mt-0.5 leading-none">
-                  {activePlatform}
-                </p>
+                {unlockedPlatforms.length > 1 ? (
+                  <select
+                    value={activePlatform}
+                    onChange={(e) => handleSelectPlatform(e.target.value as any)}
+                    className="text-xs font-black text-amazon-gold bg-transparent border-none outline-none cursor-pointer mt-0.5 leading-none pr-4 appearance-none select-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='gold' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right -4px center', backgroundSize: '16px' }}
+                  >
+                    {unlockedPlatforms.map((p) => (
+                      <option key={p} value={p} className="bg-amazon-dark text-white">
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs font-black text-amazon-gold mt-0.5 leading-none select-none">
+                    {activePlatform}
+                  </p>
+                )}
               </div>
             )}
 
@@ -2180,16 +2270,24 @@ export default function DashboardPage({
                     {(() => {
                       const filteredProducts = assignedProducts.filter(product => {
                         const matchesSearch = product.title.toLowerCase().includes(gigsSearch.toLowerCase());
-                        const isCompleted = currentPlatformData.orders.some(o => o.productTitle === product.title && o.status === 'Completed');
+                        const isCompleted = currentPlatformData.orders.some(o => 
+                          o.productId === product.id && 
+                          o.status === 'Completed' && 
+                          new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
+                        );
                         const matchesSubTab = ordersSubTab === 'completed' ? isCompleted : !isCompleted;
                         
                         return matchesSearch && matchesSubTab;
                       });
 
+                      const displayProducts = ordersSubTab === 'pending' && filteredProducts.length > 0
+                        ? [filteredProducts[0]]
+                        : filteredProducts;
+
                       const pageSize = 10;
-                      const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
+                      const totalPages = Math.ceil(displayProducts.length / pageSize) || 1;
                       const currentPage = Math.min(gigsPage, totalPages);
-                      const paginatedProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+                      const paginatedProducts = displayProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
                       return (
                         <div className="space-y-6">
@@ -2197,7 +2295,11 @@ export default function DashboardPage({
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                               {paginatedProducts.map((product) => {
                                 // Check if already completed
-                                const isCompleted = currentPlatformData.orders.some(o => o.productTitle === product.title && o.status === 'Completed');
+                                const isCompleted = currentPlatformData.orders.some(o => 
+                                  o.productId === product.id && 
+                                  o.status === 'Completed' && 
+                                  new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
+                                );
 
                                 return (
                                   <div
@@ -3962,13 +4064,22 @@ export default function DashboardPage({
                   <div className="pt-2">
                     <button
                       type="submit"
-                      disabled={reviewStars === 0 || selectedTextCode === null}
+                      disabled={reviewStars === 0 || selectedTextCode === null || isSubmittingReview}
                       className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 border-0 text-amazon-dark disabled:cursor-not-allowed font-black text-xs rounded-lg transition-colors cursor-pointer text-center uppercase tracking-wider flex items-center justify-center space-x-2"
                     >
-                      <span>Submit and Open Next Campaign</span>
-                      <span className="bg-amazon-dark/10 px-2 py-0.5 rounded text-[10px] font-mono">
-                        {currentPlatformData.completedOrders + 1}/25
-                      </span>
+                      {isSubmittingReview ? (
+                        <>
+                          <div className="h-4.5 w-4.5 border-2 border-amazon-dark border-t-transparent rounded-full animate-spin"></div>
+                          <span>Verifying & Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Submit and Open Next Campaign</span>
+                          <span className="bg-amazon-dark/10 px-2 py-0.5 rounded text-[10px] font-mono">
+                            {currentPlatformData.completedOrders + 1}/25
+                          </span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -4129,6 +4240,72 @@ export default function DashboardPage({
                   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs py-3 rounded-xl transition text-center uppercase cursor-pointer"
                 >
                   Cancel & Go Back
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ================================== MODAL: COMBO SUCCESS CONGRATULATIONS ================================== */}
+      <AnimatePresence>
+        {isComboSuccessModalOpen && comboSuccessDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsComboSuccessModalOpen(false)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl border border-yellow-250 p-6 sm:p-8 max-w-md w-full z-50 relative text-left"
+            >
+              <button
+                onClick={() => setIsComboSuccessModalOpen(false)}
+                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-gray-100 transition text-gray-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="h-16 w-16 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-600 mx-auto border border-yellow-250 animate-bounce">
+                  <span className="text-3xl">🏆</span>
+                </div>
+                <h3 className="text-lg font-black mt-4 text-gray-900 uppercase tracking-tight">Special Combo Cleared!</h3>
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  Congratulations! You cleared the high-commission <strong>Special Combo Review (Order #{comboSuccessDetails.position})</strong> successfully. 
+                  The merchant reward and profit bonus has been credited to your wallet balance.
+                </p>
+              </div>
+
+              <div className="bg-yellow-50/70 border border-yellow-200 rounded-xl p-4 space-y-3 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
+                  <span className="text-gray-600 font-medium">Combo Reward Amount:</span>
+                  <span className="font-mono font-black text-gray-900">${comboSuccessDetails.checkpointAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
+                  <span className="text-gray-600 font-medium">Profit Bonus:</span>
+                  <span className="font-mono font-black text-amber-700">${Math.max(0, comboSuccessDetails.payout - comboSuccessDetails.checkpointAmount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1 font-bold">
+                  <span className="text-gray-800">Total Payout Credited:</span>
+                  <span className="font-mono font-extrabold text-emerald-600 text-sm">${comboSuccessDetails.payout.toFixed(2)} USD</span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  onClick={() => setIsComboSuccessModalOpen(false)}
+                  className="w-full bg-[#FF9900] hover:bg-[#e68a00] text-white font-black text-xs py-3.5 rounded-xl shadow-md transition text-center uppercase tracking-wider cursor-pointer font-sans"
+                >
+                  Awesome, Let's Continue!
                 </button>
               </div>
             </motion.div>

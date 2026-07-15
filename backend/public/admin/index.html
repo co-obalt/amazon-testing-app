@@ -531,14 +531,23 @@
                   selected</span>
               </div>
 
+              <!-- Warning Banner for already completed products -->
+              <div id="vipPageWarningBanner" class="bg-red-50 text-red-800 p-3.5 rounded-xl border border-red-200 text-[11px] font-bold hidden flex items-center space-x-2">
+                <i data-lucide="alert-triangle" class="h-4.5 w-4.5 text-red-600 flex-shrink-0"></i>
+                <span>Warning: You are assigning some campaigns that this user has already completed. Saving will re-assign them to this workspace, and they will appear as pending tasks for the user to review again.</span>
+              </div>
+
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Left Side: Products checklist -->
                 <div class="space-y-2 flex flex-col">
                   <span id="vipPageProductsPoolTitle"
                     class="text-[10px] text-gray-400 font-black uppercase tracking-wider">Assign Products Pool</span>
                   <div
-                    class="flex-1 border border-gray-200 rounded-xl bg-white p-3.5 overflow-hidden flex flex-col max-h-[350px]">
-                    <div class="overflow-y-auto space-y-2 pr-1" id="vipPageProductsChecklist">
+                    class="flex-1 border border-gray-200 rounded-xl bg-white overflow-hidden flex flex-col max-h-[520px]">
+                    <!-- Tab buttons rendered here by JS into this sticky header slot -->
+                    <div id="vipPagePoolTabHeader" class="flex-shrink-0 bg-white border-b border-gray-200 px-3.5 pt-3"></div>
+                    <!-- Scrollable product rows -->
+                    <div class="overflow-y-auto flex-1 px-3.5 pb-3.5 pt-2 space-y-1.5" id="vipPageProductsChecklist">
                       <!-- Checkboxes loaded dynamically -->
                     </div>
                   </div>
@@ -605,20 +614,8 @@
           <!-- Filters and Stats Row -->
           <div
             class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div class="flex items-center space-x-2 bg-gray-50 p-1 rounded-lg border border-gray-200 w-fit"
-              id="productFilterTabs">
-              <button onclick="setProductFilter('All')" id="productFilterTab-All"
-                class="px-3.5 py-1.5 text-xs font-black rounded-md cursor-pointer transition bg-amazon-dark text-white border-0 shadow-sm">All
-                (<span id="count-All">0</span>)</button>
-              <button onclick="setProductFilter('Amazon')" id="productFilterTab-Amazon"
-                class="px-3.5 py-1.5 text-xs font-bold rounded-md cursor-pointer transition text-gray-600 hover:text-gray-900 bg-transparent border-0">Amazon
-                (<span id="count-Amazon">0</span>)</button>
-              <button onclick="setProductFilter('Alibaba')" id="productFilterTab-Alibaba"
-                class="px-3.5 py-1.5 text-xs font-bold rounded-md cursor-pointer transition text-gray-600 hover:text-gray-900 bg-transparent border-0">Alibaba
-                (<span id="count-Alibaba">0</span>)</button>
-              <button onclick="setProductFilter('Shopify')" id="productFilterTab-Shopify"
-                class="px-3.5 py-1.5 text-xs font-bold rounded-md cursor-pointer transition text-gray-600 hover:text-gray-900 bg-transparent border-0">Shopify
-                (<span id="count-Shopify">0</span>)</button>
+            <div class="text-xs font-black text-amazon-navy uppercase tracking-wider">
+              📦 Product Campaigns (<span id="count-All">0</span>)
             </div>
             <div class="text-xs text-gray-500 font-semibold md:text-right" id="productStatsSummary">
               <!-- Injected dynamically -->
@@ -646,7 +643,7 @@
                 <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                   <i data-lucide="search" class="h-4 w-4"></i>
                 </span>
-                <input type="text" id="reportsSearchField" oninput="renderReportsUserList()"
+                <input type="text" id="reportsSearchField" oninput="loadReportsTab()"
                   placeholder="Search by username or email..."
                   class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amazon-gold focus:outline-none" />
               </div>
@@ -1549,6 +1546,58 @@
             <button type="submit"
               class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0">Save
               Campaign</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Product Modal -->
+  <div id="editProductModal"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs hidden">
+    <div class="bg-white rounded-2xl border border-gray-250 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="p-4 bg-amazon-dark text-white flex items-center justify-between border-b border-gray-800">
+        <h4 class="text-xs font-black uppercase tracking-wider text-amazon-gold flex items-center space-x-1.5">
+          <i data-lucide="pencil" class="h-4 w-4"></i>
+          <span>Edit Campaign Product</span>
+        </h4>
+        <button onclick="closeEditProductModal()" class="text-gray-400 hover:text-white transition-colors cursor-pointer bg-transparent border-0">
+          <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-4">
+        <input type="hidden" id="editProdId" />
+        <form id="editProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs" onsubmit="submitEditProductForm(event)">
+          <div class="md:col-span-2 space-y-1">
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Product Title</label>
+            <input type="text" id="editProdTitle" required placeholder="e.g. Wireless Noise Cancelling Earbuds"
+              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
+          </div>
+          <div class="md:col-span-2 space-y-1">
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Image URL</label>
+            <input type="url" id="editProdImage" required placeholder="https://images.unsplash.com/..."
+              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Product Price ($)</label>
+            <input type="number" step="0.01" id="editProdPrice" required placeholder="100.00"
+              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Commission Payout ($)</label>
+            <input type="number" step="any" id="editProdPayout" required placeholder="4.00"
+              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
+          </div>
+          <div class="md:col-span-2 space-y-1">
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Merchant Product Link <span class="text-red-500 normal-case">(product page URL, NOT the image URL)</span></label>
+            <input type="url" id="editProdLink" required placeholder="https://www.amazon.com/dp/B0..."
+              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
+          </div>
+          <div class="md:col-span-2 pt-4 flex items-center justify-end space-x-3 border-t border-gray-150 mt-2">
+            <button type="button" onclick="closeEditProductModal()"
+              class="px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg transition-colors cursor-pointer bg-white">Cancel</button>
+            <button type="submit"
+              class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0">Save Changes</button>
           </div>
         </form>
       </div>
@@ -3022,16 +3071,9 @@
         const rawProducts = await res.json();
         allCampaignProducts = Array.isArray(rawProducts) ? rawProducts : [];
 
-        // Update all filter tab counts on fetch
-        const amz = allCampaignProducts.filter(p => p.platform === 'Amazon').length;
-        const ali = allCampaignProducts.filter(p => p.platform === 'Alibaba').length;
-        const sho = allCampaignProducts.filter(p => p.platform === 'Shopify').length;
         const total = allCampaignProducts.length;
-
-        document.getElementById('count-All').textContent = total;
-        document.getElementById('count-Amazon').textContent = amz;
-        document.getElementById('count-Alibaba').textContent = ali;
-        document.getElementById('count-Shopify').textContent = sho;
+        const countAll = document.getElementById('count-All');
+        if (countAll) countAll.textContent = total;
 
         renderFilteredProducts();
       } catch (err) {
@@ -3067,6 +3109,56 @@
       }
     }
 
+    function openEditProductModal(id) {
+      const p = allCampaignProducts.find(prod => prod.id === id);
+      if (!p) return;
+      document.getElementById('editProdId').value = p.id;
+      document.getElementById('editProdTitle').value = p.title || '';
+      document.getElementById('editProdImage').value = p.image_url || '';
+      document.getElementById('editProdPrice').value = p.price || '';
+      document.getElementById('editProdPayout').value = p.payout || '';
+      document.getElementById('editProdLink').value = p.external_link || '';
+      document.getElementById('editProductModal').classList.remove('hidden');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeEditProductModal() {
+      document.getElementById('editProductModal').classList.add('hidden');
+      document.getElementById('editProductForm').reset();
+    }
+
+    async function submitEditProductForm(e) {
+      e.preventDefault();
+      const id = document.getElementById('editProdId').value;
+      const title = document.getElementById('editProdTitle').value;
+      const imageUrl = document.getElementById('editProdImage').value;
+      const price = parseFloat(document.getElementById('editProdPrice').value);
+      const payout = parseFloat(document.getElementById('editProdPayout').value);
+      const externalLink = document.getElementById('editProdLink').value;
+
+      try {
+        const res = await fetch(`/api/admin/products/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ title, imageUrl, price, payout, externalLink })
+        });
+
+        if (res.ok) {
+          showToast('Product campaign successfully updated.');
+          closeEditProductModal();
+          fetchProducts();
+        } else {
+          const errData = await res.json();
+          showToast(errData.error || 'Failed to update product.', 'error');
+        }
+      } catch (err) {
+        showToast('Network error during update.', 'error');
+      }
+    }
+
     function setProductFilter(platform) {
       activeProductFilter = platform;
       renderFilteredProducts();
@@ -3075,44 +3167,21 @@
     function renderFilteredProducts() {
       const grid = document.getElementById('productGrid');
 
-      // Filter list
-      let filtered = allCampaignProducts;
-      if (activeProductFilter !== 'All') {
-        filtered = allCampaignProducts.filter(p => p.platform === activeProductFilter);
-      }
+      // All products are universal — no platform filtering
+      const filtered = allCampaignProducts;
 
-      // Update active tab buttons styling
-      const platforms = ['All', 'Amazon', 'Alibaba', 'Shopify'];
-      platforms.forEach(p => {
-        const btn = document.getElementById(`productFilterTab-${p}`);
-        if (!btn) return;
-        if (p === activeProductFilter) {
-          btn.className = "px-3.5 py-1.5 text-xs font-black rounded-md cursor-pointer transition bg-amazon-dark text-white border-0 shadow-sm";
-        } else {
-          btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-md cursor-pointer transition text-gray-650 hover:text-gray-900 bg-transparent border-0";
-        }
-      });
-
-      // Update stats text count and summary line
-      document.getElementById('productStatsCount').textContent = `${filtered.length} product${filtered.length === 1 ? '' : 's'} listed in ${activeProductFilter}`;
-
-      const totalAll = allCampaignProducts.length;
-      const amz = allCampaignProducts.filter(p => p.platform === 'Amazon').length;
-      const ali = allCampaignProducts.filter(p => p.platform === 'Alibaba').length;
-      const sho = allCampaignProducts.filter(p => p.platform === 'Shopify').length;
+      // Update stats
+      const statsCount = document.getElementById('productStatsCount');
+      if (statsCount) statsCount.textContent = `${filtered.length} universal product${filtered.length === 1 ? '' : 's'} in pool`;
 
       const summaryDiv = document.getElementById('productStatsSummary');
-      if (activeProductFilter === 'All') {
-        summaryDiv.innerHTML = `Total pool: <span class="text-amazon-navy font-black">${totalAll} campaigns</span> &bull; Amazon: <span class="font-bold text-gray-850">${amz}</span> | Alibaba: <span class="font-bold text-gray-850">${ali}</span> | Shopify: <span class="font-bold text-gray-850">${sho}</span>`;
-      } else {
-        summaryDiv.innerHTML = `Filtered view: <span class="text-amazon-navy font-black">${filtered.length} campaigns</span> matching ${activeProductFilter}`;
-      }
+      if (summaryDiv) summaryDiv.innerHTML = `Total campaign pool: <span class="text-amazon-navy font-black">${filtered.length} products</span> &bull; Available across all platforms (Amazon, Alibaba, Shopify)`;
 
       if (!filtered || filtered.length === 0) {
         grid.innerHTML = `
           <div class="col-span-full bg-white p-8 rounded-xl border border-gray-250 text-center text-gray-500 py-12">
             <i data-lucide="package-open" class="mx-auto h-8 w-8 text-gray-400 mb-2"></i>
-            <p class="font-bold text-xs uppercase tracking-wider text-gray-700">No campaigns found for ${activeProductFilter}</p>
+            <p class="font-bold text-xs uppercase tracking-wider text-gray-700">No campaigns found</p>
             <p class="text-[11px] text-gray-400 mt-1">Create your first product campaign to display it here.</p>
           </div>
         `;
@@ -3127,14 +3196,8 @@
         const cleanImage = p.image_url || defaultImg;
         return `
           <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-md transition duration-200">
-            <!-- Platform Badge -->
-            <div class="p-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase border ${p.platform === 'Amazon' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-            p.platform === 'Alibaba' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-              'bg-blue-50 text-blue-700 border-blue-200'
-          }">${p.platform}</span>
-            </div>
-
+            <!-- Universal Product Card -->
+            
             <!-- Product Body -->
             <div class="p-4 flex-1 flex flex-col justify-between">
               <div class="space-y-2">
@@ -3159,11 +3222,14 @@
 
             <!-- Card Actions -->
             <div class="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
-              <a href="${p.external_link}" target="_blank" class="flex-1 inline-flex items-center justify-center space-x-1 py-1.5 bg-gray-100 hover:bg-gray-250 text-gray-700 rounded text-[9px] font-black uppercase tracking-wider transition border border-gray-200">
+              <a href="${p.external_link || '#'}" target="_blank" class="flex-1 inline-flex items-center justify-center space-x-1 py-1.5 bg-gray-100 hover:bg-gray-250 text-gray-700 rounded text-[9px] font-black uppercase tracking-wider transition border border-gray-200">
                 <i data-lucide="external-link" class="h-3 w-3"></i>
                 <span>Open Link</span>
               </a>
-              <button onclick="deleteProduct('${p.id}')" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-lg transition cursor-pointer" title="Delete Campaign">
+              <button onclick="openEditProductModal('${p.id}')" class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition cursor-pointer border-0" title="Edit Campaign">
+                <i data-lucide="pencil" class="h-4 w-4"></i>
+              </button>
+              <button onclick="deleteProduct('${p.id}')" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-lg transition cursor-pointer border-0" title="Delete Campaign">
                 <i data-lucide="trash-2" class="h-4 w-4"></i>
               </button>
             </div>
@@ -3576,7 +3642,7 @@
     let selectedVipUsername = null;
     let currentVipConfig = null;
     let allVipProducts = [];
-    let completedProductIds = [];
+    let allUserReviews = []; // Full user reviews including platform
     let activeVipPlatform = null;
 
     async function loadVipUsersTab() {
@@ -3637,22 +3703,22 @@
       document.getElementById('vipPageActions-Shopify').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
 
       try {
-        // Fetch user VIP configs, products pool, and review logs in parallel
-        const [vipRes, prodRes, userDetailsRes] = await Promise.all([
+        // Fetch user VIP configs, products pool, and lightweight review logs in parallel (optimized)
+        const [vipRes, prodRes, reviewsRes] = await Promise.all([
           fetch(`/api/admin/users/${userId}/vip`, { headers: { 'Authorization': `Bearer ${adminToken}` } }),
           fetch('/api/admin/products', { headers: { 'Authorization': `Bearer ${adminToken}` } }),
-          fetch(`/api/admin/users/${userId}`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
+          fetch(`/api/admin/users/${userId}/reviews`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
         ]);
 
-        const [vipData, prodData, userDetailsData] = await Promise.all([
+        const [vipData, prodData, reviewsData] = await Promise.all([
           vipRes.json(),
           prodRes.json(),
-          userDetailsRes.json()
+          reviewsRes.json()
         ]);
 
         currentVipConfig = vipData;
         allVipProducts = prodData;
-        completedProductIds = (userDetailsData.reviews || []).map(r => r.product_id);
+        allUserReviews = reviewsData || [];
 
         renderVipPageCards();
       } catch (err) {
@@ -3668,6 +3734,7 @@
       selectedVipUsername = null;
       currentVipConfig = null;
       activeVipPlatform = null;
+      allUserReviews = [];
       loadVipUsersTab();
     }
 
@@ -3731,35 +3798,18 @@
       }
     }
 
+    let activeProductPoolTab = 'fresh'; // 'fresh' | 'used'
+
     function unlockVipPagePlatform(platform) {
       activeVipPlatform = platform;
+      activeProductPoolTab = 'fresh';
       document.getElementById('vipPageConfigPlatform').textContent = platform;
       document.getElementById('vipPageConfigurator').classList.remove('hidden');
 
       // Update checklist title with platform target info
-      document.getElementById('vipPageProductsPoolTitle').textContent = `Assign Products Pool (showing ${platform} campaigns only)`;
+      document.getElementById('vipPageProductsPoolTitle').textContent = `Assign Products Pool`;
 
-      // Populate products checklist
-      const productsForPlatform = allVipProducts.filter(p => p.platform === platform);
-      const checklist = document.getElementById('vipPageProductsChecklist');
-
-      if (productsForPlatform.length === 0) {
-        checklist.innerHTML = `<p class="text-gray-400 italic text-center text-xs py-4">No campaign products available for ${platform}. Create products in the Campaigns tab first.</p>`;
-      } else {
-        checklist.innerHTML = productsForPlatform.map(p => {
-          const isChecked = currentVipConfig[platform].productIds.includes(p.id);
-          const isClaimed = completedProductIds.includes(p.id);
-          const claimedBadge = isClaimed ? ` <span class="bg-green-100 text-green-800 font-black text-[9px] px-1.5 py-0.5 rounded ml-1.5 uppercase font-sans">✓ Done</span>` : '';
-          return `
-            <label class="flex items-center space-x-3 p-2.5 hover:bg-gray-50 rounded-lg border border-gray-150 cursor-pointer text-xs font-bold text-gray-700">
-              <input type="checkbox" value="${p.id}" onchange="updateSelectedPageProductsCount()" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-amazon-gold rounded border-gray-300 focus:ring-amazon-gold"/>
-              <img src="${p.image_url}" class="h-8 w-8 object-contain rounded border bg-gray-50 p-0.5" onerror="this.src='https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=120'"/>
-              <span class="flex-1 truncate">${p.title}${claimedBadge}</span>
-              <span class="text-emerald-600 font-mono">+$${parseFloat(p.payout).toFixed(2)}</span>
-            </label>
-          `;
-        }).join('');
-      }
+      renderProductPoolTabs(platform);
 
       // Populate combo checkpoints rows
       const combosList = document.getElementById('vipPageCombosList');
@@ -3774,6 +3824,131 @@
       }
     }
 
+    function renderProductPoolTabs(platform) {
+      const checklist = document.getElementById('vipPageProductsChecklist');
+      const pltf = platform || activeVipPlatform;
+
+      if (!allVipProducts || allVipProducts.length === 0) {
+        checklist.innerHTML = `<p class="text-gray-400 italic text-center text-xs py-4">No campaign products available. Create products in the Campaigns tab first.</p>`;
+        return;
+      }
+
+      // Categorise products:
+      // PREVIOUSLY USED = reviewed on THIS platform specifically
+      //                   OR reviewed on any platform globally (global history)
+      //                   OR currently assigned to THIS platform (current batch)
+      //                   OR assigned to OTHER platforms
+      // FRESH            = never reviewed anywhere, never assigned anywhere
+      const freshProducts = [];
+      const usedProducts = [];
+
+      // Precompute sets for performance
+      const reviewedOnThisPlatform = new Set(
+        allUserReviews.filter(r => r.platform === pltf).map(r => r.product_id)
+      );
+      const reviewedGlobally = new Set(allUserReviews.map(r => r.product_id));
+
+      allVipProducts.forEach(p => {
+        const isClaimedHere = reviewedOnThisPlatform.has(p.id);   // reviewed on THIS platform → Done badge
+        const isClaimedGlobal = reviewedGlobally.has(p.id);        // reviewed anywhere → goes to Previously Used
+        const isAssignedToThisPlatform = currentVipConfig[pltf] && currentVipConfig[pltf].productIds.includes(p.id);
+        const otherAssignedPlatforms = ['Amazon', 'Alibaba', 'Shopify'].filter(plat =>
+          plat !== pltf && currentVipConfig[plat] && currentVipConfig[plat].productIds.includes(p.id)
+        );
+        const assignedOnOther = otherAssignedPlatforms.length > 0;
+
+        if (isClaimedGlobal || isAssignedToThisPlatform || assignedOnOther) {
+          usedProducts.push({ ...p, isClaimedHere, isAssignedToThisPlatform, otherAssignedPlatforms });
+        } else {
+          freshProducts.push({ ...p, isClaimedHere: false, isAssignedToThisPlatform: false, otherAssignedPlatforms: [] });
+        }
+      });
+
+      const makeProductRow = (p) => {
+        // Pre-check ONLY if currently assigned to this specific platform
+        const isChecked = p.isAssignedToThisPlatform;
+        // Done badge = reviewed specifically on THIS platform
+        const claimedBadge = p.isClaimedHere
+          ? `<span style="display:inline-flex;align-items:center;background:#dcfce7;color:#15803d;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:5px;text-transform:uppercase;border:1px solid #86efac;">✓ Done</span>`
+          : '';
+        const assignedBadge = p.otherAssignedPlatforms && p.otherAssignedPlatforms.length > 0
+          ? `<span style="display:inline-flex;align-items:center;background:#dbeafe;color:#1d4ed8;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:5px;text-transform:uppercase;border:1px solid #93c5fd;">📌 ${p.otherAssignedPlatforms.join(', ')}</span>`
+          : '';
+
+        return `
+          <label class="flex items-center space-x-3 p-2.5 hover:bg-gray-50 rounded-lg border border-gray-150 cursor-pointer text-xs font-bold text-gray-700">
+            <input type="checkbox" value="${p.id}" onchange="updateSelectedPageProductsCount()" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-amazon-gold rounded border-gray-300 focus:ring-amazon-gold flex-shrink-0"/>
+            <img src="${p.image_url}" class="h-8 w-8 object-contain rounded border bg-gray-50 p-0.5 flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=120'"/>
+            <span class="flex-1 min-w-0 flex flex-col gap-0.5">
+              <span class="truncate font-bold text-gray-800">${p.title}</span>
+              <span class="flex items-center gap-1 flex-wrap">${claimedBadge}${assignedBadge}</span>
+            </span>
+            <span class="text-emerald-600 font-mono flex-shrink-0">+$${parseFloat(p.payout).toFixed(2)}</span>
+          </label>
+        `;
+      };
+
+      const freshList = freshProducts.length > 0
+        ? freshProducts.map(makeProductRow).join('')
+        : `<p class="text-gray-400 italic text-center text-xs py-6">All products have been reviewed or assigned to a platform already.</p>`;
+
+      const usedList = usedProducts.length > 0
+        ? usedProducts.map(makeProductRow).join('')
+        : `<p class="text-gray-400 italic text-center text-xs py-6">No previously used or assigned products found.</p>`;
+
+      // Render tab buttons into the sticky header (outside scroll area)
+      const tabHeader = document.getElementById('vipPagePoolTabHeader');
+      if (tabHeader) {
+        tabHeader.innerHTML = `
+          <div class="flex gap-0 -mb-px">
+            <button
+              id="poolTab-fresh"
+              onclick="switchPoolTab('fresh', '${pltf}')"
+              class="flex-1 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${activeProductPoolTab === 'fresh' ? 'border-amazon-gold text-amber-700 bg-amber-50' : 'border-transparent text-gray-400 hover:text-gray-700 bg-white'}"
+            >
+              🆕 Fresh <span class="ml-1 bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-black">${freshProducts.length}</span>
+            </button>
+            <button
+              id="poolTab-used"
+              onclick="switchPoolTab('used', '${pltf}')"
+              class="flex-1 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${activeProductPoolTab === 'used' ? 'border-amazon-gold text-amber-700 bg-amber-50' : 'border-transparent text-gray-400 hover:text-gray-700 bg-white'}"
+            >
+              🔁 Previously Used <span class="ml-1 bg-orange-100 text-orange-700 text-[9px] px-1.5 py-0.5 rounded font-black">${usedProducts.length}</span>
+            </button>
+          </div>
+        `;
+      }
+
+      // Render product rows into the scrollable body
+      checklist.innerHTML = `
+        <div id="poolTabContent-fresh" class="${activeProductPoolTab === 'fresh' ? '' : 'hidden'} space-y-1.5">
+          ${freshList}
+        </div>
+        <div id="poolTabContent-used" class="${activeProductPoolTab === 'used' ? '' : 'hidden'} space-y-1.5">
+          ${usedList}
+        </div>
+      `;
+    }
+
+    function switchPoolTab(tab, platform) {
+      activeProductPoolTab = tab;
+      // Update tab button styles
+      ['fresh', 'used'].forEach(t => {
+        const btn = document.getElementById(`poolTab-${t}`);
+        const content = document.getElementById(`poolTabContent-${t}`);
+        if (!btn || !content) return;
+        if (t === tab) {
+          btn.className = btn.className.replace('border-transparent text-gray-400 hover:text-gray-700 bg-white', 'border-amazon-gold text-amber-700 bg-amber-50');
+          content.classList.remove('hidden');
+        } else {
+          btn.className = btn.className.replace('border-amazon-gold text-amber-700 bg-amber-50', 'border-transparent text-gray-400 hover:text-gray-700 bg-white');
+          content.classList.add('hidden');
+        }
+      });
+    }
+
+
+
     function editVipPagePlatform(platform) {
       unlockVipPagePlatform(platform);
     }
@@ -3782,6 +3957,26 @@
       const checkedBoxes = document.querySelectorAll('#vipPageProductsChecklist input[type="checkbox"]:checked');
       const count = checkedBoxes.length;
       document.getElementById('vipPageConfigSelectedCount').textContent = `${count} product${count === 1 ? '' : 's'} selected`;
+
+      // Check for checked products that have already been completed by user on THIS platform
+      const reviewedOnActivePlatform = new Set(
+        allUserReviews.filter(r => r.platform === activeVipPlatform).map(r => r.product_id)
+      );
+      let hasDuplicateCompleted = false;
+      checkedBoxes.forEach(cb => {
+        if (reviewedOnActivePlatform.has(cb.value)) {
+          hasDuplicateCompleted = true;
+        }
+      });
+
+      const banner = document.getElementById('vipPageWarningBanner');
+      if (banner) {
+        if (hasDuplicateCompleted) {
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
     }
 
     function addVipPageComboRow(position = '', amount = '', profit = '') {
@@ -3816,6 +4011,8 @@
 
     function hideVipPageConfigurator() {
       document.getElementById('vipPageConfigurator').classList.add('hidden');
+      const banner = document.getElementById('vipPageWarningBanner');
+      if (banner) banner.classList.add('hidden');
       activeVipPlatform = null;
     }
 
@@ -3899,7 +4096,8 @@
     // ================================== TAB: AUDITING REPORTS ==================================
     async function loadReportsTab() {
       try {
-        const res = await fetch('/api/admin/users', {
+        const searchVal = document.getElementById('reportsSearchField').value.trim();
+        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(searchVal)}`, {
           headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         const users = await res.json();
@@ -3911,18 +4109,10 @@
     }
 
     function renderReportsUserList() {
-      const query = document.getElementById('reportsSearchField').value.trim().toLowerCase();
       const body = document.getElementById('reportsUserTableBody');
+      const filtered = allReportsUsers;
 
-      let filtered = allReportsUsers;
-      if (query) {
-        filtered = allReportsUsers.filter(u =>
-          u.username.toLowerCase().includes(query) ||
-          (u.email && u.email.toLowerCase().includes(query))
-        );
-      }
-
-      if (filtered.length === 0) {
+      if (!filtered || filtered.length === 0) {
         body.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No reviewers found</td></tr>`;
         return;
       }

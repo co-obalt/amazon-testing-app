@@ -336,7 +336,7 @@ router.get('/me', authenticateToken, async (req, res) => {
             boundUsdtAddress: profile.bound_usdt_address || null,
             withdrawalPassword: profile.withdrawal_password || null,
             profile_photo: profile.profile_photo || null,
-            unlockedPlatforms: boundPlatform ? [boundPlatform] : []
+            unlockedPlatforms: unlockedPlatforms
         });
     }
     catch (error) {

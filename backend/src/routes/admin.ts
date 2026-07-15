@@ -10,24 +10,14 @@ const router = express.Router();
 const isDbConfigured = process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('your-project-id') &&
                        process.env.SUPABASE_KEY && !process.env.SUPABASE_KEY.includes('your-supabase-anon-key');
 
-// Helper function to log administrative actions to the admin_audit database table
+// Helper function to log administrative actions
 async function logAdminAction(adminId: string, action: string, targetUserId: string | null, details: string, req: AuthenticatedRequest) {
   try {
     let ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
     if (ipAddress.includes(',')) ipAddress = ipAddress.split(',')[0].trim();
     if (ipAddress === '::1' || ipAddress === '::ffff:127.0.0.1') ipAddress = '127.0.0.1';
 
-    const { error } = await supabase.from('admin_audit').insert({
-      admin_id: adminId,
-      action,
-      target_user_id: targetUserId,
-      details,
-      ip_address: ipAddress
-    });
-
-    if (error) {
-      console.warn("admin_audit logging warning (migration might not be applied yet):", error.message);
-    }
+    console.log(`[Admin Audit] Admin: ${adminId} | Action: ${action} | Target: ${targetUserId} | Details: ${details} | IP: ${ipAddress}`);
   } catch (err) {
     console.error("Failed to log admin action:", err);
   }
@@ -281,13 +271,19 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
       query = query.in('id', assignedUserIds);
     }
 
-    // Apply optional pagination
+    // Apply pagination: default to limit 50 if no limit is specified to prevent loading the entire database
+    let limit = 50;
+    let offset = 0;
     const pageVal = parseInt(req.query.page as string);
     const limitVal = parseInt(req.query.limit as string);
-    if (!isNaN(pageVal) && !isNaN(limitVal) && pageVal > 0 && limitVal > 0) {
-      const offset = (pageVal - 1) * limitVal;
-      query = query.range(offset, offset + limitVal - 1);
+    if (!isNaN(limitVal) && limitVal > 0) {
+      limit = limitVal;
     }
+    if (!isNaN(pageVal) && pageVal > 0) {
+      offset = (pageVal - 1) * limit;
+    }
+
+    query = query.range(offset, offset + limit - 1);
 
     const { data: users, error } = await query;
     if (error) {
@@ -419,7 +415,7 @@ router.get('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
     // Fetch user transactions
     const { data: deposits } = await supabase.from('deposits').select('*').eq('user_id', id).order('created_at', { ascending: false });
     const { data: withdrawals } = await supabase.from('withdrawals').select('*').eq('user_id', id).order('created_at', { ascending: false });
-    const { data: reviews } = await supabase.from('review_submissions').select('*, products(title, platform)').eq('user_id', id).order('created_at', { ascending: false });
+    const { data: reviews } = await supabase.from('review_submissions').select('*, products(title)').eq('user_id', id).order('created_at', { ascending: false });
 
     // Fetch IP logs, custom combo rules, and customer service operator chat transcripts
     const { data: ipLogs } = await supabase.from('ip_logs').select('*').eq('user_id', id).order('created_at', { ascending: false });
@@ -438,6 +434,24 @@ router.get('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// 3a. Lightweight User Reviews lookup for VIP config tab (avoids loading massive chat histories)
+router.get('/users/:id/reviews', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data: reviews, error } = await supabase
+      .from('review_submissions')
+      .select('product_id, platform')
+      .eq('user_id', id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.json(reviews || []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
@@ -560,13 +574,10 @@ router.put('/users/:id/balance', async (req: AuthenticatedRequest, res: Response
     const currentBal = parseFloat(current.wallet_balance as any) || 0.0;
     const finalBal = Number((currentBal + delta).toFixed(2));
 
-    const { data: updatedBalance, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('platform_balances')
       .update({ wallet_balance: finalBal })
-      .eq('user_id', id)
-      .eq('platform', platform)
-      .select()
-      .single();
+      .eq('user_id', id);
 
     if (updateError) {
       return res.status(500).json({ error: 'Failed to update balance: ' + updateError.message });
@@ -578,7 +589,7 @@ router.put('/users/:id/balance', async (req: AuthenticatedRequest, res: Response
     const adminId = req.user?.id || 'unknown-admin';
     await logAdminAction(adminId, 'UPDATE_USER_BALANCE', id, `Adjusted balance on platform ${platform} by ${amount} (New balance: ${finalBal})`, req);
 
-    res.json({ message: 'Balance successfully updated', balance: updatedBalance });
+    res.json({ message: 'Balance successfully updated', balance: finalBal });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
@@ -713,8 +724,7 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
       await supabase
         .from('platform_balances')
         .update({ wallet_balance: finalBalance })
-        .eq('user_id', deposit.user_id)
-        .eq('platform', deposit.platform);
+        .eq('user_id', deposit.user_id);
 
       // 2. Set user status to active to unlock workspace
       await supabase
@@ -896,8 +906,7 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
         await supabase
           .from('platform_balances')
           .update({ wallet_balance: finalBalance })
-          .eq('user_id', wRecord.user_id)
-          .eq('platform', refundPlatform);
+          .eq('user_id', wRecord.user_id);
       }
     }
 
@@ -946,16 +955,15 @@ router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
     return res.status(403).json({ error: 'Access Denied: Restricted operators cannot modify global campaigns.' });
   }
   try {
-    const { platform, title, imageUrl, price, payout, externalLink } = req.body;
+    const { title, imageUrl, price, payout, externalLink } = req.body;
 
-    if (!platform || !title || !imageUrl || price === undefined || payout === undefined || !externalLink) {
-      return res.status(400).json({ error: 'Platform, Title, Image URL, Price, Payout, and Link are required' });
+    if (!title || !imageUrl || price === undefined || payout === undefined || !externalLink) {
+      return res.status(400).json({ error: 'Title, Image URL, Price, Payout, and Link are required' });
     }
 
     const { data: newProd, error } = await supabase
       .from('products')
       .insert({
-        platform,
         title,
         image_url: imageUrl,
         price: parseFloat(price) || 0.00,
@@ -970,7 +978,7 @@ router.post('/products', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     const adminId = req.user?.id || 'unknown-admin';
-    await logAdminAction(adminId, 'CREATE_PRODUCT', null, `Created campaign "${title}" on platform ${platform} with price ${price} and payout ${payout}`, req);
+    await logAdminAction(adminId, 'CREATE_PRODUCT', null, `Created campaign "${title}" with price ${price} and payout ${payout}`, req);
 
     res.status(201).json({ message: 'Product campaign successfully created', product: newProd });
   } catch (error: any) {
@@ -984,16 +992,15 @@ router.put('/products/:id', async (req: AuthenticatedRequest, res: Response) => 
   }
   try {
     const { id } = req.params;
-    const { platform, title, imageUrl, price, payout, externalLink } = req.body;
+    const { title, imageUrl, price, payout, externalLink } = req.body;
 
-    if (!platform || !title || !imageUrl || price === undefined || payout === undefined || !externalLink) {
-      return res.status(400).json({ error: 'Platform, Title, Image URL, Price, Payout, and Link are required' });
+    if (!title || !imageUrl || price === undefined || payout === undefined || !externalLink) {
+      return res.status(400).json({ error: 'Title, Image URL, Price, Payout, and Link are required' });
     }
 
     const { data: updatedProd, error } = await supabase
       .from('products')
       .update({
-        platform,
         title,
         image_url: imageUrl,
         price: parseFloat(price) || 0.00,
@@ -1009,7 +1016,7 @@ router.put('/products/:id', async (req: AuthenticatedRequest, res: Response) => 
     }
 
     const adminId = req.user?.id || 'unknown-admin';
-    await logAdminAction(adminId, 'EDIT_PRODUCT', null, `Updated campaign ID ${id} on platform ${platform}: "${title}" price ${price} payout ${payout}`, req);
+    await logAdminAction(adminId, 'EDIT_PRODUCT', null, `Updated campaign ID ${id}: "${title}" price ${price} payout ${payout}`, req);
 
     res.json({ message: 'Product campaign successfully updated', product: updatedProd });
   } catch (error: any) {
@@ -1251,8 +1258,7 @@ router.post('/users/:id/bonus', async (req: AuthenticatedRequest, res: Response)
     const { error: updateError } = await supabase
       .from('platform_balances')
       .update({ wallet_balance: updatedBalance })
-      .eq('user_id', id)
-      .eq('platform', platform);
+      .eq('user_id', id);
 
     if (updateError) {
       return res.status(500).json({ error: 'Failed to award bonus: ' + updateError.message });
@@ -1729,7 +1735,7 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
       return res.status(500).json({ error: 'Failed to clear assigned products: ' + delApErr.message });
     }
 
-    // 2. Insert new assigned products
+    // 2. Insert new assigned products (upsert to handle re-assignments without duplicate errors)
     if (productIds.length > 0) {
       const inserts = productIds.map(pId => ({
         user_id: id,
@@ -1743,6 +1749,7 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
       if (insApErr) {
         return res.status(500).json({ error: 'Failed to save assigned products: ' + insApErr.message });
       }
+
     }
 
     // 3. Clear existing combo checkpoints for this user & platform
