@@ -277,10 +277,21 @@ router.post('/submit', authenticateToken, async (req, res) => {
                 .maybeSingle();
             checkpoint = checkpointData;
             if (checkpoint) {
-                // Direct combo reward: trigger_balance (combo amount) + profit_override (profit)
                 const comboAmount = parseFloat(checkpoint.trigger_balance) || 0.00;
                 const profitAmount = parseFloat(checkpoint.profit_override) || 0.00;
-                payoutEarned = comboAmount + profitAmount;
+                // Check if combo checkpoint has been marked as cleared/paid
+                const isCleared = (balanceRecord.last_cleared_combo_position || 0) === checkpoint.position;
+                if (!isCleared) {
+                    return res.status(403).json({
+                        error: 'COMBO_BLOCK',
+                        triggerBalance: comboAmount,
+                        profitAmount: profitAmount,
+                        currentBalance: parseFloat(balanceRecord.wallet_balance) || 0.00,
+                        position: nextPosition
+                    });
+                }
+                // Paid/cleared combo payout is 0 here since reward was credited during deposit approval
+                payoutEarned = 0.00;
             }
         }
         // Check if user has already submitted a review for this product in the current assignment window
@@ -355,7 +366,8 @@ router.post('/submit', authenticateToken, async (req, res) => {
                 .from('platform_balances')
                 .update({
                 reviews_count: currentReviews + 1,
-                current_position: nextPos
+                current_position: nextPos,
+                last_cleared_combo_position: 0
             })
                 .eq('user_id', userId)
                 .eq('platform', platform);

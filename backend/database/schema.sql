@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS platform_balances (
   current_position INT NOT NULL DEFAULT 0, -- Current position inside the 25 reviews batch
   last_completed_batch_at TIMESTAMP WITH TIME ZONE, -- Completed timestamp (triggers 24h reset)
   last_reset_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  last_cleared_combo_position INT DEFAULT 0, -- Cleared combo checkpoint position
   UNIQUE(user_id, platform)
 );
 
@@ -315,10 +316,11 @@ DECLARE
   new_balance NUMERIC;
   new_position INT;
 BEGIN
-  -- 1. Increment position/review count on target platform
+  -- 1. Increment position/review count and reset combo cleared position
   UPDATE platform_balances
   SET reviews_count = reviews_count + 1,
-      current_position = current_position + 1
+      current_position = current_position + 1,
+      last_cleared_combo_position = 0
   WHERE user_id = target_user_id AND platform = target_platform
   RETURNING platform_balances.current_position INTO new_position;
 
@@ -354,6 +356,10 @@ BEGIN
   RETURN new_balance;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Upgrade script for existing tables
+ALTER TABLE platform_balances ADD COLUMN IF NOT EXISTS last_cleared_combo_position INT DEFAULT 0;
+
 
 
 

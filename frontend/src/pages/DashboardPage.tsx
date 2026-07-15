@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_BASE } from '../config';
-import { 
+import {
   Menu,
   X,
   LayoutDashboard,
@@ -106,8 +106,12 @@ export default function DashboardPage({
     return typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   });
   const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'orders' | 'withdraw' | 'profile' | 'invitation' | 'customer-service' | 'terms' | 'about-us' | 'faq'>('home');
+  const [selectedOrderCategory, setSelectedOrderCategory] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const handleTabSwitch = (tab: typeof activeTab) => {
     setActiveTab(tab);
+    if (tab === 'orders') {
+      setSelectedOrderCategory(null);
+    }
     if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
@@ -125,6 +129,8 @@ export default function DashboardPage({
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [selectedProtocol, setSelectedProtocol] = useState<'TRC-20' | 'ERC-20' | 'BTC'>('TRC-20');
   const [depositTargetPlatform, setDepositTargetPlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify'>('Amazon');
+  const [comboDepositAmount, setComboDepositAmount] = useState<number | null>(null);
+  const [isComboDeposit, setIsComboDeposit] = useState<boolean>(false);
   const [newDepositAmount, setNewDepositAmount] = useState('');
   const [newDepositTxHash, setNewDepositTxHash] = useState('');
   const [newDepositRemark, setNewDepositRemark] = useState('');
@@ -140,12 +146,12 @@ export default function DashboardPage({
 
   // Notifications state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<{id: any, text: string, type: string, status: string, date: string}[]>(() => {
+  const [notifications, setNotifications] = useState<{ id: any, text: string, type: string, status: string, date: string }[]>(() => {
     const saved = localStorage.getItem('user_notifications');
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {}
+      } catch (e) { }
     }
     return [
       { id: 1, text: "Welcome to Amazon Vine Portal!", type: "bonus", status: "unread", date: "Jul 10, 2026" },
@@ -189,7 +195,7 @@ export default function DashboardPage({
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     if (file.size > 1.5 * 1024 * 1024) {
       showToast("File size too large. Please select an image under 1.5MB.");
       return;
@@ -198,7 +204,7 @@ export default function DashboardPage({
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64Url = event.target?.result as string;
-      
+
       const token = localStorage.getItem('reviewer_auth_token');
       try {
         const res = await fetch(`${API_BASE}/auth/update-profile-photo`, {
@@ -209,7 +215,7 @@ export default function DashboardPage({
           },
           body: JSON.stringify({ profile_photo: base64Url })
         });
-        
+
         const data = await res.json();
         if (res.ok) {
           setProfile_photo(base64Url);
@@ -241,7 +247,7 @@ export default function DashboardPage({
   const [confirmWithdrawalPassword, setConfirmWithdrawalPassword] = useState('');
 
   // Customer Support Live Chat Box States
-  const [chatMessages, setChatMessages] = useState<Array<{id: string, sender: 'user' | 'support', text: string, time: string}>>(() => {
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string, sender: 'user' | 'support', text: string, time: string }>>(() => {
     const savedChat = sessionStorage.getItem('support_chat_history');
     if (savedChat) {
       try {
@@ -251,11 +257,11 @@ export default function DashboardPage({
       }
     }
     return [
-      { 
-        id: 'msg-init-1', 
-        sender: 'support', 
-        text: 'Hello! Welcome to the Amazon E-Commerce Hub Support Desk. How can we assist you with your account settings, deposits, or evaluations today?', 
-        time: '10:00 AM' 
+      {
+        id: 'msg-init-1',
+        sender: 'support',
+        text: 'Hello! Welcome to the Amazon E-Commerce Hub Support Desk. How can we assist you with your account settings, deposits, or evaluations today?',
+        time: '10:00 AM'
       }
     ];
   });
@@ -331,8 +337,10 @@ export default function DashboardPage({
             setActivePlatform(unlocked[0]);
           }
         } else {
-          setActivePlatform(null);
           setEnabledPlatform(null);
+          if (!activePlatform) {
+            setActivePlatform('Amazon');
+          }
         }
       }
 
@@ -488,7 +496,7 @@ export default function DashboardPage({
         try {
           const message = JSON.parse(event.data);
           if (
-            message.type === 'balance_update' || 
+            message.type === 'balance_update' ||
             message.type === 'approval_notice' ||
             message.type === 'vip_unlocked' ||
             message.type === 'vip_locked' ||
@@ -717,8 +725,8 @@ export default function DashboardPage({
   const [isComboModalOpen, setIsComboModalOpen] = useState(false);
   const [comboModalDetails, setComboModalDetails] = useState<{
     triggerBalance: number;
+    profitAmount: number;
     currentBalance: number;
-    requiredDeposit: number;
     position: number;
   } | null>(null);
 
@@ -787,8 +795,8 @@ export default function DashboardPage({
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
 
-  const currentPlatformData = activePlatform 
-    ? platformsData[activePlatform] 
+  const currentPlatformData = activePlatform
+    ? platformsData[activePlatform]
     : { walletBalance: 0, completedOrders: 0, pendingReviews: 0, profitEarned: 0, orders: [] };
 
   // Helper to copy text to clipboard
@@ -830,10 +838,10 @@ export default function DashboardPage({
       o.date,
       `"${(o.reviewText || '').replace(/"/g, '""')}"`
     ]);
-    
-    const csvContent = "data:text/csv;charset=utf-8," 
+
+    const csvContent = "data:text/csv;charset=utf-8,"
       + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -1077,8 +1085,8 @@ export default function DashboardPage({
         if (data.error === 'COMBO_BLOCK' || res.status === 403) {
           setComboModalDetails({
             triggerBalance: data.triggerBalance || 0,
+            profitAmount: data.profitAmount || 0,
             currentBalance: data.currentBalance || 0,
-            requiredDeposit: Number(((data.triggerBalance || 0) - (data.currentBalance || 0)).toFixed(2)),
             position: data.position || 0
           });
           setIsComboModalOpen(true);
@@ -1093,7 +1101,7 @@ export default function DashboardPage({
         const comboVal = data.checkpointAmount || 0;
         const profitVal = Math.max(0, actualPayout - comboVal);
         showToast(`🎉 Congratulations! You cleared a Special Combo checkpoint! Total reward of $${actualPayout.toFixed(2)} USD (Combo: $${comboVal.toFixed(2)} + Profit: $${profitVal.toFixed(2)}) credited to your wallet.`);
-        
+
         // Add to notification center bell list
         setNotifications(prev => [
           {
@@ -1116,7 +1124,7 @@ export default function DashboardPage({
       } else {
         showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
       }
-      
+
       // Clear input state parameters
       setReviewStars(0);
       setSelectedTextCode(null);
@@ -1124,14 +1132,14 @@ export default function DashboardPage({
       // Automatically find next campaign product to open (skip already completed or pending ones!)
       const remainingPending = assignedProducts.filter(p => {
         if (p.id === activeReviewProduct.id) return false;
-        const isCompleted = currentPlatformData.orders.some(o => 
-          o.productId === p.id && 
-          o.status === 'Completed' && 
+        const isCompleted = currentPlatformData.orders.some(o =>
+          o.productId === p.id &&
+          o.status === 'Completed' &&
           new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
         );
-        const isPending = currentPlatformData.orders.some(o => 
-          o.productId === p.id && 
-          o.status === 'Pending' && 
+        const isPending = currentPlatformData.orders.some(o =>
+          o.productId === p.id &&
+          o.status === 'Pending' &&
           new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
         );
         return !isCompleted && !isPending;
@@ -1233,10 +1241,12 @@ export default function DashboardPage({
       showToast("Please paste the transaction hash or TxID.");
       return;
     }
-    const targetPlatform = enabledPlatform || depositTargetPlatform;
-    const minimumDeposit = targetPlatform === 'Amazon' ? 20 : targetPlatform === 'Alibaba' ? 299 : null;
-    if (minimumDeposit !== null && amount < minimumDeposit) {
-      showToast(`⚠️ Note: Entered amount is less than the standard $${minimumDeposit.toFixed(2)} minimum to unlock ${targetPlatform}. Request will be queued for review.`);
+    const targetPlatform = enabledPlatform || 'Amazon';
+    if (!isComboDeposit) {
+      const minimumDeposit = targetPlatform === 'Amazon' ? 20 : targetPlatform === 'Alibaba' ? 299 : null;
+      if (minimumDeposit !== null && amount < minimumDeposit) {
+        showToast(`⚠️ Note: Entered amount is less than the standard $${minimumDeposit.toFixed(2)} minimum to unlock ${targetPlatform}. Request will be queued for review.`);
+      }
     }
 
     try {
@@ -1267,6 +1277,8 @@ export default function DashboardPage({
       setNewDepositAmount('');
       setNewDepositTxHash('');
       setNewDepositRemark('');
+      setIsComboDeposit(false);
+      setComboDepositAmount(null);
       showToast(`Deposit request submitted for ${targetPlatform}! Awaiting audit verification by our review team.`);
       fetchAllData();
     } catch (err) {
@@ -1340,18 +1352,18 @@ export default function DashboardPage({
 
   return (
     <div className="h-screen bg-[#F3F4F6] flex flex-col font-sans text-gray-900 overflow-hidden">
-      
+
       {/* Sleek Top Header Dashboard Navbar */}
       <header className="bg-[#131921] text-white h-14 px-4 flex items-center justify-between sticky top-0 z-40 border-b border-gray-800">
         <div className="flex items-center space-x-3">
-          <button 
+          <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             className="p-1.5 rounded hover:bg-gray-800 transition focus:outline-none"
             aria-label="Toggle Sidebar"
           >
             <Menu className="h-5 w-5 text-gray-300 hover:text-white" />
           </button>
-          
+
           <div className="flex items-center space-x-2 select-none">
             <div className="flex flex-col items-center pt-0.5">
               <div className="flex items-baseline text-white font-black text-sm italic tracking-tight font-sans">
@@ -1359,8 +1371,8 @@ export default function DashboardPage({
                 <span className="text-amazon-gold text-[10px] uppercase font-extrabold ml-0.5 leading-none italic font-serif">Vine</span>
               </div>
               <svg className="h-1.5 w-14 -mt-1 text-amazon-gold" viewBox="0 0 100 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 2C30 12 70 12 95 2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-                <path d="M91 2L95 2L94 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M5 2C30 12 70 12 95 2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M91 2L95 2L94 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </div>
@@ -1426,7 +1438,7 @@ export default function DashboardPage({
                 <>
                   {/* Invisible backdrop to dismiss click outside */}
                   <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                  
+
                   <motion.div
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1436,15 +1448,15 @@ export default function DashboardPage({
                     <div className="p-4 bg-amazon-dark border-b border-gray-800 flex items-center justify-between">
                       <h3 className="text-xs font-black text-gray-200 uppercase tracking-wider">Evaluation Notifications</h3>
                       <div className="flex space-x-2 text-[9px] font-bold">
-                        <button 
-                          onClick={markAllNotificationsRead} 
+                        <button
+                          onClick={markAllNotificationsRead}
                           className="text-amazon-gold hover:underline cursor-pointer"
                         >
                           Mark all read
                         </button>
                         <span className="text-gray-600">•</span>
-                        <button 
-                          onClick={clearAllNotifications} 
+                        <button
+                          onClick={clearAllNotifications}
                           className="text-red-400 hover:underline cursor-pointer"
                         >
                           Clear
@@ -1454,7 +1466,7 @@ export default function DashboardPage({
 
                     <div className="max-h-72 overflow-y-auto divide-y divide-gray-800/60">
                       {notifications.map((notif) => (
-                        <div 
+                        <div
                           key={notif.id}
                           onClick={() => {
                             markNotificationRead(notif.id);
@@ -1467,15 +1479,13 @@ export default function DashboardPage({
                             }
                             setShowNotifications(false);
                           }}
-                          className={`p-3.5 hover:bg-gray-800/40 transition cursor-pointer flex items-start space-x-3 ${
-                            notif.status === 'unread' ? 'bg-gray-800/20' : ''
-                          }`}
+                          className={`p-3.5 hover:bg-gray-800/40 transition cursor-pointer flex items-start space-x-3 ${notif.status === 'unread' ? 'bg-gray-800/20' : ''
+                            }`}
                         >
-                          <span className={`mt-1 flex-shrink-0 h-2 w-2 rounded-full ${
-                            notif.type === 'deposit' ? 'bg-red-500' :
-                            notif.type === 'order' ? 'bg-amber-500' :
-                            'bg-green-500'
-                          }`} />
+                          <span className={`mt-1 flex-shrink-0 h-2 w-2 rounded-full ${notif.type === 'deposit' ? 'bg-red-500' :
+                              notif.type === 'order' ? 'bg-amber-500' :
+                                'bg-green-500'
+                            }`} />
                           <div className="flex-1 space-y-0.5">
                             <p className={`text-xs font-medium text-gray-200 ${notif.status === 'unread' ? 'font-black' : ''}`}>
                               {notif.text}
@@ -1509,7 +1519,7 @@ export default function DashboardPage({
                 <User className="h-4.5 w-4.5 text-gray-400" />
               )}
             </div>
-            <button 
+            <button
               onClick={onLogout}
               className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg transition"
               title="Logout"
@@ -1523,20 +1533,19 @@ export default function DashboardPage({
 
 
       <div className="flex-1 flex overflow-hidden relative">
-        
+
         {/* Sidebar Backdrop for Mobile view */}
         {!isSidebarCollapsed && (
-          <div 
+          <div
             className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
             onClick={() => setIsSidebarCollapsed(true)}
           />
         )}
 
         {/* Left Collapsible Sidebar */}
-        <aside 
-          className={`bg-[#131921] text-white border-r border-gray-800 transition-all duration-300 flex flex-col justify-between overflow-hidden fixed md:static inset-y-0 left-0 z-50 ${
-            isSidebarCollapsed ? 'w-0 -translate-x-full md:w-16 md:translate-x-0 border-r-0 md:border-r' : 'w-64 translate-x-0'
-          }`}
+        <aside
+          className={`bg-[#131921] text-white border-r border-gray-800 transition-all duration-300 flex flex-col justify-between overflow-hidden fixed md:static inset-y-0 left-0 z-50 ${isSidebarCollapsed ? 'w-0 -translate-x-full md:w-16 md:translate-x-0 border-r-0 md:border-r' : 'w-64 translate-x-0'
+            }`}
         >
           {/* Main Navigation Items */}
           <div className="py-4 flex-1 overflow-y-auto min-h-0 space-y-1 no-scrollbar">
@@ -1550,11 +1559,10 @@ export default function DashboardPage({
               {/* Home */}
               <button
                 onClick={() => handleTabSwitch('home')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'home'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'home'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <Home className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Home</span>}
@@ -1563,11 +1571,10 @@ export default function DashboardPage({
               {/* Deposit */}
               <button
                 onClick={() => handleTabSwitch('deposit')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'deposit'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'deposit'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <Wallet className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Deposit</span>}
@@ -1576,11 +1583,10 @@ export default function DashboardPage({
               {/* Orders */}
               <button
                 onClick={() => handleTabSwitch('orders')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'orders'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'orders'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <FileText className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Orders</span>}
@@ -1589,11 +1595,10 @@ export default function DashboardPage({
               {/* Withdraw */}
               <button
                 onClick={() => handleTabSwitch('withdraw')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'withdraw'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'withdraw'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Withdraw</span>}
@@ -1602,11 +1607,10 @@ export default function DashboardPage({
               {/* Profile */}
               <button
                 onClick={() => handleTabSwitch('profile')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'profile'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'profile'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <User className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Profile</span>}
@@ -1615,11 +1619,10 @@ export default function DashboardPage({
               {/* Invitation */}
               <button
                 onClick={() => handleTabSwitch('invitation')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'invitation'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'invitation'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <Users className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Invitation</span>}
@@ -1628,11 +1631,10 @@ export default function DashboardPage({
               {/* Customer Service */}
               <button
                 onClick={() => handleTabSwitch('customer-service')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'customer-service'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'customer-service'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <MessageSquare className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Customer Service</span>}
@@ -1641,11 +1643,10 @@ export default function DashboardPage({
               {/* Terms */}
               <button
                 onClick={() => handleTabSwitch('terms')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'terms'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'terms'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <FileText className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>Terms</span>}
@@ -1654,11 +1655,10 @@ export default function DashboardPage({
               {/* About Us */}
               <button
                 onClick={() => handleTabSwitch('about-us')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'about-us'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'about-us'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <Info className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>About Us</span>}
@@ -1667,11 +1667,10 @@ export default function DashboardPage({
               {/* FAQ */}
               <button
                 onClick={() => handleTabSwitch('faq')}
-                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                  activeTab === 'faq'
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'faq'
                     ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
                     : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <HelpCircle className="h-4 w-4 flex-shrink-0" />
                 {!isSidebarCollapsed && <span>FAQ</span>}
@@ -1683,9 +1682,8 @@ export default function DashboardPage({
           <div className="p-3 border-t border-gray-800">
             <button
               onClick={onLogout}
-              className={`w-full flex items-center space-x-3 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-950/30 hover:text-red-300 rounded-lg transition-all text-left ${
-                isSidebarCollapsed ? 'justify-center' : ''
-              }`}
+              className={`w-full flex items-center space-x-3 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-950/30 hover:text-red-300 rounded-lg transition-all text-left ${isSidebarCollapsed ? 'justify-center' : ''
+                }`}
             >
               <LogOut className="h-4 w-4 flex-shrink-0" />
               {!isSidebarCollapsed && <span>Sign Out</span>}
@@ -1695,226 +1693,234 @@ export default function DashboardPage({
 
         {/* Main Content Dashboard Frame */}
         <main className="flex-1 p-3 md:p-8 pb-20 md:pb-8 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col justify-between">
-          
+
           {/* Tab Content Router */}
           <div className="flex-1 space-y-6">
             {/* ================================== OVERVIEW ================================== */}
             {activeTab === 'home' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {enabledPlatform === null ? (
-                  /* Case 1: Workspace not activated / new user with no VIP config */
-                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-5 max-w-xl mx-auto shadow-xs my-6">
-                    <div className="h-14 w-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500 border border-amber-100">
-                      <Lock className="h-6 w-6" />
+                {/* Active Network Indicator Banner */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-amazon-orange/10 text-amazon-orange rounded-full flex items-center justify-center font-bold">
+                      <Globe className="h-5 w-5" />
                     </div>
-                    <div className="space-y-1.5">
-                      <h2 className="text-lg font-black text-gray-900">Workspace Activation Required</h2>
-                      <p className="text-xs text-gray-500 leading-relaxed font-sans">
-                        Welcome to the reviewer portal! Your evaluation workspace is currently locked. To activate your workspace (Amazon, Alibaba, or Shopify) and start earning commissions, please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
-                      </p>
-                    </div>
-                    <div className="pt-2">
-                      <button
-                        onClick={() => setActiveTab('deposit')}
-                        className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
-                      >
-                        Go to Deposit Page
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Case 2: Fully unlocked and active */
-                  <div className="space-y-6 animate-fadeIn">
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                      {/* Card 1: Total Balance */}
-                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Available Balance</p>
-                          <h3 className="text-lg md:text-2xl font-mono font-black text-green-600 mt-0.5 md:mt-1">${currentPlatformData.walletBalance.toFixed(2)}</h3>
-                        </div>
-                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-mono">
-                          USDT Address ready
-                        </p>
-                      </div>
-
-                      {/* Card 2: Completed Orders */}
-                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Completed Orders</p>
-                          <h3 className="text-lg md:text-2xl font-mono font-black text-gray-900 mt-0.5 md:mt-1">{currentPlatformData.completedOrders}</h3>
-                        </div>
-                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-semibold truncate" title={25 - currentPlatformData.completedOrders > 0 ? `${25 - currentPlatformData.completedOrders} remaining` : "✓ Unlocked!"}>
-                          {25 - currentPlatformData.completedOrders > 0 
-                            ? `${25 - currentPlatformData.completedOrders} remaining`
-                            : "✓ Unlocked!"}
-                        </p>
-                      </div>
-
-                      {/* Card 3: Pending Reviews */}
-                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Pending Verification</p>
-                          <h3 className="text-lg md:text-2xl font-mono font-black text-amber-500 mt-0.5 md:mt-1">{currentPlatformData.pendingReviews}</h3>
-                        </div>
-                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
-                          Awaiting approval
-                        </p>
-                      </div>
-
-                      {/* Card 4: Profit Earned */}
-                      <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Total Profit Earned</p>
-                          <h3 className="text-lg md:text-2xl font-mono font-black text-amazon-blue mt-0.5 md:mt-1">${currentPlatformData.profitEarned.toFixed(2)}</h3>
-                        </div>
-                        <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
-                          Cumulative payout
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Real-time sync & Withdrawal progress section */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs text-left space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                          <h3 className="text-sm font-black text-gray-900 flex items-center space-x-1.5 uppercase tracking-wide">
-                            <span>📦 Withdrawal Progress</span>
-                          </h3>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            Verify and synchronize account balances with blockchain evaluation nodes.
-                          </p>
-                        </div>
-
-                        <div className="flex items-center space-x-3 self-start sm:self-center">
-                          <div className="text-right">
-                            <p className="text-[9px] text-gray-400 font-bold uppercase">Ledger Sync Status</p>
-                            <p className="text-[10px] font-mono text-gray-600 mt-0.5">{lastRefreshed === 'Never synced' ? 'Not synced' : `Synced at ${lastRefreshed}`}</p>
-                          </div>
-                          <button
-                            onClick={handleRefreshBalance}
-                            disabled={isRefreshing}
-                            className="px-3.5 py-2 bg-[#131921] hover:bg-black disabled:bg-gray-200 text-white disabled:text-gray-400 text-xs font-bold rounded-lg transition-colors flex items-center space-x-1.5 cursor-pointer"
-                          >
-                            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            <span>{isRefreshing ? 'Syncing...' : 'Sync Balance'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Dynamic Progress Bar Block */}
-                      {(() => {
-                        const completedCount = currentPlatformData.completedOrders;
-                        const targetCount = 25;
-                        const progressPercentage = Math.min(100, Math.round((completedCount / targetCount) * 100));
-                        const remainingReviews = Math.max(0, targetCount - completedCount);
-                        
-                        return (
-                          <div className="space-y-3.5 border-t border-gray-150 pt-4">
-                            <div className="flex justify-between items-baseline text-xs">
-                              <span className="font-bold text-gray-800">Compliance Threshold Progress</span>
-                              <span className="font-mono font-black text-amazon-orange">{completedCount}/{targetCount} ({progressPercentage}%)</span>
-                            </div>
-
-                            {/* Modern Visual Progress Bar */}
-                            <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                              <div 
-                                className="bg-gradient-to-r from-amazon-gold to-amazon-orange h-full transition-all duration-300"
-                                style={{ width: `${progressPercentage}%` }}
-                              />
-                            </div>
-
-                            <div className="flex items-start space-x-2 text-xs">
-                              <Info className="h-4 w-4 mt-0.5 text-amazon-orange flex-shrink-0" />
-                              <p className="text-gray-600">
-                                {remainingReviews > 0 ? (
-                                  <span>
-                                    Complete <strong className="text-amazon-orange font-bold font-mono">{remainingReviews} more reviews</strong> to unlock balance withdrawal capabilities for the active <strong className="font-bold">{activePlatform}</strong> workspace.
-                                  </span>
-                                ) : (
-                                  <span className="text-green-600 font-bold">
-                                    ✓ Minimum compliance threshold reached! Withdrawal authorization is now unlocked.
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Main section greeting */}
-                    <div className="bg-gradient-to-r from-amazon-navy to-amazon-dark text-white rounded-xl p-6 shadow-sm border border-gray-800">
-                      <h2 className="text-lg font-black text-white">Welcome back to the Evaluation Workspace, {username}!</h2>
-                      <p className="text-xs text-gray-300 mt-1.5 leading-relaxed max-w-3xl">
-                        Sellers utilize this dashboard to verify purchase compliance and payout legitimate micro-commissions. Please head over to the <strong>Assigned Gigs</strong> tab to begin compliance steps. All rewards range between <strong>$0.50 and $2.50 max</strong> per product.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                    {/* Available Evaluation Campaigns Pool Slider */}
-                    <div className="space-y-3.5 pt-2">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Available Campaigns Pool</h3>
-                          <p className="text-[10px] text-gray-400 font-sans">Live dynamic campaign feeds updated in real-time.</p>
-                        </div>
-                        <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-0.5 border border-green-200 rounded-full animate-pulse">Live Feeds</span>
-                      </div>
-
-                      <div className="relative group">
-                        {showLeftArrow && (
-                          <button
-                            type="button"
-                            onClick={() => scrollSlider('left')}
-                            className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
-                          >
-                            ‹
-                          </button>
+                    <div>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Your Assigned Work Network</p>
+                      <h4 className="text-sm font-black text-gray-900 mt-0.5">
+                        {enabledPlatform ? (
+                          <span>
+                            {enabledPlatform} (VIP {enabledPlatform === 'Amazon' ? '1' : enabledPlatform === 'Alibaba' ? '2' : '3'})
+                          </span>
+                        ) : (
+                          <span className="text-gray-450 italic font-medium">Pending active network assignment by administrator</span>
                         )}
+                      </h4>
+                    </div>
+                  </div>
+                  <div>
+                    {enabledPlatform ? (
+                      <span className="bg-green-50 text-green-700 text-[10px] font-black uppercase px-3 py-1 rounded-full border border-green-200 animate-pulse font-sans">
+                        ● Active Network
+                      </span>
+                    ) : (
+                      <span className="bg-amber-50 text-amber-700 text-[10px] font-black uppercase px-3 py-1 rounded-full border border-amber-200 font-sans">
+                        Activation Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-                        <div
-                          ref={sliderRef}
-                          onScroll={handleScroll}
-                          className="flex space-x-4 overflow-x-auto scrollbar-none pb-2 select-none"
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                    {/* Card 1: Total Balance */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Available Balance</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-green-600 mt-0.5 md:mt-1">${currentPlatformData.walletBalance.toFixed(2)}</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-mono">
+                        USDT Address ready
+                      </p>
+                    </div>
+
+                    {/* Card 2: Completed Orders */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Completed Orders</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-gray-900 mt-0.5 md:mt-1">{currentPlatformData.completedOrders}</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-semibold truncate" title={25 - currentPlatformData.completedOrders > 0 ? `${25 - currentPlatformData.completedOrders} remaining` : "✓ Unlocked!"}>
+                        {25 - currentPlatformData.completedOrders > 0
+                          ? `${25 - currentPlatformData.completedOrders} remaining`
+                          : "✓ Unlocked!"}
+                      </p>
+                    </div>
+
+                    {/* Card 3: Pending Reviews */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Pending Verification</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-amber-500 mt-0.5 md:mt-1">{currentPlatformData.pendingReviews}</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                        Awaiting approval
+                      </p>
+                    </div>
+
+                    {/* Card 4: Profit Earned */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Total Profit Earned</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-amazon-blue mt-0.5 md:mt-1">${currentPlatformData.profitEarned.toFixed(2)}</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                        Cumulative payout
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Real-time sync & Withdrawal progress section */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs text-left space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-sm font-black text-gray-900 flex items-center space-x-1.5 uppercase tracking-wide">
+                          <span>📦 Withdrawal Progress</span>
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Verify and synchronize account balances with blockchain evaluation nodes.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center space-x-3 self-start sm:self-center">
+                        <div className="text-right">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Ledger Sync Status</p>
+                          <p className="text-[10px] font-mono text-gray-600 mt-0.5">{lastRefreshed === 'Never synced' ? 'Not synced' : `Synced at ${lastRefreshed}`}</p>
+                        </div>
+                        <button
+                          onClick={handleRefreshBalance}
+                          disabled={isRefreshing}
+                          className="px-3.5 py-2 bg-[#131921] hover:bg-black disabled:bg-gray-200 text-white disabled:text-gray-400 text-xs font-bold rounded-lg transition-colors flex items-center space-x-1.5 cursor-pointer"
                         >
-                          {shuffledCampaigns.slice(0, 15).map((prod) => (
-                            <div
-                              key={prod.id}
-                              className="flex-shrink-0 w-52 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col justify-between shadow-xxs hover:shadow-xs transition p-4 space-y-3.5"
-                            >
-                              <div className="h-36 w-full flex items-center justify-center bg-gray-50/50 rounded-lg p-2 overflow-hidden">
-                                <img src={prod.image} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply" />
-                              </div>
-                              <div className="space-y-1">
-                                <h4 className="text-xs font-bold text-gray-655 truncate leading-snug" title={prod.title}>{prod.title}</h4>
-                                <div className="flex justify-between items-baseline pt-1">
-                                  <div className="flex flex-col text-left">
-                                    <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Price</span>
-                                    <span className="text-sm font-mono font-bold text-gray-800 mt-0.5">${parseFloat(prod.price || 0).toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex flex-col text-right">
-                                    <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Payout</span>
-                                    <span className="text-sm font-mono font-black text-green-600 mt-0.5">+${parseFloat(prod.payout || 0).toFixed(2)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {showRightArrow && (
-                          <button
-                            type="button"
-                            onClick={() => scrollSlider('right')}
-                            className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
-                          >
-                            ›
-                          </button>
-                        )}
+                          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                          <span>{isRefreshing ? 'Syncing...' : 'Sync Balance'}</span>
+                        </button>
                       </div>
                     </div>
+
+                    {/* Dynamic Progress Bar Block */}
+                    {(() => {
+                      const completedCount = currentPlatformData.completedOrders;
+                      const targetCount = 25;
+                      const progressPercentage = Math.min(100, Math.round((completedCount / targetCount) * 100));
+                      const remainingReviews = Math.max(0, targetCount - completedCount);
+
+                      return (
+                        <div className="space-y-3.5 border-t border-gray-150 pt-4">
+                          <div className="flex justify-between items-baseline text-xs">
+                            <span className="font-bold text-gray-800">Compliance Threshold Progress</span>
+                            <span className="font-mono font-black text-amazon-orange">{completedCount}/{targetCount} ({progressPercentage}%)</span>
+                          </div>
+
+                          {/* Modern Visual Progress Bar */}
+                          <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-amazon-gold to-amazon-orange h-full transition-all duration-300"
+                              style={{ width: `${progressPercentage}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-start space-x-2 text-xs">
+                            <Info className="h-4 w-4 mt-0.5 text-amazon-orange flex-shrink-0" />
+                            <p className="text-gray-600">
+                              {remainingReviews > 0 ? (
+                                <span>
+                                  Complete <strong className="text-amazon-orange font-bold font-mono">{remainingReviews} more reviews</strong> to unlock balance withdrawal capabilities for the active <strong className="font-bold">{activePlatform}</strong> workspace.
+                                </span>
+                              ) : (
+                                <span className="text-green-600 font-bold">
+                                  ✓ Minimum compliance threshold reached! Withdrawal authorization is now unlocked.
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Main section greeting */}
+                  <div className="bg-gradient-to-r from-amazon-navy to-amazon-dark text-white rounded-xl p-6 shadow-sm border border-gray-800">
+                    <h2 className="text-lg font-black text-white">Welcome back to the Evaluation Workspace, {username}!</h2>
+                    <p className="text-xs text-gray-300 mt-1.5 leading-relaxed max-w-3xl">
+                      Sellers utilize this dashboard to verify purchase compliance and payout legitimate micro-commissions. Please head over to the <strong>Assigned Gigs</strong> tab to begin compliance steps. All rewards range between <strong>$0.50 and $2.50 max</strong> per product.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Available Evaluation Campaigns Pool Slider */}
+                <div className="space-y-3.5 pt-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Available Campaigns Pool</h3>
+                      <p className="text-[10px] text-gray-400 font-sans">Live dynamic campaign feeds updated in real-time.</p>
+                    </div>
+                    <span className="text-[9px] font-black uppercase text-green-600 bg-green-50 px-2 py-0.5 border border-green-200 rounded-full animate-pulse">Live Feeds</span>
+                  </div>
+
+                  <div className="relative group">
+                    {showLeftArrow && (
+                      <button
+                        type="button"
+                        onClick={() => scrollSlider('left')}
+                        className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
+                      >
+                        ‹
+                      </button>
+                    )}
+
+                    <div
+                      ref={sliderRef}
+                      onScroll={handleScroll}
+                      className="flex space-x-4 overflow-x-auto scrollbar-none pb-2 select-none"
+                    >
+                      {shuffledCampaigns.slice(0, 15).map((prod) => (
+                        <div
+                          key={prod.id}
+                          className="flex-shrink-0 w-52 bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col justify-between shadow-xxs hover:shadow-xs transition p-4 space-y-3.5"
+                        >
+                          <div className="h-36 w-full flex items-center justify-center bg-gray-50/50 rounded-lg p-2 overflow-hidden">
+                            <img src={prod.image} alt={prod.title} className="max-h-full max-w-full object-contain mix-blend-multiply" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-xs font-bold text-gray-655 truncate leading-snug" title={prod.title}>{prod.title}</h4>
+                            <div className="flex justify-between items-baseline pt-1">
+                              <div className="flex flex-col text-left">
+                                <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Price</span>
+                                <span className="text-sm font-mono font-bold text-gray-800 mt-0.5">${parseFloat(prod.price || 0).toFixed(2)}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                <span className="text-[9px] text-gray-400 font-extrabold uppercase leading-none">Payout</span>
+                                <span className="text-sm font-mono font-black text-green-600 mt-0.5">+${parseFloat(prod.payout || 0).toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {showRightArrow && (
+                      <button
+                        type="button"
+                        onClick={() => scrollSlider('right')}
+                        className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-7 w-7 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-800 hover:bg-gray-50 transition font-black text-base cursor-pointer focus:outline-none"
+                      >
+                        ›
+                      </button>
+                    )}
+                  </div>
+                </div>
 
               </div>
             )}
@@ -1952,37 +1958,37 @@ export default function DashboardPage({
                       <label className="text-[10px] text-gray-400 uppercase font-black">Select Protocol to Use</label>
                       <div className="grid grid-cols-3 gap-3">
                         {([
-                          { 
-                            key: 'TRC-20', 
-                            label: 'TRC-20', 
-                            coin: 'USDT (Tron)', 
+                          {
+                            key: 'TRC-20',
+                            label: 'TRC-20',
+                            coin: 'USDT (Tron)',
                             logo: (
                               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="12" r="12" fill="#26A17B"/>
-                                <path d="M12.7 8.3v1.8h3.9v3h-3.9v5H9.7v-5H5.8v-3h3.9V8.3c-2.4-.2-4.1-.7-4.1-1.3 0-.6 1.7-1.1 4.1-1.3v-1.1h3v1.1c2.4.2 4.1.7 4.1 1.3 0 .6-1.7 1.1-4.1 1.3zm.0-3.3c-1.8-.1-3.6-.1-5.4 0 .9.2 2.7.3 3.6.3s2.7-.1 3.6-.3z" fill="white"/>
+                                <circle cx="12" cy="12" r="12" fill="#26A17B" />
+                                <path d="M12.7 8.3v1.8h3.9v3h-3.9v5H9.7v-5H5.8v-3h3.9V8.3c-2.4-.2-4.1-.7-4.1-1.3 0-.6 1.7-1.1 4.1-1.3v-1.1h3v1.1c2.4.2 4.1.7 4.1 1.3 0 .6-1.7 1.1-4.1 1.3zm.0-3.3c-1.8-.1-3.6-.1-5.4 0 .9.2 2.7.3 3.6.3s2.7-.1 3.6-.3z" fill="white" />
                               </svg>
                             )
                           },
-                          { 
-                            key: 'ERC-20', 
-                            label: 'ERC-20', 
-                            coin: 'USDT (Ethereum)', 
+                          {
+                            key: 'ERC-20',
+                            label: 'ERC-20',
+                            coin: 'USDT (Ethereum)',
                             logo: (
                               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="12" r="12" fill="#627EEA"/>
-                                <path d="M12 3L6 12.8l6 3.6 6-3.6L12 3zm0 14l-6-3.6 6 8.6 6-8.6-6 3.6z" fill="white" fillOpacity="0.9"/>
-                                <path d="M12 3v13.4l6-3.6L12 3zm0 14v8.6l6-8.6-6-3.6z" fill="white" fillOpacity="0.5"/>
+                                <circle cx="12" cy="12" r="12" fill="#627EEA" />
+                                <path d="M12 3L6 12.8l6 3.6 6-3.6L12 3zm0 14l-6-3.6 6 8.6 6-8.6-6 3.6z" fill="white" fillOpacity="0.9" />
+                                <path d="M12 3v13.4l6-3.6L12 3zm0 14v8.6l6-8.6-6-3.6z" fill="white" fillOpacity="0.5" />
                               </svg>
                             )
                           },
-                          { 
-                            key: 'BTC', 
-                            label: 'BTC', 
-                            coin: 'BTC (Bitcoin)', 
+                          {
+                            key: 'BTC',
+                            label: 'BTC',
+                            coin: 'BTC (Bitcoin)',
                             logo: (
                               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="12" cy="12" r="12" fill="#F7931A"/>
-                                <path d="M16.1 10.3c.2-.9-.3-1.5-1.3-1.8l.6-2.5-1.5-.4-.6 2.4c-.4-.1-.8-.2-1.2-.3l.6-2.4-1.5-.4-.6 2.5c-.3-.1-.7-.2-1-.2l.0-.0-2.1-.5-.4 1.6s1.1.3 1.1.3c.6.2.7.5.7.8l-.7 2.8c.0.0.1.1.1.1l.0.0c-.1-.1-.1-.1-.1-.1l-.7 2.8c-.1.3-.3.5-.8.4 0 0-1.1-.3-1.1-.3l-.7 1.7 2.0.5c.4.1.7.2 1.1.2l-.6 2.5 1.5.4.6-2.4c.4.1.8.2 1.2.2l-.6 2.5 1.5.4.6-2.5c2.4.5 4.3.3 5.0-1.9.6-1.8-.1-2.8-1.4-3.5 1.0-.2 1.7-.8 1.9-2.0zm-3.4 5.3c-.4 1.7-3.2.8-4.2.5l.8-3.4c.9.2 3.8.7 3.4 2.9zm.4-5.3c-.4 1.6-2.7.8-3.6.5l.8-3.1c.8.2 3.2.7 2.8 2.6z" fill="white"/>
+                                <circle cx="12" cy="12" r="12" fill="#F7931A" />
+                                <path d="M16.1 10.3c.2-.9-.3-1.5-1.3-1.8l.6-2.5-1.5-.4-.6 2.4c-.4-.1-.8-.2-1.2-.3l.6-2.4-1.5-.4-.6 2.5c-.3-.1-.7-.2-1-.2l.0-.0-2.1-.5-.4 1.6s1.1.3 1.1.3c.6.2.7.5.7.8l-.7 2.8c.0.0.1.1.1.1l.0.0c-.1-.1-.1-.1-.1-.1l-.7 2.8c-.1.3-.3.5-.8.4 0 0-1.1-.3-1.1-.3l-.7 1.7 2.0.5c.4.1.7.2 1.1.2l-.6 2.5 1.5.4.6-2.4c.4.1.8.2 1.2.2l-.6 2.5 1.5.4.6-2.5c2.4.5 4.3.3 5.0-1.9.6-1.8-.1-2.8-1.4-3.5 1.0-.2 1.7-.8 1.9-2.0zm-3.4 5.3c-.4 1.7-3.2.8-4.2.5l.8-3.4c.9.2 3.8.7 3.4 2.9zm.4-5.3c-.4 1.6-2.7.8-3.6.5l.8-3.1c.8.2 3.2.7 2.8 2.6z" fill="white" />
                               </svg>
                             )
                           }
@@ -1990,11 +1996,10 @@ export default function DashboardPage({
                           <button
                             key={proto.key}
                             onClick={() => setSelectedProtocol(proto.key)}
-                            className={`p-3 rounded-lg border text-left transition flex flex-col justify-between h-24 cursor-pointer ${
-                              selectedProtocol === proto.key
+                            className={`p-3 rounded-lg border text-left transition flex flex-col justify-between h-24 cursor-pointer ${selectedProtocol === proto.key
                                 ? 'border-amazon-gold bg-amber-50/30 text-gray-900 ring-1 ring-amazon-gold shadow-xs'
                                 : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-white'
-                            }`}
+                              }`}
                           >
                             {proto.logo}
                             <div className="mt-1.5">
@@ -2039,64 +2044,47 @@ export default function DashboardPage({
 
                     {/* Deposit details form inputs */}
                     <form onSubmit={handleDepositSubmit} className="space-y-4">
-                       {/* Platform Network selector block */}
-                       {enabledPlatform === null ? (
-                         /* Unbound user: can select platform */
-                         <div className="space-y-2">
-                           <label className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Select platform network workspace to fund</label>
-                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                             {([
-                               { key: 'Amazon', name: 'Amazon (VIP 1)', rate: '4% Profit', min: 'Min Deposit $20' },
-                               { key: 'Alibaba', name: 'Alibaba (VIP 2)', rate: '8% Commission', min: 'Min Deposit $299' },
-                               { key: 'Shopify', name: 'Shopify (VIP 3)', rate: '12% Commission', min: 'Deposit / CS Contact' }
-                             ] as const).map((plat) => (
-                               <button
-                                 key={plat.key}
-                                 type="button"
-                                 onClick={() => setDepositTargetPlatform(plat.key)}
-                                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 ${
-                                   depositTargetPlatform === plat.key
-                                     ? 'border-amazon-gold bg-amber-50/20 ring-1 ring-amazon-gold shadow-xs'
-                                     : 'border-gray-200 hover:border-gray-300 text-gray-650 bg-white'
-                                 }`}
-                               >
-                                 <div className="flex items-center justify-between w-full">
-                                   <span className="text-[11px] font-black text-gray-900 leading-none">{plat.name}</span>
-                                   {depositTargetPlatform === plat.key && (
-                                     <span className="h-2 w-2 rounded-full bg-amazon-gold" />
-                                   )}
-                                 </div>
-                                 <div className="space-y-0.5">
-                                   <p className="text-[10px] font-black text-green-600 leading-none">{plat.rate}</p>
-                                   <p className="text-[9px] text-gray-450 leading-none font-medium">{plat.min}</p>
-                                 </div>
-                               </button>
-                             ))}
-                           </div>
-                         </div>
-                       ) : (
-                         /* Bound user: read-only static indicator */
-                         <div className="bg-amber-50/50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
-                           <div>
-                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Bound Platform Network</span>
-                             <h4 className="text-sm font-black text-gray-955 mt-0.5 uppercase">{enabledPlatform} Workspace</h4>
-                           </div>
-                           <span className="bg-[#131921] text-amazon-gold text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-gray-800">
-                             Activated & Locked
-                           </span>
-                         </div>
-                       )}
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Special Combo Payment lock alert banner */}
+                      {isComboDeposit && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start space-x-3 text-red-800 animate-fadeIn">
+                          <ShieldAlert className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-600" />
+                          <div className="text-xs leading-relaxed font-medium">
+                            <strong className="text-red-900 font-bold">Special Combo Deposit Lock Active</strong>
+                            <p className="mt-0.5 text-red-700">
+                              You are executing a locked deposit request of <strong className="font-mono">${newDepositAmount}</strong> to satisfy the micro-campaign criteria. This field is locked and cannot be manually modified.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsComboDeposit(false);
+                                setComboDepositAmount(null);
+                                setNewDepositAmount('');
+                                setNewDepositRemark('');
+                              }}
+                              className="text-xxs font-black text-red-900 underline mt-2 hover:text-black cursor-pointer font-sans"
+                            >
+                              Cancel Combo Deposit & Make Normal Deposit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <label className="text-[10px] text-gray-505 uppercase font-black">Amount ({selectedProtocol === 'BTC' ? 'BTC' : 'USDT'})</label>
+                          <label className="text-[10px] text-gray-505 uppercase font-black">
+                            Amount ({selectedProtocol === 'BTC' ? 'BTC' : 'USDT'})
+                            {isComboDeposit && <span className="text-red-600 font-bold ml-1.5">(Locked)</span>}
+                          </label>
                           <input
                             type="number"
                             step="any"
                             required
+                            disabled={isComboDeposit}
                             placeholder="Enter amount (e.g. 20.00)"
                             value={newDepositAmount}
                             onChange={(e) => setNewDepositAmount(e.target.value)}
-                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
+                            className={`w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 ${isComboDeposit ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''
+                              }`}
                           />
                         </div>
                         <div className="space-y-1">
@@ -2144,11 +2132,10 @@ export default function DashboardPage({
                         <div key={req.id} className="border border-gray-150 p-4.5 rounded-xl bg-gray-50/50 space-y-3 text-xs">
                           <div className="flex justify-between items-center border-b border-gray-150 pb-2">
                             <span className="font-bold text-gray-855">{req.protocol} Network</span>
-                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${
-                              req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
-                              req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
-                              'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
-                            }`}>
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
+                                req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
+                                  'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
+                              }`}>
                               {req.status}
                             </span>
                           </div>
@@ -2187,35 +2174,181 @@ export default function DashboardPage({
             {/* ================================== ORDERS (EVALUATIONS) ================================== */}
             {activeTab === 'orders' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {enabledPlatform === null ? (
-                  /* Case 1: Workspace not activated / locked */
-                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
-                    <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100">
-                      <Lock className="h-6 w-6" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h2 className="text-lg font-black text-gray-900">Campaign Evaluation Locked</h2>
-                      <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
-                        Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
+                {selectedOrderCategory === null ? (
+                  /* Platform selection screen */
+                  <div className="space-y-6 animate-fadeIn">
+                    <div className="text-center max-w-xl mx-auto space-y-2 py-4">
+                      <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Select Platform Network</h2>
+                      <p className="text-xs text-gray-500 font-sans">
+                        Please select your assigned VIP category to view and perform order evaluations.
                       </p>
                     </div>
-                    <div className="pt-2">
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                      {/* VIP 1: Amazon */}
                       <button
-                        onClick={() => setActiveTab('deposit')}
-                        className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                        onClick={() => {
+                          setSelectedOrderCategory('Amazon');
+                          if (enabledPlatform === 'Amazon') {
+                            handleSelectPlatform('Amazon');
+                          }
+                        }}
+                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
                       >
-                        Go to Deposit Page
+                        <div className="h-12 w-12 bg-amazon-orange/10 text-amazon-orange rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                          VIP 1
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase">Amazon</h3>
+                          <span className="inline-block bg-orange-50 text-amazon-orange text-[10px] font-black uppercase px-2 py-0.5 rounded border border-orange-100">
+                            4% Commission
+                          </span>
+                        </div>
+                        <p className="text-xxs text-gray-550 font-sans">
+                          Standard e-commerce workspace for beginner tier reviewers.
+                        </p>
+                        <div className="text-xs font-black text-amazon-orange flex items-center space-x-1 pt-2">
+                          <span>Enter Panel</span>
+                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* VIP 2: Alibaba */}
+                      <button
+                        onClick={() => {
+                          setSelectedOrderCategory('Alibaba');
+                          if (enabledPlatform === 'Alibaba') {
+                            handleSelectPlatform('Alibaba');
+                          }
+                        }}
+                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
+                      >
+                        <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                          VIP 2
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase">Alibaba</h3>
+                          <span className="inline-block bg-blue-50 text-blue-600 text-[10px] font-black uppercase px-2 py-0.5 rounded border border-blue-100">
+                            8% Commission
+                          </span>
+                        </div>
+                        <p className="text-xxs text-gray-555 font-sans">
+                          Advanced wholesale workspace with higher micro-commissions.
+                        </p>
+                        <div className="text-xs font-black text-blue-600 flex items-center space-x-1 pt-2">
+                          <span>Enter Panel</span>
+                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* VIP 3: Shopify */}
+                      <button
+                        onClick={() => {
+                          setSelectedOrderCategory('Shopify');
+                          if (enabledPlatform === 'Shopify') {
+                            handleSelectPlatform('Shopify');
+                          }
+                        }}
+                        className="bg-white rounded-2xl border border-gray-200 p-6 text-center space-y-4 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between"
+                      >
+                        <div className="h-12 w-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform font-sans">
+                          VIP 3
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="font-black text-gray-900 uppercase">Shopify</h3>
+                          <span className="inline-block bg-green-50 text-green-700 text-[10px] font-black uppercase px-2 py-0.5 rounded border border-green-100">
+                            12% Commission
+                          </span>
+                        </div>
+                        <p className="text-xxs text-gray-555 font-sans">
+                          Premium storefront evaluations with maximum reward multiplier.
+                        </p>
+                        <div className="text-xs font-black text-green-600 flex items-center space-x-1 pt-2">
+                          <span>Enter Panel</span>
+                          <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                        </div>
                       </button>
                     </div>
                   </div>
+                ) : selectedOrderCategory !== enabledPlatform ? (
+                  /* Wrong category lock screen (or workspace not activated) */
+                  enabledPlatform === null ? (
+                    /* Case 1: Workspace not activated / locked */
+                    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
+                      <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100 animate-pulse">
+                        <Lock className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h2 className="text-lg font-black text-gray-900">Campaign Evaluation Locked</h2>
+                        <p className="text-xs text-gray-550 leading-relaxed font-sans font-medium">
+                          Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
+                        </p>
+                      </div>
+                      <div className="pt-2 flex justify-center space-x-3">
+                        <button
+                          onClick={() => setSelectedOrderCategory(null)}
+                          className="px-4 py-2 border border-gray-305 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          Back to Categories
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('deposit')}
+                          className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                        >
+                          Go to Deposit Page
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Case 2: User clicked wrong category */
+                    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6 animate-fadeIn">
+                      <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100 animate-pulse">
+                        <Lock className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-3">
+                        <h2 className="text-lg font-black text-gray-900">Workspace Category Locked</h2>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                          <p className="text-xs text-red-800 font-bold font-sans leading-relaxed">
+                            "Your active workspace assigned by the administrator is {enabledPlatform} You cannot perform order reviews on other networks."
+                          </p>
+                        </div>
+                      </div>
+                      <div className="pt-2 flex justify-center space-x-3">
+                        <button
+                          onClick={() => setSelectedOrderCategory(null)}
+                          className="px-4 py-2 border border-gray-305 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          Back to Categories
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedOrderCategory(enabledPlatform);
+                            handleSelectPlatform(enabledPlatform);
+                          }}
+                          className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                        >
+                          Go to {enabledPlatform} Workspace
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ) : (
-                  /* Case 2: Fully unlocked and active */
+                  /* Case 3: Correct active platform selected! Show standard orders workspace */
                   <div className="space-y-6 animate-fadeIn">
-                    <div>
-                      <h2 className="text-lg font-black text-gray-900">Merchant Evaluation Tasks</h2>
-                      <p className="text-xs text-gray-500 mt-1 font-sans">
-                        Select a campaign below. Click "Start Review" to complete compliance steps. All payouts are strictly bounded between $0.50 and $2.50 to mirror legitimate testing commissions.
-                      </p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h2 className="text-lg font-black text-gray-900">Merchant Evaluation Tasks ({selectedOrderCategory})</h2>
+                        <p className="text-xs text-gray-500 mt-1 font-sans">
+                          Select a campaign below. Click "Start Review" to complete compliance steps. All payouts are strictly bounded between $0.50 and $2.50 to mirror legitimate testing commissions.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedOrderCategory(null)}
+                        className="px-3 py-1.5 border border-gray-350 text-gray-650 hover:bg-gray-50 font-bold text-xs rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        <span>All Categories</span>
+                      </button>
                     </div>
 
                     {/* Sub-tabs: Pending vs Completed Gigs */}
@@ -2225,11 +2358,10 @@ export default function DashboardPage({
                           setOrdersSubTab('pending');
                           setGigsPage(1);
                         }}
-                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
-                          ordersSubTab === 'pending'
+                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${ordersSubTab === 'pending'
                             ? 'border-amazon-gold text-[#131921] font-black'
                             : 'border-transparent text-gray-400 hover:text-gray-655'
-                        }`}
+                          }`}
                       >
                         Pending Tasks
                       </button>
@@ -2238,11 +2370,10 @@ export default function DashboardPage({
                           setOrdersSubTab('completed');
                           setGigsPage(1);
                         }}
-                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
-                          ordersSubTab === 'completed'
+                        className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${ordersSubTab === 'completed'
                             ? 'border-amazon-gold text-[#131921] font-black'
                             : 'border-transparent text-gray-400 hover:text-gray-655'
-                        }`}
+                          }`}
                       >
                         Completed Tasks ({currentPlatformData.orders.length})
                       </button>
@@ -2270,13 +2401,13 @@ export default function DashboardPage({
                     {(() => {
                       const filteredProducts = assignedProducts.filter(product => {
                         const matchesSearch = product.title.toLowerCase().includes(gigsSearch.toLowerCase());
-                        const isCompleted = currentPlatformData.orders.some(o => 
-                          o.productId === product.id && 
-                          o.status === 'Completed' && 
+                        const isCompleted = currentPlatformData.orders.some(o =>
+                          o.productId === product.id &&
+                          o.status === 'Completed' &&
                           new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
                         );
                         const matchesSubTab = ordersSubTab === 'completed' ? isCompleted : !isCompleted;
-                        
+
                         return matchesSearch && matchesSubTab;
                       });
 
@@ -2295,9 +2426,9 @@ export default function DashboardPage({
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                               {paginatedProducts.map((product) => {
                                 // Check if already completed
-                                const isCompleted = currentPlatformData.orders.some(o => 
-                                  o.productId === product.id && 
-                                  o.status === 'Completed' && 
+                                const isCompleted = currentPlatformData.orders.some(o =>
+                                  o.productId === product.id &&
+                                  o.status === 'Completed' &&
                                   new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
                                 );
 
@@ -2343,13 +2474,13 @@ export default function DashboardPage({
                           ) : (
                             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
                               <p className="font-bold text-gray-500">
-                                {ordersSubTab === 'pending' 
-                                  ? "All assigned campaign tasks have been completed!" 
+                                {ordersSubTab === 'pending'
+                                  ? "All assigned campaign tasks have been completed!"
                                   : "You have not completed any campaign tasks yet."}
                               </p>
                               <p className="text-[11px] text-gray-400 mt-1">
-                                {ordersSubTab === 'pending' 
-                                  ? "Check back later or wait for administrators to unlock new batches." 
+                                {ordersSubTab === 'pending'
+                                  ? "Check back later or wait for administrators to unlock new batches."
                                   : "Select pending campaigns to complete evaluation compliance tasks."}
                               </p>
                             </div>
@@ -2373,11 +2504,10 @@ export default function DashboardPage({
                                   <button
                                     key={idx}
                                     onClick={() => setGigsPage(idx + 1)}
-                                    className={`px-2.5 py-1.5 text-[10px] rounded border font-bold cursor-pointer transition-colors ${
-                                      currentPage === idx + 1
+                                    className={`px-2.5 py-1.5 text-[10px] rounded border font-bold cursor-pointer transition-colors ${currentPage === idx + 1
                                         ? 'bg-[#131921] border-[#131921] text-white font-black'
                                         : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                                    }`}
+                                      }`}
                                   >
                                     {idx + 1}
                                   </button>
@@ -2469,11 +2599,10 @@ export default function DashboardPage({
                           <button
                             key={st}
                             onClick={() => setOrdersStatusFilter(st as any)}
-                            className={`px-3 py-1 rounded-lg text-[10px] font-black transition-colors uppercase cursor-pointer border ${
-                              ordersStatusFilter === st
+                            className={`px-3 py-1 rounded-lg text-[10px] font-black transition-colors uppercase cursor-pointer border ${ordersStatusFilter === st
                                 ? 'bg-[#131921] border-[#131921] text-white shadow-xs'
                                 : 'bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-600 hover:text-gray-900'
-                            }`}
+                              }`}
                           >
                             {st}
                           </button>
@@ -2541,11 +2670,10 @@ export default function DashboardPage({
                                   <td className="py-3.5 px-4 font-mono text-gray-500 font-semibold">{order.orderId || 'N/A'}</td>
                                   <td className="py-3.5 px-4 text-right font-mono font-black text-green-600">+${order.payout.toFixed(2)}</td>
                                   <td className="py-3.5 px-4 text-center">
-                                    <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
-                                      order.status === 'Completed'
+                                    <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${order.status === 'Completed'
                                         ? 'bg-green-50 text-green-700 border-green-200 font-bold'
                                         : 'bg-amber-50 text-amber-700 border-amber-200 font-bold'
-                                    }`}>
+                                      }`}>
                                       {order.status}
                                     </span>
                                   </td>
@@ -2572,29 +2700,54 @@ export default function DashboardPage({
             {/* ================================== WITHDRAW ================================== */}
             {activeTab === 'withdraw' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {enabledPlatform === null ? (
-                  /* Case 1: Workspace not activated / locked */
-                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6">
-                    <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100">
+                {enabledPlatform === null || currentPlatformData.completedOrders < 25 ? (
+                  /* Case 1: Workspace not activated OR completed orders < 25 (Locked) */
+                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6 animate-fadeIn">
+                    <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100 animate-pulse">
                       <Lock className="h-6 w-6" />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <h2 className="text-lg font-black text-gray-900">Withdrawal Operations Locked</h2>
-                      <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
-                        Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
-                      </p>
+                      {enabledPlatform === null ? (
+                        <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
+                          Your workspace is not yet activated. Please submit a deposit request. Our compliance team will audit and activate your workspace network in up to 24 hours.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
+                            Minimum compliance threshold requires 25 completed reviews. Currently completed: <strong className="text-red-655 font-mono">{currentPlatformData.completedOrders}/25</strong>.
+                          </p>
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-center mt-2">
+                            <p className="text-xs text-amber-800 font-bold font-sans">
+                              "Aap order mein 25 order complete karoge toh us ke baad aapka ye unlock ho jayega"
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-bold mt-1 font-mono">
+                              (Complete 25 task evaluations to automatically authorize withdrawal operations)
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="pt-2">
-                      <button
-                        onClick={() => setActiveTab('deposit')}
-                        className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
-                      >
-                        Go to Deposit Page
-                      </button>
+                      {enabledPlatform === null ? (
+                        <button
+                          onClick={() => setActiveTab('deposit')}
+                          className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                        >
+                          Go to Deposit Page
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setActiveTab('orders')}
+                          className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
+                        >
+                          Complete Orders ({currentPlatformData.completedOrders}/25)
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  /* Case 2: Activated workspace — show form and history */
+                  /* Case 2: Activated workspace and 25+ orders completed — show form and history */
                   <>
                     <div>
                       <h2 className="text-lg font-black text-gray-900">Request Payout Withdrawal</h2>
@@ -2610,165 +2763,164 @@ export default function DashboardPage({
                           <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">New Payout Request</h3>
                           <p className="text-xs text-gray-400 mt-0.5 font-sans">Withdraw funds from your active workspace balance.</p>
                         </div>
-                    {/* Warning notices if locked */}
-                    {currentPlatformData.completedOrders < 25 && (
-                      <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start space-x-3 text-red-800">
-                        <Lock className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-600" />
-                        <div className="text-xs leading-relaxed font-semibold">
-                          <strong className="text-red-900 font-bold">Withdrawal Locked:</strong>
-                          <p className="mt-0.5 text-red-700 font-sans">
-                            Minimum compliance threshold requires 25 completed reviews. Currently completed: {currentPlatformData.completedOrders}/25. Please complete more task evaluations to authorize withdrawals.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isAddressBound && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start justify-between space-x-3 text-amber-800">
-                        <div className="flex items-start space-x-3">
-                          <ShieldAlert className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
-                          <div className="text-xs leading-relaxed font-semibold">
-                            <strong className="text-amber-900 font-bold">USDT Address Required:</strong>
-                            <p className="mt-0.5 text-amber-700 font-sans">
-                              Please configure and bind your receiving wallet address in the Profile settings tab before requesting withdrawals.
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveTab('profile');
-                            setProfileActiveSection('wallet');
-                          }}
-                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xxs uppercase font-black rounded-lg transition-colors cursor-pointer whitespace-nowrap self-center"
-                        >
-                          Bind Address →
-                        </button>
-                      </div>
-                    )}
-
-                    <form onSubmit={handleWithdrawSubmit} className="space-y-4">
-                      {/* Active Platform details */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
-                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Active Workspace</span>
-                          <p className="text-xs font-black text-gray-900 mt-1 uppercase">{activePlatform || 'Amazon'}</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
-                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Available Balance</span>
-                          <p className="text-xs font-black text-green-600 mt-1">${currentPlatformData.walletBalance.toFixed(2)}</p>
-                        </div>
-                      </div>
-
-                      {/* Bound USDT Address display */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-baseline">
-                          <label className="text-[10px] text-gray-500 uppercase font-black">Linked USDT Payout Address</label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveTab('profile');
-                              setProfileActiveSection('wallet');
-                            }}
-                            className="text-[10px] text-amazon-blue hover:underline font-bold font-sans"
-                          >
-                            Change in Profile →
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          readOnly
-                          value={defaultWalletAddress || 'No receiving wallet linked'}
-                          className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-lg text-gray-500 font-mono"
-                        />
-                      </div>
-
-                      {/* Amount input */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-gray-550 uppercase font-black">Withdrawal Amount (USDT)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            required
-                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
-                            placeholder="Min 20.00"
-                            value={newWithdrawAmount}
-                            onChange={(e) => setNewWithdrawAmount(e.target.value)}
-                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-gray-555 uppercase font-black font-sans">Withdrawal Password</label>
-                          <input
-                            type="password"
-                            required
-                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
-                            placeholder="Enter your withdrawal password"
-                            value={newWithdrawPassword}
-                            onChange={(e) => setNewWithdrawPassword(e.target.value)}
-                            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
-                        className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed border-0"
-                      >
-                        Submit Payout Request
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Right Column: Withdrawal request history */}
-                  <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col space-y-4">
-                    <div>
-                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Recent Payout History</h3>
-                      <p className="text-xs text-gray-400 mt-0.5 font-sans">Review your submitted withdrawals and ledger standing.</p>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-3.5 pt-2">
-                      {withdrawals.map((req) => (
-                        <div key={req.id} className="border border-gray-150 p-4.5 rounded-xl bg-gray-50/50 space-y-3 text-xs">
-                          <div className="flex justify-between items-center border-b border-gray-150 pb-2">
-                            <span className="font-bold text-gray-855">Withdrawal Request</span>
-                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${
-                              req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
-                              req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
-                              'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
-                            }`}>
-                              {req.status}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-y-1.5 text-gray-600 font-medium font-sans">
-                            <div>Amount:</div>
-                            <div className="text-right font-black font-mono text-gray-900">${parseFloat(req.amount).toFixed(2)} USDT</div>
-                            <div>Address:</div>
-                            <div className="text-right font-mono text-[10px] text-gray-400 truncate max-w-[120px] ml-auto cursor-pointer" title={req.address || defaultWalletAddress}>
-                              {(req.address || defaultWalletAddress || '').slice(0, 8)}...{(req.address || defaultWalletAddress || '').slice(-8)}
+                        {/* Warning notices if locked */}
+                        {currentPlatformData.completedOrders < 25 && (
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start space-x-3 text-red-800">
+                            <Lock className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-600" />
+                            <div className="text-xs leading-relaxed font-semibold">
+                              <strong className="text-red-900 font-bold">Withdrawal Locked:</strong>
+                              <p className="mt-0.5 text-red-700 font-sans">
+                                Minimum compliance threshold requires 25 completed reviews. Currently completed: {currentPlatformData.completedOrders}/25. Please complete more task evaluations to authorize withdrawals.
+                              </p>
                             </div>
-                            <div>Date:</div>
-                            <div className="text-right font-mono text-gray-500">{new Date(req.created_at || req.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
                           </div>
-                        </div>
-                      ))}
+                        )}
 
-                      {withdrawals.length === 0 && (
-                        <div className="text-center py-12 text-gray-400">
-                          <Wallet className="h-10 w-10 mx-auto text-gray-300 mb-2" />
-                          <p className="font-bold font-sans">No withdrawals requested yet.</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Submit details on the left to request payout.</p>
+                        {!isAddressBound && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start justify-between space-x-3 text-amber-800">
+                            <div className="flex items-start space-x-3">
+                              <ShieldAlert className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                              <div className="text-xs leading-relaxed font-semibold">
+                                <strong className="text-amber-900 font-bold">USDT Address Required:</strong>
+                                <p className="mt-0.5 text-amber-700 font-sans">
+                                  Please configure and bind your receiving wallet address in the Profile settings tab before requesting withdrawals.
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('profile');
+                                setProfileActiveSection('wallet');
+                              }}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xxs uppercase font-black rounded-lg transition-colors cursor-pointer whitespace-nowrap self-center"
+                            >
+                              Bind Address →
+                            </button>
+                          </div>
+                        )}
+
+                        <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+                          {/* Active Platform details */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
+                              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Active Workspace</span>
+                              <p className="text-xs font-black text-gray-900 mt-1 uppercase">{activePlatform || 'Amazon'}</p>
+                            </div>
+                            <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl">
+                              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Available Balance</span>
+                              <p className="text-xs font-black text-green-600 mt-1">${currentPlatformData.walletBalance.toFixed(2)}</p>
+                            </div>
+                          </div>
+
+                          {/* Bound USDT Address display */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-baseline">
+                              <label className="text-[10px] text-gray-500 uppercase font-black">Linked USDT Payout Address</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab('profile');
+                                  setProfileActiveSection('wallet');
+                                }}
+                                className="text-[10px] text-amazon-blue hover:underline font-bold font-sans"
+                              >
+                                Change in Profile →
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              readOnly
+                              value={defaultWalletAddress || 'No receiving wallet linked'}
+                              className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-lg text-gray-500 font-mono"
+                            />
+                          </div>
+
+                          {/* Amount input */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-550 uppercase font-black">Withdrawal Amount (USDT)</label>
+                              <input
+                                type="number"
+                                step="any"
+                                required
+                                disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                                placeholder="Min 1.00"
+                                value={newWithdrawAmount}
+                                onChange={(e) => setNewWithdrawAmount(e.target.value)}
+                                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-555 uppercase font-black font-sans">Withdrawal Password</label>
+                              <input
+                                type="password"
+                                required
+                                disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                                placeholder="Enter your withdrawal password"
+                                value={newWithdrawPassword}
+                                onChange={(e) => setNewWithdrawPassword(e.target.value)}
+                                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                            className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed border-0"
+                          >
+                            Submit Payout Request
+                          </button>
+                        </form>
+                      </div>
+
+                      {/* Right Column: Withdrawal request history */}
+                      <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex flex-col space-y-4">
+                        <div>
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Recent Payout History</h3>
+                          <p className="text-xs text-gray-400 mt-0.5 font-sans">Review your submitted withdrawals and ledger standing.</p>
                         </div>
-                      )}
+
+                        <div className="flex-1 overflow-y-auto space-y-3.5 pt-2">
+                          {withdrawals.map((req) => (
+                            <div key={req.id} className="border border-gray-150 p-4.5 rounded-xl bg-gray-50/50 space-y-3 text-xs">
+                              <div className="flex justify-between items-center border-b border-gray-150 pb-2">
+                                <span className="font-bold text-gray-855">Withdrawal Request</span>
+                                <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
+                                    req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
+                                      'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
+                                  }`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-y-1.5 text-gray-600 font-medium font-sans">
+                                <div>Amount:</div>
+                                <div className="text-right font-black font-mono text-gray-900">${parseFloat(req.amount).toFixed(2)} USDT</div>
+                                <div>Address:</div>
+                                <div className="text-right font-mono text-[10px] text-gray-400 truncate max-w-[120px] ml-auto cursor-pointer" title={req.address || defaultWalletAddress}>
+                                  {(req.address || defaultWalletAddress || '').slice(0, 8)}...{(req.address || defaultWalletAddress || '').slice(-8)}
+                                </div>
+                                <div>Date:</div>
+                                <div className="text-right font-mono text-gray-500">{new Date(req.created_at || req.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
+                              </div>
+                            </div>
+                          ))}
+
+                          {withdrawals.length === 0 && (
+                            <div className="text-center py-12 text-gray-400">
+                              <Wallet className="h-10 w-10 mx-auto text-gray-300 mb-2" />
+                              <p className="font-bold font-sans">No withdrawals requested yet.</p>
+                              <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Submit details on the left to request payout.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </>
+                  </>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
             {/* ================================== PROFILE ================================== */}
             {activeTab === 'profile' && (
@@ -2790,11 +2942,10 @@ export default function DashboardPage({
                     <button
                       key={sec.key}
                       onClick={() => setProfileActiveSection(sec.key)}
-                      className={`py-2 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center ${
-                        profileActiveSection === sec.key
+                      className={`py-2 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center ${profileActiveSection === sec.key
                           ? 'border-amazon-gold text-[#a88734] font-black'
                           : 'border-transparent text-gray-400 hover:text-gray-700'
-                      }`}
+                        }`}
                     >
                       {sec.label}
                     </button>
@@ -2820,18 +2971,18 @@ export default function DashboardPage({
                             ) : (
                               <User className="h-12 w-12 text-gray-400" />
                             )}
-                            
+
                             <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase tracking-wider cursor-pointer transition-opacity">
                               Change
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                onChange={handlePhotoChange} 
-                                className="hidden" 
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handlePhotoChange}
+                                className="hidden"
                               />
                             </label>
                           </div>
-                          
+
                           {profile_photo && (
                             <button
                               type="button"
@@ -2867,11 +3018,11 @@ export default function DashboardPage({
                         <div className="w-full border-t border-gray-100 pt-4">
                           <label className="inline-block px-4 py-2 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-[10px] rounded-lg border border-[#a88734] transition cursor-pointer uppercase">
                             Upload Photo
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              onChange={handlePhotoChange} 
-                              className="hidden" 
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handlePhotoChange}
+                              className="hidden"
                             />
                           </label>
                           <p className="text-[9px] text-gray-400 mt-2">Supports JPG, PNG under 1.5MB</p>
@@ -3259,9 +3410,9 @@ export default function DashboardPage({
                     <label className="text-[10px] text-gray-400 uppercase font-black">QR Code</label>
                     <div className="bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center py-6 space-y-3">
                       <div className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm flex items-center justify-center">
-                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(referralCode ? `https://www.amazonecommercehub.com/register?ref=${referralCode}` : 'https://www.amazonecommercehub.com/register')}`} 
-                          alt="Referral Link QR Code" 
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(referralCode ? `https://www.amazonecommercehub.com/register?ref=${referralCode}` : 'https://www.amazonecommercehub.com/register')}`}
+                          alt="Referral Link QR Code"
                           className="h-36 w-36 select-none pointer-events-none"
                         />
                       </div>
@@ -3321,24 +3472,22 @@ export default function DashboardPage({
                             key={msg.id}
                             className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                           >
-                            <div className={`max-w-[85%] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-xs shadow-xxs border ${
-                                msg.sender === 'user'
-                                  ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
-                                  : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
-                            }`}>
+                            <div className={`max-w-[85%] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-xs shadow-xxs border ${msg.sender === 'user'
+                                ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
+                                : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
+                              }`}>
                               {msg.text.startsWith('data:image/') || msg.text.startsWith('/uploads/') ? (
-                                <img 
-                                  src={msg.text.startsWith('/') ? `${API_BASE.replace('/api', '')}${msg.text}` : msg.text} 
-                                  alt="Screenshot proof" 
-                                  className="max-w-xs rounded-lg border shadow-3xs cursor-pointer hover:opacity-90 transition" 
+                                <img
+                                  src={msg.text.startsWith('/') ? `${API_BASE.replace('/api', '')}${msg.text}` : msg.text}
+                                  alt="Screenshot proof"
+                                  className="max-w-xs rounded-lg border shadow-3xs cursor-pointer hover:opacity-90 transition"
                                   onClick={() => window.open(msg.text.startsWith('/') ? `${API_BASE.replace('/api', '')}${msg.text}` : msg.text, '_blank')}
                                 />
                               ) : (
                                 <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                               )}
-                              <span className={`block text-[9px] mt-1.5 text-right font-mono ${
-                                msg.sender === 'user' ? 'text-gray-400' : 'text-gray-450'
-                              }`}>
+                              <span className={`block text-[9px] mt-1.5 text-right font-mono ${msg.sender === 'user' ? 'text-gray-400' : 'text-gray-450'
+                                }`}>
                                 {msg.time}
                               </span>
                             </div>
@@ -3363,19 +3512,19 @@ export default function DashboardPage({
 
                     {/* Input Form Box */}
                     <form onSubmit={handleSendChatMessage} className="bg-white p-2 md:p-3 border-t border-gray-200 flex items-center space-x-1.5 md:space-x-2">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={triggerUserImageAttach}
                         title="Upload proof screenshot"
                         className="p-2 border border-gray-300 hover:bg-gray-50 rounded-xl text-gray-500 hover:text-gray-700 transition cursor-pointer flex-shrink-0"
                       >
                         <Paperclip className="h-4 w-4" />
                       </button>
-                      <input 
-                        type="file" 
-                        id="userImageAttachInput" 
-                        accept="image/*" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        id="userImageAttachInput"
+                        accept="image/*"
+                        className="hidden"
                         onChange={handleUserImageUpload}
                       />
 
@@ -3408,7 +3557,7 @@ export default function DashboardPage({
                       <div className="h-12 w-12 bg-[#0088cc]/10 rounded-full flex items-center justify-center mx-auto text-[#0088cc] border border-[#0088cc]/20">
                         {/* Telegram Icon SVG */}
                         <svg className="h-5.5 w-5.5" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.11.02-1.89 1.2-5.33 3.52-.5.35-.96.52-1.37.51-.46-.01-1.35-.26-2.01-.48-.81-.27-1.46-.42-1.4-.89.03-.25.38-.51 1.07-.78 4.2-1.82 7-3.03 8.4-3.61 4-.17 4.83.12 4.74 1.25z"/>
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.11.02-1.89 1.2-5.33 3.52-.5.35-.96.52-1.37.51-.46-.01-1.35-.26-2.01-.48-.81-.27-1.46-.42-1.4-.89.03-.25.38-.51 1.07-.78 4.2-1.82 7-3.03 8.4-3.61 4-.17 4.83.12 4.74 1.25z" />
                         </svg>
                       </div>
                       <div className="space-y-1">
@@ -3417,9 +3566,9 @@ export default function DashboardPage({
                           Prefer direct chat? Click below to speak with an operator on our verified Telegram customer service channel.
                         </p>
                       </div>
-                      <a 
-                        href={telegramSupportLink} 
-                        target="_blank" 
+                      <a
+                        href={telegramSupportLink}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="block w-full py-2.5 bg-[#0088cc] hover:bg-[#0077b3] text-white font-bold text-xs rounded-xl transition shadow-xs text-center"
                       >
@@ -3480,7 +3629,7 @@ export default function DashboardPage({
                   <div className="space-y-2">
                     <h4 className="text-sm font-black text-gray-900 uppercase">VIP Program</h4>
                     <p>
-                      Our tiered VIP system rewards dedicated reviewers with higher commission rates. VIP 1 (Amazon) offers 4% commission, VIP 2 (Alibaba) offers 5%, and VIP 3 (Shopify) offers up to 12% commission on every completed review task.
+                      Our tiered VIP system rewards dedicated reviewers with higher commission rates. VIP 1 (Amazon) offers 4% commission, VIP 2 (Alibaba) offers 8%, and VIP 3 (Shopify) offers up to 12% commission on every completed review task.
                     </p>
                   </div>
 
@@ -3513,11 +3662,10 @@ export default function DashboardPage({
                       <button
                         key={sub.id}
                         onClick={() => setSettingsSubTab(sub.id)}
-                        className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all text-left ${
-                          settingsSubTab === sub.id
+                        className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all text-left ${settingsSubTab === sub.id
                             ? 'bg-[#131921] text-white font-black'
                             : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                        }`}
+                          }`}
                       >
                         <sub.icon className="h-4 w-4 flex-shrink-0" />
                         <span>{sub.label}</span>
@@ -3527,7 +3675,7 @@ export default function DashboardPage({
 
                   {/* Right Column: Interactive Sub-Tab Content */}
                   <div className="lg:col-span-9 bg-white rounded-xl border border-gray-200 p-6 shadow-xs min-h-[320px]">
-                    
+
                     {/* Sub-tab: Account Profile */}
                     {settingsSubTab === 'account' && (
                       <form
@@ -3538,7 +3686,7 @@ export default function DashboardPage({
                         className="space-y-4 animate-fadeIn"
                       >
                         <h3 className="text-sm font-black text-gray-900 border-b border-gray-100 pb-2.5">Security Credentials</h3>
-                        
+
                         <div className="space-y-1">
                           <label className="text-[10px] text-gray-400 uppercase font-black">Username Profile Identifier</label>
                           <input
@@ -3616,7 +3764,7 @@ export default function DashboardPage({
                       <div className="space-y-5 animate-fadeIn">
                         <h3 className="text-sm font-black text-gray-900 border-b border-gray-100 pb-2.5">Alert & Hook Notification Channels</h3>
                         <p className="text-xs text-gray-500">Configure real-time hooks to capture merchant order matches instantly.</p>
-                        
+
                         <div className="space-y-4 pt-1">
                           <label className="flex items-start space-x-3 cursor-pointer">
                             <input
@@ -3701,7 +3849,7 @@ export default function DashboardPage({
                         className="space-y-4 animate-fadeIn"
                       >
                         <h3 className="text-sm font-black text-gray-900 border-b border-gray-100 pb-2.5">USDT Payout Destination Wallet</h3>
-                        
+
                         <div className="space-y-1">
                           <label className="text-[10px] text-gray-400 uppercase font-black">Release Network</label>
                           <select
@@ -3727,8 +3875,8 @@ export default function DashboardPage({
                             className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-mono text-gray-800 disabled:bg-gray-100 disabled:opacity-80"
                           />
                           <p className="text-[9px] text-gray-400 leading-normal">
-                            {isAddressBound 
-                              ? "🔒 This payout destination address is bound and locked. Contact support to request adjustments." 
+                            {isAddressBound
+                              ? "🔒 This payout destination address is bound and locked. Contact support to request adjustments."
                               : "⚠️ Ensure correctness! Once locked, all future simulated withdrawals will propagate exclusively to this coordinate."}
                           </p>
                         </div>
@@ -3748,7 +3896,7 @@ export default function DashboardPage({
                     {settingsSubTab === 'danger' && (
                       <div className="space-y-5 animate-fadeIn text-left">
                         <h3 className="text-sm font-black text-red-600 border-b border-red-100 pb-2.5">Sensitive Danger Operations</h3>
-                        
+
                         <div className="bg-red-50 border border-red-200 rounded-xl p-4.5 text-red-800 text-xs leading-relaxed space-y-1">
                           <strong className="font-bold text-red-950 block">⚠️ Security Audit Warning</strong>
                           <span className="block text-red-700">
@@ -3761,11 +3909,13 @@ export default function DashboardPage({
                             onClick={() => {
                               if (window.confirm("Restore factory database defaults? All order history counts will be reset to compliance base.")) {
                                 setPlatformsData({
-                                  Amazon: { walletBalance: 16.45, completedOrders: 14, pendingReviews: 1, profitEarned: 22.85, orders: [
-                                    { id: "ord-amz-101", productTitle: "ZonHub Smart Echo (5th Gen)", orderId: "403-9912039-112019", payout: 1.25, status: 'Completed', date: "Jul 08, 2026", reviewText: "Incredible sound quality." },
-                                    { id: "ord-amz-102", productTitle: "ZonReader Paperwhite (16 GB)", orderId: "403-1293842-881903", payout: 1.95, status: 'Completed', date: "Jul 06, 2026" },
-                                    { id: "ord-amz-103", productTitle: "Bamboo Coasters Set (6-Pack)", orderId: "403-7712394-002931", payout: 0.80, status: 'Pending', date: "Jul 09, 2026" }
-                                  ]},
+                                  Amazon: {
+                                    walletBalance: 16.45, completedOrders: 14, pendingReviews: 1, profitEarned: 22.85, orders: [
+                                      { id: "ord-amz-101", productTitle: "ZonHub Smart Echo (5th Gen)", orderId: "403-9912039-112019", payout: 1.25, status: 'Completed', date: "Jul 08, 2026", reviewText: "Incredible sound quality." },
+                                      { id: "ord-amz-102", productTitle: "ZonReader Paperwhite (16 GB)", orderId: "403-1293842-881903", payout: 1.95, status: 'Completed', date: "Jul 06, 2026" },
+                                      { id: "ord-amz-103", productTitle: "Bamboo Coasters Set (6-Pack)", orderId: "403-7712394-002931", payout: 0.80, status: 'Pending', date: "Jul 09, 2026" }
+                                    ]
+                                  },
                                   Alibaba: { walletBalance: 2.10, completedOrders: 2, pendingReviews: 0, profitEarned: 3.50, orders: [] },
                                   Shopify: { walletBalance: 0.00, completedOrders: 0, pendingReviews: 0, profitEarned: 0.00, orders: [] }
                                 });
@@ -3861,8 +4011,8 @@ export default function DashboardPage({
                       a: "No. To comply with authentic review guidelines, you cannot submit multiple reviews for the same product in a single 25-order batch. Each campaign must represent a unique product evaluation."
                     }
                   ] as const)
-                    .filter(item => 
-                      item.q.toLowerCase().includes(faqSearch.toLowerCase()) || 
+                    .filter(item =>
+                      item.q.toLowerCase().includes(faqSearch.toLowerCase()) ||
                       item.a.toLowerCase().includes(faqSearch.toLowerCase())
                     )
                     .map((item) => {
@@ -3988,7 +4138,7 @@ export default function DashboardPage({
 
               {/* Modal Body / Scrollable Content */}
               <div className="p-6 overflow-y-auto space-y-5 flex-1">
-                
+
                 {/* Product Details Section */}
                 <div className="flex items-start space-x-4 bg-gray-50 p-4 rounded-xl border border-gray-150">
                   <img src={activeReviewProduct.image} alt={activeReviewProduct.title} className="h-16 w-16 object-contain rounded border border-gray-200 bg-white p-1 flex-shrink-0" />
@@ -4029,7 +4179,7 @@ export default function DashboardPage({
                       <span className="h-4.5 w-4.5 bg-[#131921] text-white text-[10px] rounded-full flex items-center justify-center font-bold">2</span>
                       <span>Choose Feedback Template</span>
                     </label>
-                    
+
                     <div className="grid grid-cols-1 gap-2.5">
                       {[
                         { code: '01', text: "Excellent product quality, fast delivery, and premium packaging. Highly satisfied!" },
@@ -4042,15 +4192,13 @@ export default function DashboardPage({
                             type="button"
                             key={opt.code}
                             onClick={() => setSelectedTextCode(opt.code)}
-                            className={`w-full p-3.5 text-left text-xs rounded-xl border transition-all cursor-pointer flex items-start space-x-3 ${
-                              isSelected 
-                                ? 'bg-[#fcf8e3] border-amazon-gold shadow-xxs ring-1 ring-amazon-gold text-gray-900 font-semibold' 
+                            className={`w-full p-3.5 text-left text-xs rounded-xl border transition-all cursor-pointer flex items-start space-x-3 ${isSelected
+                                ? 'bg-[#fcf8e3] border-amazon-gold shadow-xxs ring-1 ring-amazon-gold text-gray-900 font-semibold'
                                 : 'bg-white border-gray-200 hover:border-gray-300 text-gray-655 font-medium'
-                            }`}
+                              }`}
                           >
-                            <div className={`mt-0.5 h-4 w-4 rounded-full border flex-shrink-0 flex items-center justify-center ${
-                              isSelected ? 'border-amazon-gold bg-amazon-gold text-amazon-dark' : 'border-gray-300 bg-white'
-                            }`}>
+                            <div className={`mt-0.5 h-4 w-4 rounded-full border flex-shrink-0 flex items-center justify-center ${isSelected ? 'border-amazon-gold bg-amazon-gold text-amazon-dark' : 'border-gray-300 bg-white'
+                              }`}>
                               {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-[#131921]" />}
                             </div>
                             <span className="leading-relaxed">{opt.text}</span>
@@ -4153,8 +4301,8 @@ export default function DashboardPage({
                     className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-gray-900 font-mono disabled:bg-gray-100 disabled:opacity-80"
                   />
                   <p className="text-[10px] text-gray-400 mt-1 leading-normal">
-                    {isAddressBound 
-                      ? "🔒 Payouts are routed directly to your bound destination coordinates." 
+                    {isAddressBound
+                      ? "🔒 Payouts are routed directly to your bound destination coordinates."
                       : "⚠️ Warning: You must bind your USDT address in Settings before you can withdraw."}
                   </p>
                 </div>
@@ -4205,29 +4353,41 @@ export default function DashboardPage({
                 </div>
                 <h3 className="text-lg font-black mt-4 text-gray-900 uppercase tracking-tight">Special Combo Order Locked!</h3>
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  Congratulations! You have triggered a high-yield <strong>Special Combo Review (Order #{comboModalDetails.position})</strong>. 
+                  Congratulations! You have triggered a high-yield <strong>Special Combo Review (Order #{comboModalDetails.position})</strong>.
                   To process this high-commission order, your wallet balance must meet the merchant requirement.
                 </p>
               </div>
 
               <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3 text-xs">
+                {/* Top: Position / Product Details */}
                 <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
-                  <span className="text-gray-600 font-medium">Your Current Balance:</span>
+                  <span className="text-gray-655 font-bold">Combo Target:</span>
+                  <span className="font-mono font-black text-gray-900 uppercase">Order #{comboModalDetails.position}</span>
+                </div>
+                {/* Middle: Combo Profit */}
+                <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
+                  <span className="text-gray-655 font-bold text-green-700 font-sans">Combo Profit Bonus:</span>
+                  <span className="font-mono font-black text-green-700 font-bold">+${comboModalDetails.profitAmount.toFixed(2)}</span>
+                </div>
+                {/* Bottom: Available Balance */}
+                <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
+                  <span className="text-gray-655 font-bold">Your Available Balance:</span>
                   <span className="font-mono font-black text-gray-900">${comboModalDetails.currentBalance.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center pb-2 border-b border-amber-200/50">
-                  <span className="text-gray-600 font-medium">Merchant Trigger Balance:</span>
-                  <span className="font-mono font-black text-amber-700">${comboModalDetails.triggerBalance.toFixed(2)}</span>
-                </div>
+                {/* Top-up details */}
                 <div className="flex justify-between items-center pt-1 font-bold">
-                  <span className="text-gray-800">Required Top-up Amount:</span>
-                  <span className="font-mono font-extrabold text-red-600 text-sm">${comboModalDetails.requiredDeposit.toFixed(2)}</span>
+                  <span className="text-red-750 font-black">Required Deposit Amount:</span>
+                  <span className="font-mono font-extrabold text-red-650 text-sm font-black">${comboModalDetails.triggerBalance.toFixed(2)}</span>
                 </div>
               </div>
 
               <div className="mt-6 space-y-3">
                 <button
                   onClick={() => {
+                    setIsComboDeposit(true);
+                    setComboDepositAmount(comboModalDetails.triggerBalance);
+                    setNewDepositAmount(comboModalDetails.triggerBalance.toString());
+                    setNewDepositRemark(`Combo Payment for Position ${comboModalDetails.position}`);
                     setIsComboModalOpen(false);
                     setActiveTab('deposit');
                   }}
@@ -4280,23 +4440,26 @@ export default function DashboardPage({
                 </div>
                 <h3 className="text-lg font-black mt-4 text-gray-900 uppercase tracking-tight">Special Combo Cleared!</h3>
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  Congratulations! You cleared the high-commission <strong>Special Combo Review (Order #{comboSuccessDetails.position})</strong> successfully. 
+                  Congratulations! You cleared the high-commission <strong>Special Combo Review (Order #{comboSuccessDetails.position})</strong> successfully.
                   The merchant reward and profit bonus has been credited to your wallet balance.
                 </p>
               </div>
 
               <div className="bg-yellow-50/70 border border-yellow-200 rounded-xl p-4 space-y-3 text-xs">
+                {/* Top: Combo Reward Amount */}
                 <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
-                  <span className="text-gray-600 font-medium">Combo Reward Amount:</span>
+                  <span className="text-gray-655 font-bold">Combo Reward Amount:</span>
                   <span className="font-mono font-black text-gray-900">${comboSuccessDetails.checkpointAmount.toFixed(2)}</span>
                 </div>
+                {/* Middle: Profit Bonus */}
                 <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
-                  <span className="text-gray-600 font-medium">Profit Bonus:</span>
+                  <span className="text-gray-655 font-bold text-amber-700 font-sans">Profit Bonus:</span>
                   <span className="font-mono font-black text-amber-700">${Math.max(0, comboSuccessDetails.payout - comboSuccessDetails.checkpointAmount).toFixed(2)}</span>
                 </div>
+                {/* Bottom: Total Available Balance */}
                 <div className="flex justify-between items-center pt-1 font-bold">
-                  <span className="text-gray-800">Total Payout Credited:</span>
-                  <span className="font-mono font-extrabold text-emerald-600 text-sm">${comboSuccessDetails.payout.toFixed(2)} USD</span>
+                  <span className="text-emerald-800 font-extrabold font-sans">Total Available Balance:</span>
+                  <span className="font-mono font-black text-emerald-600 text-sm">${currentPlatformData.walletBalance.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -4376,11 +4539,10 @@ export default function DashboardPage({
                     <div>
                       <label className="text-[10px] text-gray-400 uppercase font-black">Standing Status</label>
                       <div className="mt-1">
-                        <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
-                          selectedOrderDetail.status === 'Completed'
+                        <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selectedOrderDetail.status === 'Completed'
                             ? 'bg-green-50 text-green-700 border-green-200'
                             : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
+                          }`}>
                           {selectedOrderDetail.status}
                         </span>
                       </div>
@@ -4440,9 +4602,8 @@ export default function DashboardPage({
             setActiveTab('home');
             setIsSidebarCollapsed(true);
           }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
-            activeTab === 'home' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${activeTab === 'home' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+            }`}
         >
           <Home className="h-5 w-5" />
           <span className="text-[10px] font-bold mt-0.5">Home</span>
@@ -4453,9 +4614,8 @@ export default function DashboardPage({
             setActiveTab('deposit');
             setIsSidebarCollapsed(true);
           }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
-            activeTab === 'deposit' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${activeTab === 'deposit' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+            }`}
         >
           <Wallet className="h-5 w-5" />
           <span className="text-[10px] font-bold mt-0.5">Deposit</span>
@@ -4466,9 +4626,8 @@ export default function DashboardPage({
             setActiveTab('orders');
             setIsSidebarCollapsed(true);
           }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
-            activeTab === 'orders' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${activeTab === 'orders' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+            }`}
         >
           <FileText className="h-5 w-5" />
           <span className="text-[10px] font-bold mt-0.5">Orders</span>
@@ -4479,9 +4638,8 @@ export default function DashboardPage({
             setActiveTab('profile');
             setIsSidebarCollapsed(true);
           }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
-            activeTab === 'profile' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${activeTab === 'profile' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+            }`}
         >
           <User className="h-5 w-5" />
           <span className="text-[10px] font-bold mt-0.5">Profile</span>
@@ -4492,9 +4650,8 @@ export default function DashboardPage({
             setActiveTab('customer-service');
             setIsSidebarCollapsed(true);
           }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${
-            activeTab === 'customer-service' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 py-1 cursor-pointer transition-colors ${activeTab === 'customer-service' ? 'text-amazon-orange font-black' : 'text-gray-500 hover:text-gray-800'
+            }`}
         >
           <MessageSquare className="h-5 w-5" />
           <span className="text-[10px] font-bold mt-0.5">Support</span>

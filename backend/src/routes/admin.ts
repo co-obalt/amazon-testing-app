@@ -710,23 +710,56 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
     }
 
     if (status === 'Approved') {
-      // 1. Credit wallet balance
+      // 1. Fetch user's current progress/balance on the deposit platform
       const { data: balanceRecord } = await supabase
         .from('platform_balances')
-        .select('wallet_balance')
+        .select('wallet_balance, current_position')
         .eq('user_id', deposit.user_id)
         .eq('platform', deposit.platform)
         .single();
 
       const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-      const finalBalance = Number((currentBalance + parseFloat(deposit.amount)).toFixed(2));
+      const currentPos = balanceRecord?.current_position || 0;
+      const nextPosition = currentPos + 1;
 
+      // 2. Check if a combo checkpoint is configured for this position
+      const { data: checkpoint } = await supabase
+        .from('combo_checkpoints')
+        .select('trigger_balance, profit_override')
+        .eq('user_id', deposit.user_id)
+        .eq('platform', deposit.platform)
+        .eq('position', nextPosition)
+        .maybeSingle();
+
+      let finalBalance = currentBalance + parseFloat(deposit.amount);
+      let clearedComboPos = 0;
+
+      if (checkpoint) {
+        // This is a combo payment approval!
+        // Credit the deposit amount + the custom combo profit override!
+        const profitOverride = parseFloat(checkpoint.profit_override as any) || 0.00;
+        finalBalance = Number((currentBalance + parseFloat(deposit.amount) + profitOverride).toFixed(2));
+        clearedComboPos = nextPosition;
+      } else {
+        finalBalance = Number((currentBalance + parseFloat(deposit.amount)).toFixed(2));
+      }
+
+      // 3. Update wallet balance for ALL platforms of this user
       await supabase
         .from('platform_balances')
         .update({ wallet_balance: finalBalance })
         .eq('user_id', deposit.user_id);
 
-      // 2. Set user status to active to unlock workspace
+      // 4. Mark combo cleared if applicable on target platform
+      if (clearedComboPos > 0) {
+        await supabase
+          .from('platform_balances')
+          .update({ last_cleared_combo_position: clearedComboPos })
+          .eq('user_id', deposit.user_id)
+          .eq('platform', deposit.platform);
+      }
+
+      // 5. Set user status to active to unlock workspace
       await supabase
         .from('profiles')
         .update({ status: 'active' })
