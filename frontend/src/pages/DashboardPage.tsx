@@ -2423,9 +2423,9 @@ export default function DashboardPage({
                             handleSelectPlatform('Alibaba');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-2 md:p-6 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[80px] md:min-h-[240px] w-full pt-3 pb-1.5 md:pt-6 md:pb-6"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-2 md:p-6 hover:border-blue-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[80px] md:min-h-[240px] w-full pt-3 pb-1.5 md:pt-6 md:pb-6"
                       >
-                        <span className="absolute top-0 left-0 bg-blue-605 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
+                        <span className="absolute top-0 left-0 bg-blue-600 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 2
                         </span>
                         <div className="h-5 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0 mt-0.5 md:mt-0">
