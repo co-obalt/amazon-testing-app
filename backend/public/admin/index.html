@@ -152,19 +152,19 @@
   <!-- ================= MAIN LAYOUT SCREEN ================= -->
   <div id="mainDashboard" class="flex-1 flex overflow-hidden hidden">
     <!-- Collapsible Sidebar -->
-    <aside id="adminSidebar" class="bg-amazon-dark text-white w-0 -translate-x-full md:w-64 md:translate-x-0 border-r-0 md:border-r border-gray-800 flex flex-col justify-between flex-shrink-0 transition-all duration-300 fixed md:static inset-y-0 left-0 z-50 overflow-hidden">
+    <aside id="adminSidebar"
+      class="bg-amazon-dark text-white w-0 -translate-x-full md:w-64 md:translate-x-0 border-r-0 md:border-r border-gray-800 flex flex-col justify-between flex-shrink-0 transition-all duration-300 fixed md:static inset-y-0 left-0 z-50 overflow-hidden">
       <div class="py-4 flex-1 overflow-y-auto min-h-0 space-y-4 no-scrollbar">
         <!-- Logo block -->
         <div class="px-6 pb-2 border-b border-gray-800 flex items-center justify-between">
           <div class="flex flex-col">
             <span class="text-white text-sm font-black uppercase tracking-widest">Amazon Vine</span>
-            <span class="text-amazon-gold text-[9px] font-bold uppercase tracking-widest mt-0.5 font-serif">Admin Control Panel</span>
+            <span class="text-amazon-gold text-[9px] font-bold uppercase tracking-widest mt-0.5 font-serif">Admin
+              Control Panel</span>
           </div>
-          <button 
-            onclick="toggleSidebar()"
+          <button onclick="toggleSidebar()"
             class="md:hidden p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition cursor-pointer border-0 bg-transparent flex items-center"
-            aria-label="Collapse Sidebar"
-          >
+            aria-label="Collapse Sidebar">
             <i data-lucide="x" class="h-4.5 w-4.5"></i>
           </button>
         </div>
@@ -262,11 +262,9 @@
     <main class="flex-1 flex flex-col overflow-hidden bg-gray-50 text-left">
       <!-- Navbar header -->
       <header class="bg-white h-14 border-b border-gray-200 px-4 md:px-6 flex items-center space-x-3 flex-shrink-0">
-        <button 
-          onclick="toggleSidebar()"
+        <button onclick="toggleSidebar()"
           class="p-1.5 rounded hover:bg-gray-150 transition focus:outline-none md:hidden cursor-pointer"
-          aria-label="Toggle Sidebar"
-        >
+          aria-label="Toggle Sidebar">
           <i data-lucide="menu" class="h-5 w-5 text-gray-600"></i>
         </button>
         <h2 id="currentTabTitle" class="text-sm font-black text-gray-800 uppercase tracking-wider">Metrics Overview</h2>
@@ -532,9 +530,12 @@
               </div>
 
               <!-- Warning Banner for already completed products -->
-              <div id="vipPageWarningBanner" class="bg-red-50 text-red-800 p-3.5 rounded-xl border border-red-200 text-[11px] font-bold hidden flex items-center space-x-2">
+              <div id="vipPageWarningBanner"
+                class="bg-red-50 text-red-800 p-3.5 rounded-xl border border-red-200 text-[11px] font-bold hidden flex items-center space-x-2">
                 <i data-lucide="alert-triangle" class="h-4.5 w-4.5 text-red-600 flex-shrink-0"></i>
-                <span>Warning: You are assigning some campaigns that this user has already completed. Saving will re-assign them to this workspace, and they will appear as pending tasks for the user to review again.</span>
+                <span>Warning: You are assigning some campaigns that this user has already completed. Saving will
+                  re-assign them to this workspace, and they will appear as pending tasks for the user to review
+                  again.</span>
               </div>
 
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -545,7 +546,8 @@
                   <div
                     class="flex-1 border border-gray-200 rounded-xl bg-white overflow-hidden flex flex-col max-h-[520px]">
                     <!-- Tab buttons rendered here by JS into this sticky header slot -->
-                    <div id="vipPagePoolTabHeader" class="flex-shrink-0 bg-white border-b border-gray-200 px-3.5 pt-3"></div>
+                    <div id="vipPagePoolTabHeader" class="flex-shrink-0 bg-white border-b border-gray-200 px-3.5 pt-3">
+                    </div>
                     <!-- Scrollable product rows -->
                     <div class="overflow-y-auto flex-1 px-3.5 pb-3.5 pt-2 space-y-1.5" id="vipPageProductsChecklist">
                       <!-- Checkboxes loaded dynamically -->
@@ -726,30 +728,38 @@
                     <h3
                       class="text-xs font-black uppercase text-amazon-dark tracking-wider border-b border-gray-300 pb-1">
                       1. Account Information</h3>
-                    <div class="grid grid-cols-2 gap-x-8 gap-y-2 text-[11px] text-gray-600">
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Username:</span>
-                        <strong id="reportUsernameVal" class="text-gray-800">--</strong>
+                    <div class="flex items-start space-x-6">
+                      <div class="flex-1 grid grid-cols-2 gap-x-8 gap-y-2 text-[11px] text-gray-600">
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Username:</span>
+                          <strong id="reportUsernameVal" class="text-gray-800">--</strong>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Account ID / UUID:</span>
+                          <strong id="reportUuidVal" class="font-mono text-gray-800">--</strong>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Email Address:</span>
+                          <strong id="reportEmailVal" class="text-gray-800">--</strong>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Registration Date:</span>
+                          <strong id="reportRegDateVal" class="text-gray-800">--</strong>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Audited IP Location:</span>
+                          <strong id="reportLocationVal" class="text-gray-800">--</strong>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                          <span class="font-bold text-gray-400">Referred By Code:</span>
+                          <strong id="reportReferredByVal" class="font-mono text-gray-800">--</strong>
+                        </div>
                       </div>
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Account ID / UUID:</span>
-                        <strong id="reportUuidVal" class="font-mono text-gray-800">--</strong>
-                      </div>
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Email Address:</span>
-                        <strong id="reportEmailVal" class="text-gray-800">--</strong>
-                      </div>
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Registration Date:</span>
-                        <strong id="reportRegDateVal" class="text-gray-800">--</strong>
-                      </div>
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Audited IP Location:</span>
-                        <strong id="reportLocationVal" class="text-gray-800">--</strong>
-                      </div>
-                      <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span class="font-bold text-gray-400">Referred By Code:</span>
-                        <strong id="reportReferredByVal" class="font-mono text-gray-800">--</strong>
+
+                      <!-- Profile Photo Container -->
+                      <div id="reportProfilePhotoContainer"
+                        class="flex-shrink-0 h-20 w-20 rounded-lg border border-gray-300 bg-white flex items-center justify-center shadow-xxs bg-cover bg-center">
+                        <i id="reportProfilePlaceholder" data-lucide="user" class="h-10 w-10 text-gray-400"></i>
                       </div>
                     </div>
                   </div>
@@ -841,7 +851,10 @@
                     <div>AMAZON E-COMMERCE HUB LEDGER AUDIT</div>
                     <div>SECURE DECENTRALIZED PROTOCOL SHEET</div>
                   </div>
-                  <div class="text-center font-mono w-44">
+                  <div class="text-center font-mono w-44 relative">
+                    <!-- Overlapping Signature Image -->
+                    <img id="reportSignatureImg" src="signature.png" alt="Signature"
+                      class="absolute left-1/2 -translate-x-1/2 -top-6 h-10 w-auto object-contain mix-blend-multiply select-none pointer-events-none" />
                     <div class="border-b border-gray-400 pb-1 text-gray-800">SYSTEM AUDITOR SIGNATURE</div>
                     <div class="mt-1 font-semibold">AUTOMATED SECURE SYSTEM</div>
                   </div>
@@ -940,7 +953,8 @@
         <div id="view-chats"
           class="bg-white rounded-xl border border-gray-200 shadow-sm h-[calc(100vh-8rem)] flex overflow-hidden hidden text-xs">
           <!-- Sidebar: Conversations List -->
-          <div id="supportSidebar" class="w-full md:w-80 md:min-w-[320px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-gray-50/50">
+          <div id="supportSidebar"
+            class="w-full md:w-80 md:min-w-[320px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-gray-50/50">
             <div class="p-4 border-b border-gray-200 bg-white">
               <h4 class="font-black text-gray-800 uppercase tracking-wider">Support Inbox</h4>
               <p class="text-[10px] text-gray-400 mt-1">Real-time operator chat feeds</p>
@@ -1555,19 +1569,22 @@
   <!-- Edit Product Modal -->
   <div id="editProductModal"
     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs hidden">
-    <div class="bg-white rounded-2xl border border-gray-250 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div
+      class="bg-white rounded-2xl border border-gray-250 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
       <div class="p-4 bg-amazon-dark text-white flex items-center justify-between border-b border-gray-800">
         <h4 class="text-xs font-black uppercase tracking-wider text-amazon-gold flex items-center space-x-1.5">
           <i data-lucide="pencil" class="h-4 w-4"></i>
           <span>Edit Campaign Product</span>
         </h4>
-        <button onclick="closeEditProductModal()" class="text-gray-400 hover:text-white transition-colors cursor-pointer bg-transparent border-0">
+        <button onclick="closeEditProductModal()"
+          class="text-gray-400 hover:text-white transition-colors cursor-pointer bg-transparent border-0">
           <i data-lucide="x" class="h-5 w-5"></i>
         </button>
       </div>
       <div class="p-6 overflow-y-auto space-y-4">
         <input type="hidden" id="editProdId" />
-        <form id="editProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs" onsubmit="submitEditProductForm(event)">
+        <form id="editProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs"
+          onsubmit="submitEditProductForm(event)">
           <div class="md:col-span-2 space-y-1">
             <label class="font-bold text-gray-500 uppercase text-[9px]">Product Title</label>
             <input type="text" id="editProdTitle" required placeholder="e.g. Wireless Noise Cancelling Earbuds"
@@ -1589,7 +1606,8 @@
               class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
           </div>
           <div class="md:col-span-2 space-y-1">
-            <label class="font-bold text-gray-500 uppercase text-[9px]">Merchant Product Link <span class="text-red-500 normal-case">(product page URL, NOT the image URL)</span></label>
+            <label class="font-bold text-gray-500 uppercase text-[9px]">Merchant Product Link <span
+                class="text-red-500 normal-case">(product page URL, NOT the image URL)</span></label>
             <input type="url" id="editProdLink" required placeholder="https://www.amazon.com/dp/B0..."
               class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
           </div>
@@ -1597,7 +1615,8 @@
             <button type="button" onclick="closeEditProductModal()"
               class="px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg transition-colors cursor-pointer bg-white">Cancel</button>
             <button type="submit"
-              class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0">Save Changes</button>
+              class="bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0">Save
+              Changes</button>
           </div>
         </form>
       </div>
@@ -1689,7 +1708,7 @@
     let selectedSupportUserId = null;
     let isSidebarCollapsed = true;
 
-    window.toggleSidebar = function() {
+    window.toggleSidebar = function () {
       const sidebar = document.getElementById('adminSidebar');
       const backdrop = document.getElementById('sidebarBackdrop');
       if (sidebar) {
@@ -4178,6 +4197,8 @@
       document.getElementById('reportRegDateVal').textContent = 'Loading...';
       document.getElementById('reportLocationVal').textContent = 'Loading...';
       document.getElementById('reportReferredByVal').textContent = 'Loading...';
+      document.getElementById('reportProfilePhotoContainer').style.backgroundImage = 'none';
+      document.getElementById('reportProfilePlaceholder').classList.remove('hidden');
       document.getElementById('reportBalancesTableBody').innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-400 italic">Loading audit details...</td></tr>`;
       document.getElementById('reportDepositsTableBody').innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400 italic">Loading...</td></tr>`;
       document.getElementById('reportWithdrawalsTableBody').innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400 italic">Loading...</td></tr>`;
@@ -4198,6 +4219,17 @@
         document.getElementById('reportRegDateVal').textContent = new Date(profile.created_at).toLocaleString();
         document.getElementById('reportLocationVal').textContent = locationText;
         document.getElementById('reportReferredByVal').textContent = profile.referred_by || 'DIRECT REGISTRATION (NONE)';
+
+        // Load profile picture if available
+        const reportPhotoContainer = document.getElementById('reportProfilePhotoContainer');
+        const reportPhotoPlaceholder = document.getElementById('reportProfilePlaceholder');
+        if (profile.profile_photo && profile.profile_photo.trim() !== '') {
+          reportPhotoContainer.style.backgroundImage = `url('${profile.profile_photo}')`;
+          reportPhotoPlaceholder.classList.add('hidden');
+        } else {
+          reportPhotoContainer.style.backgroundImage = 'none';
+          reportPhotoPlaceholder.classList.remove('hidden');
+        }
 
         // Generate random but persistent Report ID
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -4317,8 +4349,46 @@
       }
     }
 
+    function makeSignatureTransparent() {
+      const img = document.getElementById('reportSignatureImg');
+      if (!img) return;
+
+      const tempImg = new Image();
+      tempImg.crossOrigin = "anonymous";
+      tempImg.onload = function () {
+        const canvas = document.createElement('canvas');
+        canvas.width = tempImg.width;
+        canvas.height = tempImg.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tempImg, 0, 0);
+
+        try {
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imgData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // If the pixel is close to white (light grey to white background), make it transparent
+            if (r > 200 && g > 200 && b > 200) {
+              data[i + 3] = 0; // Alpha = 0
+            }
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+          img.src = canvas.toDataURL('image/png');
+        } catch (e) {
+          console.error("Error making signature transparent:", e);
+        }
+      };
+      tempImg.src = 'signature.png';
+    }
+
     // On Load Initialization
     checkAuth();
+    makeSignatureTransparent();
   </script>
   <div id="toast-container" class="fixed top-5 right-5 z-[9999] space-y-2 flex flex-col items-end pointer-events-none">
   </div>

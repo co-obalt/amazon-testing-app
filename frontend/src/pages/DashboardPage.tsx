@@ -1483,8 +1483,8 @@ export default function DashboardPage({
                             }`}
                         >
                           <span className={`mt-1 flex-shrink-0 h-2 w-2 rounded-full ${notif.type === 'deposit' ? 'bg-red-500' :
-                              notif.type === 'order' ? 'bg-amber-500' :
-                                'bg-green-500'
+                            notif.type === 'order' ? 'bg-amber-500' :
+                              'bg-green-500'
                             }`} />
                           <div className="flex-1 space-y-0.5">
                             <p className={`text-xs font-medium text-gray-200 ${notif.status === 'unread' ? 'font-black' : ''}`}>
@@ -1560,8 +1560,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('home')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'home'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <Home className="h-4 w-4 flex-shrink-0" />
@@ -1572,8 +1572,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('deposit')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'deposit'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <Wallet className="h-4 w-4 flex-shrink-0" />
@@ -1584,8 +1584,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('orders')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'orders'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <FileText className="h-4 w-4 flex-shrink-0" />
@@ -1596,8 +1596,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('withdraw')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'withdraw'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <ArrowUpRight className="h-4 w-4 flex-shrink-0" />
@@ -1608,8 +1608,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('profile')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'profile'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <User className="h-4 w-4 flex-shrink-0" />
@@ -1620,8 +1620,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('invitation')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'invitation'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <Users className="h-4 w-4 flex-shrink-0" />
@@ -1632,8 +1632,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('customer-service')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'customer-service'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <MessageSquare className="h-4 w-4 flex-shrink-0" />
@@ -1644,8 +1644,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('terms')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'terms'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <FileText className="h-4 w-4 flex-shrink-0" />
@@ -1656,8 +1656,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('about-us')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'about-us'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <Info className="h-4 w-4 flex-shrink-0" />
@@ -1668,8 +1668,8 @@ export default function DashboardPage({
               <button
                 onClick={() => handleTabSwitch('faq')}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${activeTab === 'faq'
-                    ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
-                    : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border border-amazon-gold text-[#F7CA00] bg-gray-850'
+                  : 'border border-transparent text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
               >
                 <HelpCircle className="h-4 w-4 flex-shrink-0" />
@@ -1971,8 +1971,8 @@ export default function DashboardPage({
                             key={proto.key}
                             onClick={() => setSelectedProtocol(proto.key)}
                             className={`p-3 rounded-lg border text-left transition flex flex-col justify-between h-24 cursor-pointer ${selectedProtocol === proto.key
-                                ? 'border-amazon-gold bg-amber-50/30 text-gray-900 ring-1 ring-amazon-gold shadow-xs'
-                                : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-white'
+                              ? 'border-amazon-gold bg-amber-50/30 text-gray-900 ring-1 ring-amazon-gold shadow-xs'
+                              : 'border-gray-200 hover:border-gray-300 text-gray-600 bg-white'
                               }`}
                           >
                             {proto.logo}
@@ -2107,8 +2107,8 @@ export default function DashboardPage({
                           <div className="flex justify-between items-center border-b border-gray-150 pb-2">
                             <span className="font-bold text-gray-855">{req.protocol} Network</span>
                             <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
-                                req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
-                                  'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
+                              req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
+                                'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
                               }`}>
                               {req.status}
                             </span>
@@ -2179,10 +2179,15 @@ export default function DashboardPage({
                             className="h-4 md:h-8 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
-                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Amazon</h3>
-                          <span className="inline-block bg-orange-50 text-amazon-orange text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-orange-100 flex-shrink-0">
-                            4% Commission
+                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Amazon</h3>
+                            <span className="inline-block bg-orange-50 text-amazon-orange text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-orange-100 flex-shrink-0">
+                              4% Comm.
+                            </span>
+                          </div>
+                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                            Min. Balance: $20
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
@@ -2214,10 +2219,15 @@ export default function DashboardPage({
                             className="h-5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
-                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Alibaba</h3>
-                          <span className="inline-block bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-blue-100 flex-shrink-0">
-                            8% Commission
+                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Alibaba</h3>
+                            <span className="inline-block bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-blue-100 flex-shrink-0">
+                              8% Comm.
+                            </span>
+                          </div>
+                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                            Min. Balance: $299
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
@@ -2249,10 +2259,15 @@ export default function DashboardPage({
                             className="h-5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-row md:flex-col items-center md:justify-center space-x-2 md:space-x-0 md:space-y-1 px-3 md:px-0">
-                          <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Shopify</h3>
-                          <span className="inline-block bg-green-50 text-green-700 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 md:px-2 md:py-0.5 rounded border border-green-100 flex-shrink-0">
-                            12% Commission
+                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Shopify</h3>
+                            <span className="inline-block bg-green-50 text-green-700 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-green-100 flex-shrink-0">
+                              12% Comm.
+                            </span>
+                          </div>
+                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                            Min. Balance: $499
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
@@ -2354,8 +2369,8 @@ export default function DashboardPage({
                           setGigsPage(1);
                         }}
                         className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${ordersSubTab === 'pending'
-                            ? 'border-amazon-gold text-[#131921] font-black'
-                            : 'border-transparent text-gray-400 hover:text-gray-655'
+                          ? 'border-amazon-gold text-[#131921] font-black'
+                          : 'border-transparent text-gray-400 hover:text-gray-655'
                           }`}
                       >
                         Pending Tasks
@@ -2366,8 +2381,8 @@ export default function DashboardPage({
                           setGigsPage(1);
                         }}
                         className={`pb-3 px-6 text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${ordersSubTab === 'completed'
-                            ? 'border-amazon-gold text-[#131921] font-black'
-                            : 'border-transparent text-gray-400 hover:text-gray-655'
+                          ? 'border-amazon-gold text-[#131921] font-black'
+                          : 'border-transparent text-gray-400 hover:text-gray-655'
                           }`}
                       >
                         Completed Tasks ({currentPlatformData.orders.length})
@@ -2471,15 +2486,15 @@ export default function DashboardPage({
                               <p className="font-bold text-gray-500">
                                 {ordersSubTab === 'pending'
                                   ? (currentPlatformData.completedOrders >= 25
-                                      ? "Today's 25 campaign tasks have been completed!"
-                                      : "All assigned campaign tasks have been completed!")
+                                    ? "Today's 25 campaign tasks have been completed!"
+                                    : "All assigned campaign tasks have been completed!")
                                   : "You have not completed any campaign tasks yet."}
                               </p>
                               <p className="text-[11px] text-gray-400 mt-1">
                                 {ordersSubTab === 'pending'
                                   ? (currentPlatformData.completedOrders >= 25
-                                      ? "The next batch will unlock in 24 hours. Your task count will reset to 1/25 on the next daily routine session."
-                                      : "Check back later or wait for administrators to unlock new batches.")
+                                    ? "The next batch will unlock in 24 hours. Your task count will reset to 1/25 on the next daily routine session."
+                                    : "Check back later or wait for administrators to unlock new batches.")
                                   : "Select pending campaigns to complete evaluation compliance tasks."}
                               </p>
                             </div>
@@ -2504,8 +2519,8 @@ export default function DashboardPage({
                                     key={idx}
                                     onClick={() => setGigsPage(idx + 1)}
                                     className={`px-2.5 py-1.5 text-[10px] rounded border font-bold cursor-pointer transition-colors ${currentPage === idx + 1
-                                        ? 'bg-[#131921] border-[#131921] text-white font-black'
-                                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                                      ? 'bg-[#131921] border-[#131921] text-white font-black'
+                                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                                       }`}
                                   >
                                     {idx + 1}
@@ -2599,8 +2614,8 @@ export default function DashboardPage({
                             key={st}
                             onClick={() => setOrdersStatusFilter(st as any)}
                             className={`px-3 py-1 rounded-lg text-[10px] font-black transition-colors uppercase cursor-pointer border ${ordersStatusFilter === st
-                                ? 'bg-[#131921] border-[#131921] text-white shadow-xs'
-                                : 'bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-600 hover:text-gray-900'
+                              ? 'bg-[#131921] border-[#131921] text-white shadow-xs'
+                              : 'bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-600 hover:text-gray-900'
                               }`}
                           >
                             {st}
@@ -2670,8 +2685,8 @@ export default function DashboardPage({
                                   <td className="py-3.5 px-4 text-right font-mono font-black text-green-600">+${order.payout.toFixed(2)}</td>
                                   <td className="py-3.5 px-4 text-center">
                                     <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${order.status === 'Completed'
-                                        ? 'bg-green-50 text-green-700 border-green-200 font-bold'
-                                        : 'bg-amber-50 text-amber-700 border-amber-200 font-bold'
+                                      ? 'bg-green-50 text-green-700 border-green-200 font-bold'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200 font-bold'
                                       }`}>
                                       {order.status}
                                     </span>
@@ -2879,8 +2894,8 @@ export default function DashboardPage({
                               <div className="flex justify-between items-center border-b border-gray-150 pb-2">
                                 <span className="font-bold text-gray-855">Withdrawal Request</span>
                                 <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${req.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200 font-bold' :
-                                    req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
-                                      'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
+                                  req.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200 font-bold' :
+                                    'bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-bold'
                                   }`}>
                                   {req.status}
                                 </span>
@@ -2934,8 +2949,8 @@ export default function DashboardPage({
                       key={sec.key}
                       onClick={() => setProfileActiveSection(sec.key)}
                       className={`py-2.5 sm:py-2.5 px-4 text-xs font-black uppercase tracking-wider transition-all border-l-2 sm:border-l-0 sm:border-b-2 whitespace-nowrap cursor-pointer text-left sm:text-center flex items-center justify-between sm:justify-center w-full sm:w-auto rounded-lg sm:rounded-none bg-gray-50/50 sm:bg-transparent ${profileActiveSection === sec.key
-                          ? 'border-amazon-gold text-[#a88734] font-black bg-[#fcf8e3]/30 sm:bg-transparent'
-                          : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-100/50 sm:hover:bg-transparent'
+                        ? 'border-amazon-gold text-[#a88734] font-black bg-[#fcf8e3]/30 sm:bg-transparent'
+                        : 'border-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-100/50 sm:hover:bg-transparent'
                         }`}
                     >
                       <span>{sec.label}</span>
@@ -3467,8 +3482,8 @@ export default function DashboardPage({
                             className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                           >
                             <div className={`max-w-[85%] rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-xs shadow-xxs border ${msg.sender === 'user'
-                                ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
-                                : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
+                              ? 'bg-[#131921] border-[#131921] text-white rounded-tr-none'
+                              : 'bg-white border-gray-200 text-gray-800 rounded-tl-none'
                               }`}>
                               {msg.text.startsWith('data:image/') || msg.text.startsWith('/uploads/') ? (
                                 <img
@@ -3657,8 +3672,8 @@ export default function DashboardPage({
                         key={sub.id}
                         onClick={() => setSettingsSubTab(sub.id)}
                         className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all text-left ${settingsSubTab === sub.id
-                            ? 'bg-[#131921] text-white font-black'
-                            : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          ? 'bg-[#131921] text-white font-black'
+                          : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                           }`}
                       >
                         <sub.icon className="h-4 w-4 flex-shrink-0" />
@@ -4179,16 +4194,15 @@ export default function DashboardPage({
                         onChange={(e) => setSelectedTextCode(e.target.value ? e.target.value : null)}
                         className="w-full p-2.5 text-xs bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
                       >
-                        <option value="">-- Click to choose template --</option>
-                        <option value="01">Quality & Packaging (Template 1)</option>
-                        <option value="02">Performance & Build (Template 2)</option>
-                        <option value="03">Value & Support (Template 3)</option>
+                        <option value="01">Quality & Packaging</option>
+                        <option value="02">Performance & Build</option>
+                        <option value="03">Value & Support</option>
                       </select>
                       {selectedTextCode && (
                         <div className="mt-2 p-2.5 bg-[#fcf8e3]/45 border border-amazon-gold/30 rounded-lg text-[10px] text-gray-700 italic leading-relaxed">
                           "{selectedTextCode === '01' ? "Excellent product quality, fast delivery, and premium packaging. Highly satisfied!" :
-                             selectedTextCode === '02' ? "Works exactly as described. Reliable performance and durable build. Would recommend!" :
-                             "Great value for money. Very easy setup and outstanding customer support."}"
+                            selectedTextCode === '02' ? "Works exactly as described. Reliable performance and durable build. Would recommend!" :
+                              "Great value for money. Very easy setup and outstanding customer support."}"
                         </div>
                       )}
                     </div>
@@ -4207,8 +4221,8 @@ export default function DashboardPage({
                             key={opt.code}
                             onClick={() => setSelectedTextCode(opt.code)}
                             className={`w-full p-3.5 text-left text-xs rounded-xl border transition-all cursor-pointer flex items-start space-x-3 ${isSelected
-                                ? 'bg-[#fcf8e3] border-amazon-gold shadow-xxs ring-1 ring-amazon-gold text-gray-900 font-semibold'
-                                : 'bg-white border-gray-200 hover:border-gray-300 text-gray-655 font-medium'
+                              ? 'bg-[#fcf8e3] border-amazon-gold shadow-xxs ring-1 ring-amazon-gold text-gray-900 font-semibold'
+                              : 'bg-white border-gray-200 hover:border-gray-300 text-gray-655 font-medium'
                               }`}
                           >
                             <div className={`mt-0.5 h-4 w-4 rounded-full border flex-shrink-0 flex items-center justify-center ${isSelected ? 'border-amazon-gold bg-amazon-gold text-amazon-dark' : 'border-gray-300 bg-white'
@@ -4236,7 +4250,7 @@ export default function DashboardPage({
                         </>
                       ) : (
                         <>
-                          <span>Submit and Open Next Campaign</span>
+                          <span>Submit and Open Next Order</span>
                           <span className="bg-amazon-dark/10 px-2 py-0.5 rounded text-[10px] font-mono">
                             {currentPlatformData.completedOrders + 1}/25
                           </span>
@@ -4554,8 +4568,8 @@ export default function DashboardPage({
                       <label className="text-[10px] text-gray-400 uppercase font-black">Standing Status</label>
                       <div className="mt-1">
                         <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${selectedOrderDetail.status === 'Completed'
-                            ? 'bg-green-50 text-green-700 border-green-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}>
                           {selectedOrderDetail.status}
                         </span>

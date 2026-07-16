@@ -365,7 +365,54 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       });
     }
 
-    // Record submission directly as Completed
+    // Fetch the current balance record first
+    const { data: balanceRecord, error: fetchBalError } = await supabase
+      .from('platform_balances')
+      .select('wallet_balance, reviews_count, current_position, last_cleared_combo_position')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .single();
+
+    if (fetchBalError || !balanceRecord) {
+      return res.status(500).json({ error: 'Failed to retrieve platform balance: ' + (fetchBalError?.message || 'Record not found') });
+    }
+
+    const currentBalance = parseFloat(balanceRecord.wallet_balance as any) || 0.0;
+    const currentReviews = balanceRecord.reviews_count || 0;
+    const currentPos = balanceRecord.current_position || 0;
+
+    // 1. Update wallet balance for ALL platforms of this user
+    const finalBalance = Number((currentBalance + payoutEarned).toFixed(2));
+    const { error: updateBalError } = await supabase
+      .from('platform_balances')
+      .update({ wallet_balance: finalBalance })
+      .eq('user_id', userId);
+
+    if (updateBalError) {
+      return res.status(500).json({ error: 'Failed to update wallet balance: ' + updateBalError.message });
+    }
+
+    // 2. Update reviews count and position only for target platform
+    const { error: updateProgressError } = await supabase
+      .from('platform_balances')
+      .update({
+        reviews_count: currentReviews + 1,
+        current_position: currentPos + 1,
+        last_cleared_combo_position: 0
+      })
+      .eq('user_id', userId)
+      .eq('platform', platform);
+
+    if (updateProgressError) {
+      // Rollback balance update
+      await supabase
+        .from('platform_balances')
+        .update({ wallet_balance: currentBalance })
+        .eq('user_id', userId);
+      return res.status(500).json({ error: 'Failed to update review progress: ' + updateProgressError.message });
+    }
+
+    // 3. Record submission directly as Completed
     const { data: submission, error: insertError } = await supabase
       .from('review_submissions')
       .insert({
@@ -381,49 +428,22 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       .single();
 
     if (insertError) {
-      return res.status(500).json({ error: 'Failed to record review: ' + insertError.message });
-    }
-
-    // Auto-approve: Update user platform balance atomically via database RPC (concurrency protection)
-    const { error: rpcError } = await supabase.rpc('increment_user_review_progress', {
-      target_user_id: userId,
-      target_platform: platform,
-      payout_amount: payoutEarned
-    });
-
-    if (rpcError) {
-      console.warn("RPC increment_user_review_progress failed, falling back to non-atomic update:", rpcError.message);
-
-      // Fallback non-atomic update logic
-      const { data: balanceRecord } = await supabase
-        .from('platform_balances')
-        .select('wallet_balance, reviews_count, current_position')
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .single();
-
-      const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-      const currentReviews = balanceRecord?.reviews_count || 0;
-      const nextPos = (balanceRecord?.current_position || 0) + 1;
-
-      const finalBalance = Number((currentBalance + payoutEarned).toFixed(2));
-
-      // Update wallet balance for ALL platforms of this user
+      // Rollback progress and balance updates
       await supabase
         .from('platform_balances')
-        .update({ wallet_balance: finalBalance })
+        .update({ wallet_balance: currentBalance })
         .eq('user_id', userId);
-
-      // Update reviews count and position only for target platform
       await supabase
         .from('platform_balances')
         .update({
-          reviews_count: currentReviews + 1,
-          current_position: nextPos,
-          last_cleared_combo_position: 0
+          reviews_count: currentReviews,
+          current_position: currentPos,
+          last_cleared_combo_position: balanceRecord.last_cleared_combo_position
         })
         .eq('user_id', userId)
         .eq('platform', platform);
+
+      return res.status(500).json({ error: 'Failed to record review: ' + insertError.message });
     }
 
     // Also check referral bonus

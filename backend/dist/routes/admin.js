@@ -1590,7 +1590,7 @@ router.post('/users/:id/vip', async (req, res) => {
             .select('platform')
             .eq('id', id)
             .single();
-        if (userProfile && !userProfile.platform) {
+        if (userProfile) {
             await supabase
                 .from('profiles')
                 .update({ platform })
