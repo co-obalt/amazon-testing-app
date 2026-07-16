@@ -61,6 +61,13 @@ interface PlatformStats {
   completedOrders: number;
   pendingReviews: number;
   profitEarned: number;
+  lastResetAt?: string;
+  isComboBlocked?: boolean;
+  comboDetails?: {
+    position: number;
+    triggerBalance: number;
+    profitAmount: number;
+  } | null;
   orders: OrderRecord[];
 }
 
@@ -143,6 +150,12 @@ export default function DashboardPage({
   // Real-time refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>('Never synced');
+
+  // Amazon Real-Time Product Search state
+  const [amazonSearchQuery, setAmazonSearchQuery] = useState('');
+  const [amazonSearchResults, setAmazonSearchResults] = useState<any[]>([]);
+  const [amazonSearchLoading, setAmazonSearchLoading] = useState(false);
+  const [amazonSearchError, setAmazonSearchError] = useState<string | null>(null);
 
   // Notifications state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -230,6 +243,37 @@ export default function DashboardPage({
     };
     reader.readAsDataURL(file);
   };
+
+  const handleAmazonSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!amazonSearchQuery.trim()) {
+      showToast("Please enter a search term.");
+      return;
+    }
+    setAmazonSearchLoading(true);
+    setAmazonSearchError(null);
+    try {
+      const token = localStorage.getItem('reviewer_auth_token');
+      const response = await fetch(`${API_BASE}/reviews/amazon-search?q=${encodeURIComponent(amazonSearchQuery.trim())}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAmazonSearchResults(data);
+      } else {
+        setAmazonSearchError(data.error || "Failed to fetch Amazon products.");
+        showToast(data.error || "Failed to fetch Amazon products.");
+      }
+    } catch (err: any) {
+      setAmazonSearchError("Network error. Please try again.");
+      showToast("Network error. Please try again.");
+    } finally {
+      setAmazonSearchLoading(false);
+    }
+  };
+
   const [profileActiveSection, setProfileActiveSection] = useState<'details' | 'wallet' | 'security'>('details');
   const [profileEmail, setProfileEmail] = useState(username.toLowerCase().replace(/\s+/g, '') + '@gmail.com');
   const [profilePhone, setProfilePhone] = useState('+1 (555) 019-2831');
@@ -304,6 +348,9 @@ export default function DashboardPage({
             completedOrders: userData.balances.Amazon?.completedReviewsCount || 0,
             pendingReviews: 0,
             profitEarned: 0,
+            lastResetAt: userData.balances.Amazon?.lastResetAt,
+            isComboBlocked: !!userData.balances.Amazon?.isComboBlocked,
+            comboDetails: userData.balances.Amazon?.comboDetails || null,
             orders: []
           },
           Alibaba: {
@@ -311,6 +358,9 @@ export default function DashboardPage({
             completedOrders: userData.balances.Alibaba?.completedReviewsCount || 0,
             pendingReviews: 0,
             profitEarned: 0,
+            lastResetAt: userData.balances.Alibaba?.lastResetAt,
+            isComboBlocked: !!userData.balances.Alibaba?.isComboBlocked,
+            comboDetails: userData.balances.Alibaba?.comboDetails || null,
             orders: []
           },
           Shopify: {
@@ -318,6 +368,9 @@ export default function DashboardPage({
             completedOrders: userData.balances.Shopify?.completedReviewsCount || 0,
             pendingReviews: 0,
             profitEarned: 0,
+            lastResetAt: userData.balances.Shopify?.lastResetAt,
+            isComboBlocked: !!userData.balances.Shopify?.isComboBlocked,
+            comboDetails: userData.balances.Shopify?.comboDetails || null,
             orders: []
           }
         });
@@ -818,7 +871,7 @@ export default function DashboardPage({
 
   const currentPlatformData = activePlatform
     ? platformsData[activePlatform]
-    : { walletBalance: 0, completedOrders: 0, pendingReviews: 0, profitEarned: 0, orders: [] };
+    : { walletBalance: 0, completedOrders: 0, pendingReviews: 0, profitEarned: 0, lastResetAt: undefined, isComboBlocked: false, comboDetails: null, orders: [] };
 
   // Helper to copy text to clipboard
   const handleCopyText = (text: string, label: string) => {
@@ -1047,6 +1100,17 @@ export default function DashboardPage({
 
   // Progress tracker functions
   const startReviewFlow = (product: AssignedProduct) => {
+    if (currentPlatformData.isComboBlocked && currentPlatformData.comboDetails) {
+      setComboModalDetails({
+        triggerBalance: currentPlatformData.comboDetails.triggerBalance,
+        profitAmount: currentPlatformData.comboDetails.profitAmount,
+        currentBalance: currentPlatformData.walletBalance,
+        position: currentPlatformData.comboDetails.position
+      });
+      setIsComboModalOpen(true);
+      showToast("⚠️ Special Combo Order is locked! Please complete payment to continue.");
+      return;
+    }
     setActiveReviewProduct(product);
     setReviewStep(1);
     setInputOrderId('');
@@ -1156,12 +1220,12 @@ export default function DashboardPage({
         const isCompleted = currentPlatformData.orders.some(o =>
           o.productId === p.id &&
           o.status === 'Completed' &&
-          new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
+          new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
         );
         const isPending = currentPlatformData.orders.some(o =>
           o.productId === p.id &&
           o.status === 'Pending' &&
-          new Date(o.createdAt).getTime() >= new Date(p.assignedAt || 0).getTime()
+          new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
         );
         return !isCompleted && !isPending;
       });
@@ -1189,6 +1253,10 @@ export default function DashboardPage({
   // Handle withdraw submission
   const handleWithdrawRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentPlatformData.isComboBlocked && currentPlatformData.comboDetails) {
+      showToast("❌ Withdrawal locked! Please pay and complete your pending Special Combo order first.");
+      return;
+    }
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) {
       showToast("Please enter a valid withdrawal amount.");
@@ -1897,6 +1965,153 @@ export default function DashboardPage({
                   </div>
                 </div>
 
+                {/* Real-time Amazon Product Search Engine */}
+                <div className="max-w-4xl mx-auto px-1 md:px-0 pt-6 mt-8 border-t border-gray-150">
+                  <div className="bg-white rounded-2xl p-5 md:p-8 text-gray-900 border border-gray-200 relative overflow-hidden shadow-sm">
+                    {/* Background Watermarks */}
+                    <div className="absolute top-0 right-0 opacity-[0.03] pointer-events-none transform translate-x-12 -translate-y-12">
+                      <Search className="w-64 h-64 text-gray-900" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 opacity-[0.03] pointer-events-none transform -translate-x-12 translate-y-12">
+                      <Globe className="w-64 h-64 text-gray-900" />
+                    </div>
+                    
+                    <div className="relative z-10 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center space-x-2">
+                            <span className="bg-[#ff9900] text-black text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-sm">
+                              Live Engine
+                            </span>
+                            <h3 className="text-base md:text-lg font-black tracking-tight text-gray-900 uppercase">
+                              Real-Time Amazon Search
+                            </h3>
+                          </div>
+                          <p className="text-[11px] md:text-xs text-gray-555 font-sans font-medium">
+                            Search products directly from Amazon.com to view live pricing and images.
+                          </p>
+                        </div>
+                        <div className="flex items-center opacity-85 self-start sm:self-center">
+                          <img
+                            src="/amazon-logo.svg"
+                            alt="Amazon Logo"
+                            className="h-4.5 md:h-5 w-auto object-contain"
+                          />
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleAmazonSearch} className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            value={amazonSearchQuery}
+                            onChange={(e) => setAmazonSearchQuery(e.target.value)}
+                            placeholder="Enter keyword (e.g. Hairdryer, Wireless Earbuds, Sneaker)..."
+                            className="w-full bg-gray-50 border border-gray-250 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#ff9900] transition-all"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={amazonSearchLoading}
+                          className="bg-[#ff9900] text-black font-bold text-xs px-6 py-2.5 rounded-xl hover:bg-amber-500 hover:shadow-xs transition-all shadow-xxs flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50"
+                        >
+                          {amazonSearchLoading ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4.5 w-4.5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>Searching...</span>
+                            </>
+                          ) : (
+                            <span>Search</span>
+                          )}
+                        </button>
+                      </form>
+
+                      {amazonSearchError && (
+                        <p className="text-xxs font-semibold text-red-500 mt-1 font-sans text-left">
+                          {amazonSearchError}
+                        </p>
+                      )}
+
+                      {amazonSearchResults.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-4 border-t border-gray-100 animate-fadeIn">
+                          {amazonSearchResults.map((item, idx) => (
+                            <a
+                              key={idx}
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group bg-gray-50/50 hover:bg-white border border-gray-200 hover:border-[#ff9900]/50 rounded-xl p-2.5 transition-all flex flex-col h-full text-left shadow-xxs hover:shadow-xs"
+                            >
+                              <div className="aspect-square bg-white rounded-lg overflow-hidden flex items-center justify-center relative p-1.5 mb-2 border border-gray-100 group-hover:scale-95 transition-transform duration-300">
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.title}
+                                  className="max-h-full max-w-full object-contain"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?w=500";
+                                  }}
+                                />
+                                <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm backdrop-blur-xs font-mono">
+                                  ASIN: {item.asin}
+                                </span>
+                              </div>
+                              <div className="flex-1 flex flex-col justify-between space-y-1">
+                                <h4 className="text-[10px] md:text-[11px] font-bold text-gray-700 line-clamp-2 leading-tight group-hover:text-[#ff9900] transition-colors">
+                                  {item.title}
+                                </h4>
+                                <div className="flex items-center justify-between pt-1">
+                                  <span className="text-xs md:text-sm font-black text-gray-950 font-mono">
+                                    ${item.price.toFixed(2)}
+                                  </span>
+                                  <span className="text-[8px] font-bold text-[#ff9900] opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all flex items-center space-x-0.5">
+                                    <span>View</span>
+                                    <ArrowUpRight className="h-2.5 w-2.5" />
+                                  </span>
+                                </div>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* WFP Organization Support Card */}
+                <div className="max-w-4xl mx-auto px-1 md:px-0 mt-4 mb-4 pb-4">
+                  <a
+                    href="https://www.wfp.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex flex-col sm:flex-row items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-xxs hover:shadow-xs"
+                  >
+                    <div className="flex items-center space-x-3.5 text-left font-sans">
+                      <div className="bg-blue-600 text-white p-2.5 rounded-xl group-hover:scale-110 transition-transform">
+                        <Globe className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>World Food Programme</span>
+                          <span className="bg-blue-200 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded-sm uppercase">
+                            Official Partner
+                          </span>
+                        </h4>
+                        <p className="text-[10px] text-blue-700 font-medium font-sans mt-0.5 leading-relaxed">
+                          Reviewers Hub proudly supports the UN World Food Programme (WFP) in fighting global hunger. Click to learn more about the cause.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 sm:mt-0 bg-blue-600 group-hover:bg-blue-700 text-white font-bold text-xxs px-4 py-2 rounded-lg transition-colors flex items-center space-x-1 whitespace-nowrap self-end sm:self-center font-sans">
+                      <span>Visit WFP.org</span>
+                      <ArrowUpRight className="h-3 w-3" />
+                    </div>
+                  </a>
+                </div>
+
               </div>
             )}
 
@@ -2148,18 +2363,18 @@ export default function DashboardPage({
 
             {/* ================================== ORDERS (EVALUATIONS) ================================== */}
             {activeTab === 'orders' && (
-              <div className="space-y-6 animate-fadeIn text-left">
+              <div className="space-y-3 md:space-y-6 animate-fadeIn text-left">
                 {selectedOrderCategory === null ? (
                   /* Platform selection screen */
-                  <div className="space-y-6 animate-fadeIn">
-                    <div className="text-center max-w-xl mx-auto space-y-2 py-4">
-                      <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Select Platform Network</h2>
-                      <p className="text-xs text-gray-550 font-sans">
+                  <div className="space-y-3 md:space-y-6 animate-fadeIn">
+                    <div className="text-center max-w-xl mx-auto space-y-0.5 md:space-y-2 py-1.5 md:py-4">
+                      <h2 className="text-sm md:text-xl font-black text-gray-900 tracking-tight uppercase">Select Platform Network</h2>
+                      <p className="text-[10px] md:text-xs text-gray-550 font-sans">
                         Please select your assigned VIP category to view and perform order evaluations.
                       </p>
                     </div>
 
-                    <div className="flex flex-col md:grid md:grid-cols-3 gap-3 md:gap-6 max-w-4xl mx-auto px-1 md:px-0">
+                    <div className="flex flex-col md:grid md:grid-cols-3 gap-2 md:gap-6 max-w-4xl mx-auto px-1 md:px-0">
                       {/* VIP 1: Amazon */}
                       <button
                         onClick={() => {
@@ -2168,35 +2383,35 @@ export default function DashboardPage({
                             handleSelectPlatform('Amazon');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-2 md:p-6 hover:border-amazon-orange hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[80px] md:min-h-[240px] w-full pt-3 pb-1.5 md:pt-6 md:pb-6"
                       >
                         <span className="absolute top-0 left-0 bg-amazon-orange text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 1
                         </span>
-                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                        <div className="h-5 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0 mt-0.5 md:mt-0">
                           <img
                             src="/amazon-logo.svg"
                             alt="Amazon"
-                            className="h-4 md:h-8 w-auto object-contain"
+                            className="h-4.5 md:h-8 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Amazon</h3>
-                            <span className="inline-block bg-orange-50 text-amazon-orange text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-orange-100 flex-shrink-0">
+                        <div className="flex-1 flex flex-col items-center px-1 md:px-0 min-w-0 mt-0.5 md:mt-2">
+                          <div className="flex items-center space-x-1.5 justify-center">
+                            <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Amazon</h3>
+                            <span className="inline-block bg-orange-50 text-amazon-orange text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-orange-100 flex-shrink-0">
                               4% Comm.
                             </span>
                           </div>
-                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                          <span className="text-[8px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
                             Min. Balance: $20
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Standard e-commerce workspace for beginner tier reviewers.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-amazon-orange flex items-center space-x-1 flex-shrink-0">
+                        <div className="text-[8px] md:text-xs font-black text-amazon-orange flex items-center space-x-1 flex-shrink-0 mt-0.5 md:mt-0">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2 w-2 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
 
@@ -2208,35 +2423,35 @@ export default function DashboardPage({
                             handleSelectPlatform('Alibaba');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-2 md:p-6 hover:border-blue-605 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[80px] md:min-h-[240px] w-full pt-3 pb-1.5 md:pt-6 md:pb-6"
                       >
-                        <span className="absolute top-0 left-0 bg-blue-600 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
+                        <span className="absolute top-0 left-0 bg-blue-605 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 2
                         </span>
-                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                        <div className="h-5 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0 mt-0.5 md:mt-0">
                           <img
                             src="/alibaba-logo.svg"
                             alt="Alibaba"
-                            className="h-5 md:h-10 w-auto object-contain"
+                            className="h-4.5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Alibaba</h3>
-                            <span className="inline-block bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-blue-100 flex-shrink-0">
+                        <div className="flex-1 flex flex-col items-center px-1 md:px-0 min-w-0 mt-0.5 md:mt-2">
+                          <div className="flex items-center space-x-1.5 justify-center">
+                            <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Alibaba</h3>
+                            <span className="inline-block bg-blue-50 text-blue-600 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-blue-100 flex-shrink-0">
                               8% Comm.
                             </span>
                           </div>
-                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                          <span className="text-[8px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
                             Min. Balance: $299
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Advanced wholesale workspace with higher micro-commissions.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-blue-600 flex items-center space-x-1 flex-shrink-0">
+                        <div className="text-[8px] md:text-xs font-black text-blue-600 flex items-center space-x-1 flex-shrink-0 mt-0.5 md:mt-0">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2 w-2 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
 
@@ -2248,37 +2463,184 @@ export default function DashboardPage({
                             handleSelectPlatform('Shopify');
                           }
                         }}
-                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-3 md:p-6 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-row md:flex-col items-center justify-between min-h-[64px] md:min-h-[240px] w-full pt-6 pb-3 md:pt-6 md:pb-6"
+                        className="relative overflow-hidden bg-white rounded-xl md:rounded-2xl border border-gray-200 p-2 md:p-6 hover:border-green-600 hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-between min-h-[80px] md:min-h-[240px] w-full pt-3 pb-1.5 md:pt-6 md:pb-6"
                       >
                         <span className="absolute top-0 left-0 bg-green-600 text-white text-[7px] md:text-[9px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-tl-xl md:rounded-tl-2xl rounded-br-lg shadow-xxs">
                           VIP 3
                         </span>
-                        <div className="h-6 md:h-14 w-16 md:w-full flex items-center justify-start md:justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                        <div className="h-5 md:h-14 w-full flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0 mt-0.5 md:mt-0">
                           <img
                             src="/shopify-logo.svg"
                             alt="Shopify"
-                            className="h-5 md:h-10 w-auto object-contain"
+                            className="h-4.5 md:h-10 w-auto object-contain"
                           />
                         </div>
-                        <div className="flex-1 flex flex-col md:items-center items-start px-3 md:px-0 min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <h3 className="font-black text-gray-900 uppercase text-[10px] sm:text-xs md:text-sm">Shopify</h3>
-                            <span className="inline-block bg-green-50 text-green-700 text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-green-100 flex-shrink-0">
+                        <div className="flex-1 flex flex-col items-center px-1 md:px-0 min-w-0 mt-0.5 md:mt-2">
+                          <div className="flex items-center space-x-1.5 justify-center">
+                            <h3 className="font-black text-gray-900 uppercase text-[9px] sm:text-xs md:text-sm">Shopify</h3>
+                            <span className="inline-block bg-green-50 text-green-700 text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase px-1 py-0.5 rounded border border-green-100 flex-shrink-0">
                               12% Comm.
                             </span>
                           </div>
-                          <span className="text-[9px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
+                          <span className="text-[8px] md:text-[10px] font-bold text-gray-500 mt-0.5 font-mono">
                             Min. Balance: $499
                           </span>
                         </div>
                         <p className="text-xxs text-gray-555 font-sans hidden sm:block">
                           Premium storefront evaluations with maximum reward multiplier.
                         </p>
-                        <div className="text-[9px] md:text-xs font-black text-green-600 flex items-center space-x-1 flex-shrink-0">
+                        <div className="text-[8px] md:text-xs font-black text-green-600 flex items-center space-x-1 flex-shrink-0 mt-0.5 md:mt-0">
                           <span>Enter Panel</span>
-                          <ArrowRight className="h-2.5 w-2.5 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
+                          <ArrowRight className="h-2 w-2 md:h-3 md:w-3 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
+                    </div>
+
+                    {/* Real-time Amazon Product Search Engine */}
+                    <div className="max-w-4xl mx-auto px-1 md:px-0 pt-6 mt-8 border-t border-gray-150">
+                      <div className="bg-white rounded-2xl p-5 md:p-8 text-gray-900 border border-gray-200 relative overflow-hidden shadow-sm">
+                        {/* Background Watermarks */}
+                        <div className="absolute top-0 right-0 opacity-[0.03] pointer-events-none transform translate-x-12 -translate-y-12">
+                          <Search className="w-64 h-64 text-gray-900" />
+                        </div>
+                        <div className="absolute bottom-0 left-0 opacity-[0.03] pointer-events-none transform -translate-x-12 translate-y-12">
+                          <Globe className="w-64 h-64 text-gray-900" />
+                        </div>
+                        
+                        <div className="relative z-10 space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="bg-[#ff9900] text-black text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-sm">
+                                  Live Engine
+                                </span>
+                                <h3 className="text-base md:text-lg font-black tracking-tight text-gray-900 uppercase">
+                                  Real-Time Amazon Search
+                                </h3>
+                              </div>
+                              <p className="text-[11px] md:text-xs text-gray-550 font-sans font-medium">
+                                Search products directly from Amazon.com to view live pricing and images.
+                              </p>
+                            </div>
+                            <div className="flex items-center opacity-85 self-start sm:self-center">
+                              <img
+                                src="/amazon-logo.svg"
+                                alt="Amazon Logo"
+                                className="h-4.5 md:h-5 w-auto object-contain"
+                              />
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleAmazonSearch} className="flex gap-2">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <input
+                                type="text"
+                                value={amazonSearchQuery}
+                                onChange={(e) => setAmazonSearchQuery(e.target.value)}
+                                placeholder="Enter keyword (e.g. Hairdryer, Wireless Earbuds, Sneaker)..."
+                                className="w-full bg-gray-50 border border-gray-250 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#ff9900] transition-all"
+                              />
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={amazonSearchLoading}
+                              className="bg-[#ff9900] text-black font-bold text-xs px-6 py-2.5 rounded-xl hover:bg-amber-500 hover:shadow-xs transition-all shadow-xxs flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50"
+                            >
+                              {amazonSearchLoading ? (
+                                <>
+                                  <svg className="animate-spin -ml-1 mr-2 h-4.5 w-4.5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>Searching...</span>
+                                </>
+                              ) : (
+                                <span>Search</span>
+                              )}
+                            </button>
+                          </form>
+
+                          {amazonSearchError && (
+                            <p className="text-xxs font-semibold text-red-500 mt-1 font-sans">
+                              {amazonSearchError}
+                            </p>
+                          )}
+
+                          {amazonSearchResults.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-4 border-t border-gray-100 animate-fadeIn">
+                              {amazonSearchResults.map((item, idx) => (
+                                <a
+                                  key={idx}
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="group bg-gray-50/50 hover:bg-white border border-gray-200 hover:border-[#ff9900]/50 rounded-xl p-2.5 transition-all flex flex-col h-full text-left shadow-xxs hover:shadow-xs"
+                                >
+                                  <div className="aspect-square bg-white rounded-lg overflow-hidden flex items-center justify-center relative p-1.5 mb-2 border border-gray-100 group-hover:scale-95 transition-transform duration-300">
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={item.title}
+                                      className="max-h-full max-w-full object-contain"
+                                      onError={(e) => {
+                                        e.currentTarget.src = "https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?w=500";
+                                      }}
+                                    />
+                                    <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm backdrop-blur-xs font-mono">
+                                      ASIN: {item.asin}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1 flex flex-col justify-between space-y-1">
+                                    <h4 className="text-[10px] md:text-[11px] font-bold text-gray-750 line-clamp-2 leading-tight group-hover:text-[#ff9900] transition-colors">
+                                      {item.title}
+                                    </h4>
+                                    <div className="flex items-center justify-between pt-1">
+                                      <span className="text-xs md:text-sm font-black text-gray-950 font-mono">
+                                        ${item.price.toFixed(2)}
+                                      </span>
+                                      <span className="text-[8px] font-bold text-[#ff9900] opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all flex items-center space-x-0.5">
+                                        <span>View</span>
+                                        <ArrowUpRight className="h-2.5 w-2.5" />
+                                      </span>
+                                    </div>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* WFP Organization Support Card */}
+                    <div className="max-w-4xl mx-auto px-1 md:px-0 mt-4 mb-4 pb-4">
+                      <a
+                        href="https://www.wfp.org/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col sm:flex-row items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-100 rounded-2xl p-4 transition-all duration-300 shadow-xxs hover:shadow-xs"
+                      >
+                        <div className="flex items-center space-x-3.5 text-left font-sans">
+                          <div className="bg-blue-600 text-white p-2.5 rounded-xl group-hover:scale-110 transition-transform">
+                            <Globe className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <span>World Food Programme</span>
+                              <span className="bg-blue-200 text-blue-800 text-[8px] font-black px-1.5 py-0.5 rounded-sm uppercase">
+                                Official Partner
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-blue-700 font-medium font-sans mt-0.5 leading-relaxed">
+                              Reviewers Hub proudly supports the UN World Food Programme (WFP) in fighting global hunger. Click to learn more about the cause.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 sm:mt-0 bg-blue-600 group-hover:bg-blue-700 text-white font-bold text-xxs px-4 py-2 rounded-lg transition-colors flex items-center space-x-1 whitespace-nowrap self-end sm:self-center font-sans">
+                          <span>Visit WFP.org</span>
+                          <ArrowUpRight className="h-3 w-3" />
+                        </div>
+                      </a>
                     </div>
                   </div>
                 ) : selectedOrderCategory !== enabledPlatform ? (
@@ -2390,8 +2752,42 @@ export default function DashboardPage({
                       </button>
                     </div>
 
+                    {currentPlatformData.isComboBlocked && currentPlatformData.comboDetails && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-left animate-pulse mt-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="bg-amber-600 text-white p-2.5 rounded-lg flex-shrink-0">
+                            <ShieldAlert className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-amber-900 uppercase">
+                              Special Combo Order #{currentPlatformData.comboDetails.position} Triggered!
+                            </h4>
+                            <p className="text-[10px] text-amber-700 font-sans mt-0.5 leading-relaxed">
+                              You have triggered a high-yield Special Combo order. Please complete the deposit of <strong>${currentPlatformData.comboDetails.triggerBalance.toFixed(2)} USD</strong> to unlock this workspace and continue.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (currentPlatformData.comboDetails) {
+                              setComboModalDetails({
+                                triggerBalance: currentPlatformData.comboDetails.triggerBalance,
+                                profitAmount: currentPlatformData.comboDetails.profitAmount,
+                                currentBalance: currentPlatformData.walletBalance,
+                                position: currentPlatformData.comboDetails.position
+                              });
+                              setIsComboModalOpen(true);
+                            }
+                          }}
+                          className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg transition whitespace-nowrap self-end sm:self-center cursor-pointer font-sans"
+                        >
+                          View Combo Invoice
+                        </button>
+                      </div>
+                    )}
+
                     {/* Search and Filters Bar */}
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs mt-4">
                       {/* Search bar */}
                       <div className="relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2415,7 +2811,7 @@ export default function DashboardPage({
                         const isCompleted = currentPlatformData.orders.some(o =>
                           o.productId === product.id &&
                           o.status === 'Completed' &&
-                          new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
+                          new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
                         );
                         const matchesSubTab = ordersSubTab === 'completed' ? isCompleted : !isCompleted;
 
@@ -2440,7 +2836,7 @@ export default function DashboardPage({
                                 const isCompleted = currentPlatformData.orders.some(o =>
                                   o.productId === product.id &&
                                   o.status === 'Completed' &&
-                                  new Date(o.createdAt).getTime() >= new Date(product.assignedAt || 0).getTime()
+                                  new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
                                 );
 
                                 return (

@@ -5,6 +5,15 @@ import { supabase } from '../config/supabase.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
 
+interface StatusCacheEntry {
+  status: string;
+  timestamp: number;
+}
+
+// In-memory status check cache to optimize parallel requests latency
+const statusCache: Record<string, StatusCacheEntry> = {};
+const CACHE_TTL_MS = 8000; // Cache status verification for 8 seconds
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
@@ -28,26 +37,51 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
     }
     
     const userPayload = decoded as { id: string; username: string; role: string; isRestricted?: boolean };
+    const now = Date.now();
     
     try {
       if (userPayload.role === 'admin') {
-        const { data: adminUser, error: adminErr } = await supabase
-          .from('admins')
-          .select('status')
-          .eq('id', userPayload.id)
-          .maybeSingle();
+        const cached = statusCache[userPayload.id];
+        let status = '';
 
-        if (adminErr || !adminUser || adminUser.status !== 'active') {
+        if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+          status = cached.status;
+        } else {
+          const { data: adminUser, error: adminErr } = await supabase
+            .from('admins')
+            .select('status')
+            .eq('id', userPayload.id)
+            .maybeSingle();
+
+          if (!adminErr && adminUser) {
+            status = adminUser.status;
+            statusCache[userPayload.id] = { status, timestamp: now };
+          }
+        }
+
+        if (status !== 'active') {
           return res.status(403).json({ error: 'Administrative privileges are suspended or inactive.' });
         }
       } else if (userPayload.role === 'user') {
-        const { data: userProfile, error: profileErr } = await supabase
-          .from('profiles')
-          .select('status')
-          .eq('id', userPayload.id)
-          .maybeSingle();
+        const cached = statusCache[userPayload.id];
+        let status = '';
 
-        if (profileErr || !userProfile || userProfile.status === 'restricted') {
+        if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+          status = cached.status;
+        } else {
+          const { data: userProfile, error: profileErr } = await supabase
+            .from('profiles')
+            .select('status')
+            .eq('id', userPayload.id)
+            .maybeSingle();
+
+          if (!profileErr && userProfile) {
+            status = userProfile.status || '';
+            statusCache[userPayload.id] = { status, timestamp: now };
+          }
+        }
+
+        if (status === 'restricted') {
           return res.status(403).json({ error: 'Account has been restricted. Please contact customer service.' });
         }
       }

@@ -197,6 +197,24 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
     // Enforce 25-order compliance gate before allowing withdrawal
     const currentPosition = parseInt(balanceRecord.current_position as any) || 0;
+
+    // Verify user doesn't have an uncleared combo
+    const nextPos = currentPosition + 1;
+    const { data: checkpoint } = await supabase
+      .from('combo_checkpoints')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .eq('position', nextPos)
+      .maybeSingle();
+
+    const isCleared = (balanceRecord.last_cleared_combo_position || 0) === nextPos;
+    if (checkpoint && !isCleared) {
+      return res.status(400).json({
+        error: 'Withdrawal is locked. Please pay and complete your pending Special Combo order first.'
+      });
+    }
+
     if (currentPosition < 25) {
       const remaining = 25 - currentPosition;
       return res.status(400).json({

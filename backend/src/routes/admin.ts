@@ -926,7 +926,8 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
           .from('platform_balances')
           .update({
             current_position: 0,
-            last_completed_batch_at: new Date().toISOString()
+            last_completed_batch_at: new Date().toISOString(),
+            last_reset_at: new Date().toISOString()
           })
           .eq('user_id', wRecord.user_id)
           .eq('platform', targetPlatform);
@@ -1235,6 +1236,12 @@ router.post('/users/:id/reset-batch', async (req: AuthenticatedRequest, res: Res
     if (error) {
       return res.status(500).json({ error: 'Failed to reset batch: ' + error.message });
     }
+
+    // Broadcast real-time update event to connected reviewer client immediately
+    broadcastToUser(id, 'balance_update', {
+      type: 'vip_configured',
+      platform: platform || 'Amazon'
+    });
 
     res.json({ message: 'Review batch progress reset successfully.' });
   } catch (error: any) {

@@ -313,24 +313,43 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     // Fetch platform balances
     const { data: balancesData } = await supabase
       .from('platform_balances')
-      .select('platform, wallet_balance, reviews_count, current_position')
+      .select('platform, wallet_balance, reviews_count, current_position, last_reset_at, last_cleared_combo_position')
       .eq('user_id', userId);
 
     const formattedBalances: any = {
-      Amazon: { walletBalance: 0.00, completedReviewsCount: 0 },
-      Alibaba: { walletBalance: 0.00, completedReviewsCount: 0 },
-      Shopify: { walletBalance: 0.00, completedReviewsCount: 0 }
+      Amazon: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null },
+      Alibaba: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null },
+      Shopify: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null }
     };
 
     if (balancesData) {
-      balancesData.forEach((b: any) => {
+      for (const b of balancesData) {
         if (formattedBalances[b.platform]) {
+          const nextPos = (b.current_position || 0) + 1;
+          const { data: checkpoint } = await supabase
+            .from('combo_checkpoints')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('platform', b.platform)
+            .eq('position', nextPos)
+            .maybeSingle();
+
+          const isCleared = (b.last_cleared_combo_position || 0) === nextPos;
+          const isComboBlocked = checkpoint && !isCleared;
+
           formattedBalances[b.platform] = {
             walletBalance: parseFloat(b.wallet_balance as any) || 0.00,
-            completedReviewsCount: b.current_position || 0
+            completedReviewsCount: b.current_position || 0,
+            lastResetAt: b.last_reset_at,
+            isComboBlocked: !!isComboBlocked,
+            comboDetails: isComboBlocked ? {
+              position: nextPos,
+              triggerBalance: parseFloat(checkpoint.trigger_balance as any) || 0.00,
+              profitAmount: parseFloat(checkpoint.profit_override as any) || 0.00
+            } : null
           };
         }
-      });
+      }
     }
 
     // Fetch global system config (deposit addresses, links, notification banner text)
