@@ -457,6 +457,9 @@ router.get('/users/:id/reviews', async (req: AuthenticatedRequest, res: Response
 
 // 3b. Delete User Account (Admin permanently removes a user profile)
 router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    return res.status(403).json({ error: 'Access Denied: Restricted operators cannot delete user accounts.' });
+  }
   try {
     const { id } = req.params;
 
@@ -883,11 +886,37 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Withdrawal already audited and processed' });
     }
 
-    // Update status
+    // Refund target balance first if rejected (atomic check)
+    if (status === 'Rejected') {
+      const refundPlatform = wRecord.platform || platform;
+      if (!refundPlatform) {
+        return res.status(400).json({ error: 'Platform identifier is required to process refund logs' });
+      }
+
+      // Perform atomic balance refund using database RPC
+      const { error: refundError } = await supabase.rpc('adjust_platform_balance', {
+        target_user_id: wRecord.user_id,
+        target_platform: refundPlatform,
+        amount_to_add: parseFloat(wRecord.amount)
+      });
+
+      if (refundError) {
+        console.error("Atomic refund failed during withdrawal rejection:", refundError.message);
+        return res.status(500).json({ error: 'Failed to process refund: ' + refundError.message });
+      }
+    }
+
+    // Update status in the database
     const { error: updateError } = await supabase
       .from('withdrawals')
       .update({ status })
       .eq('id', id);
+
+    if (updateError) {
+      // Note: If this fails for a rejected status, the balance was already refunded.
+      // This is a rare DB connectivity error, but it is safe because the user is credited.
+      return res.status(500).json({ error: 'Failed to update withdrawal status: ' + updateError.message });
+    }
 
     // If approved, reset user's order progress and start the 24h cooldown
     if (status === 'Approved') {
@@ -901,45 +930,6 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
           })
           .eq('user_id', wRecord.user_id)
           .eq('platform', targetPlatform);
-      }
-    }
-
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to update status: ' + updateError.message });
-    }
-
-    // Refund target balance if rejected
-    if (status === 'Rejected') {
-      const refundPlatform = wRecord.platform || platform;
-      if (!refundPlatform) {
-        return res.status(400).json({ error: 'Platform identifier is required to process refund logs' });
-      }
-
-      // Try to atomically refund balance using database RPC
-      const { error: refundError } = await supabase.rpc('adjust_platform_balance', {
-        target_user_id: wRecord.user_id,
-        target_platform: refundPlatform,
-        amount_to_add: parseFloat(wRecord.amount)
-      });
-
-      if (refundError) {
-        console.warn("RPC adjust_platform_balance failed, falling back to non-atomic update:", refundError.message);
-
-        // Fallback non-atomic logic
-        const { data: balanceRecord } = await supabase
-          .from('platform_balances')
-          .select('wallet_balance')
-          .eq('user_id', wRecord.user_id)
-          .eq('platform', refundPlatform)
-          .single();
-
-        const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-        const finalBalance = Number((currentBalance + parseFloat(wRecord.amount)).toFixed(2));
-
-        await supabase
-          .from('platform_balances')
-          .update({ wallet_balance: finalBalance })
-          .eq('user_id', wRecord.user_id);
       }
     }
 
@@ -1211,6 +1201,19 @@ router.delete('/users/:id/combos/:comboId', async (req: AuthenticatedRequest, re
 
 // 16. Manual Reset Reviewer Progress Batch
 router.post('/users/:id/reset-batch', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.isRestricted) {
+    // Verify user assignment
+    const adminId = req.user.id;
+    const { count } = await supabase
+      .from('admin_assigned_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('admin_id', adminId)
+      .eq('user_id', req.params.id);
+
+    if (!count || count === 0) {
+      return res.status(403).json({ error: 'Access Denied: You do not have permission to reset batch progress for this reviewer.' });
+    }
+  }
   try {
     const { id } = req.params;
     const { platform } = req.body;

@@ -3042,7 +3042,7 @@
       const platform = document.getElementById('prodPlatform').value;
       let pct = 0.04;
       if (platform === 'Alibaba') pct = 0.08;
-      else if (platform === 'Shopify') pct = 0.10;
+      else if (platform === 'Shopify') pct = 0.12;
 
       const commission = Number((priceVal * pct).toFixed(2));
       document.getElementById('prodPayout').value = commission;

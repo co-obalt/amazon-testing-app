@@ -163,19 +163,19 @@ router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res
           { title: 'Portable Bluetooth Thermal Label Printer', image_url: 'https://images.unsplash.com/photo-1543269664-76bc3997d9ea?auto=format&fit=crop&q=80&w=600', price: 15.00, payout: 1.20, external_link: 'https://www.alibaba.com/trade/search?SearchText=label+printer' },
           { title: 'Dual Layer Car Roof Cargo Carrier Bag | Waterproof', image_url: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600', price: 18.75, payout: 1.50, external_link: 'https://www.alibaba.com/trade/search?SearchText=roof+cargo+bag' },
           { title: 'Foldable Lightbox Photography Studio Kit', image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600', price: 18.12, payout: 1.45, external_link: 'https://www.alibaba.com/trade/search?SearchText=lightbox+studio' },
-          // Shopify (10% Commission)
-          { title: 'Minimalist Full-Grain Leather Wallet | RFID organizer', image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600', price: 11.00, payout: 1.10, external_link: 'https://www.google.com/search?q=minimalist+leather+wallet' },
-          { title: 'Therapeutic Essential Oils Diffuser | Ceramic ultrasonic', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', price: 9.00, payout: 0.90, external_link: 'https://www.google.com/search?q=ceramic+essential+oils+diffuser' },
-          { title: 'Eco-Friendly Cork Yoga Mat | Non-slip sweat-resistant', image_url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600', price: 17.00, payout: 1.70, external_link: 'https://www.google.com/search?q=cork+yoga+mat' },
-          { title: 'Hydro Flask Insulated Travel Coffee Mug | 16oz Wide Mouth', image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=600', price: 12.00, payout: 1.20, external_link: 'https://www.google.com/search?q=insulated+travel+mug' },
-          { title: 'Premium Bamboo Bed Sheets Set | King Size Cooling', image_url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600', price: 23.50, payout: 2.35, external_link: 'https://www.google.com/search?q=bamboo+bed+sheets' },
-          { title: 'Minimalist Wooden Desk Organizer Stand | Handcrafted Walnut', image_url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=600', price: 15.00, payout: 1.50, external_link: 'https://www.google.com/search?q=wooden+desk+organizer' },
-          { title: 'Aromatherapy Soy Wax Candles Set | Lavender & Eucalyptus', image_url: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=600', price: 8.50, payout: 0.85, external_link: 'https://www.google.com/search?q=soy+wax+candles' },
-          { title: 'Polarized Retro Round Sunglasses | UV400 Unbreakable', image_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=600', price: 13.00, payout: 1.30, external_link: 'https://www.google.com/search?q=polarized+round+sunglasses' },
-          { title: 'Manual Ceramic Burr Coffee Grinder | Adjustable Coarseness', image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=600', price: 14.50, payout: 1.45, external_link: 'https://www.google.com/search?q=manual+coffee+grinder' },
-          { title: 'Stainless Steel French Press Coffee Maker | Double Wall', image_url: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=600', price: 19.00, payout: 1.90, external_link: 'https://www.google.com/search?q=french+press+coffee+maker' },
-          { title: 'Vegan Leather Minimalist Backpack | 15.6 Inch Laptop Sleeve', image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600', price: 21.00, payout: 2.10, external_link: 'https://www.google.com/search?q=vegan+leather+backpack' },
-          { title: 'Ergonomic Balance Ball Chair with Stability Base', image_url: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=600', price: 22.50, payout: 2.25, external_link: 'https://www.google.com/search?q=balance+ball+chair' }
+          // Shopify (12% Commission)
+          { title: 'Minimalist Full-Grain Leather Wallet | RFID organizer', image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&q=80&w=600', price: 11.00, payout: 1.32, external_link: 'https://www.google.com/search?q=minimalist+leather+wallet' },
+          { title: 'Therapeutic Essential Oils Diffuser | Ceramic ultrasonic', image_url: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600', price: 9.00, payout: 1.08, external_link: 'https://www.google.com/search?q=ceramic+essential+oils+diffuser' },
+          { title: 'Eco-Friendly Cork Yoga Mat | Non-slip sweat-resistant', image_url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600', price: 17.00, payout: 2.04, external_link: 'https://www.google.com/search?q=cork+yoga+mat' },
+          { title: 'Hydro Flask Insulated Travel Coffee Mug | 16oz Wide Mouth', image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=600', price: 12.00, payout: 1.44, external_link: 'https://www.google.com/search?q=insulated+travel+mug' },
+          { title: 'Premium Bamboo Bed Sheets Set | King Size Cooling', image_url: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600', price: 23.50, payout: 2.82, external_link: 'https://www.google.com/search?q=bamboo+bed+sheets' },
+          { title: 'Minimalist Wooden Desk Organizer Stand | Handcrafted Walnut', image_url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=600', price: 15.00, payout: 1.80, external_link: 'https://www.google.com/search?q=wooden+desk+organizer' },
+          { title: 'Aromatherapy Soy Wax Candles Set | Lavender & Eucalyptus', image_url: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?auto=format&fit=crop&q=80&w=600', price: 8.50, payout: 1.02, external_link: 'https://www.google.com/search?q=soy+wax+candles' },
+          { title: 'Polarized Retro Round Sunglasses | UV400 Unbreakable', image_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=600', price: 13.00, payout: 1.56, external_link: 'https://www.google.com/search?q=polarized+round+sunglasses' },
+          { title: 'Manual Ceramic Burr Coffee Grinder | Adjustable Coarseness', image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=600', price: 14.50, payout: 1.74, external_link: 'https://www.google.com/search?q=manual+coffee+grinder' },
+          { title: 'Stainless Steel French Press Coffee Maker | Double Wall', image_url: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=600', price: 19.00, payout: 2.28, external_link: 'https://www.google.com/search?q=french+press+coffee+maker' },
+          { title: 'Vegan Leather Minimalist Backpack | 15.6 Inch Laptop Sleeve', image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600', price: 21.00, payout: 2.52, external_link: 'https://www.google.com/search?q=vegan+leather+backpack' },
+          { title: 'Ergonomic Balance Ball Chair with Stability Base', image_url: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=600', price: 22.50, payout: 2.70, external_link: 'https://www.google.com/search?q=balance+ball+chair' }
         ];
 
         const { error: seedError } = await supabase.from('products').insert(defaultProducts);
@@ -381,38 +381,18 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     const currentReviews = balanceRecord.reviews_count || 0;
     const currentPos = balanceRecord.current_position || 0;
 
-    // 1. Update wallet balance for ALL platforms of this user
-    const finalBalance = Number((currentBalance + payoutEarned).toFixed(2));
-    const { error: updateBalError } = await supabase
-      .from('platform_balances')
-      .update({ wallet_balance: finalBalance })
-      .eq('user_id', userId);
+    // 1. Perform atomic update on review progress and balance using stored procedure RPC
+    const { error: progressError } = await supabase.rpc('increment_user_review_progress', {
+      target_user_id: userId,
+      target_platform: platform,
+      payout_amount: payoutEarned
+    });
 
-    if (updateBalError) {
-      return res.status(500).json({ error: 'Failed to update wallet balance: ' + updateBalError.message });
+    if (progressError) {
+      return res.status(500).json({ error: 'Failed to update review progress: ' + progressError.message });
     }
 
-    // 2. Update reviews count and position only for target platform
-    const { error: updateProgressError } = await supabase
-      .from('platform_balances')
-      .update({
-        reviews_count: currentReviews + 1,
-        current_position: currentPos + 1,
-        last_cleared_combo_position: 0
-      })
-      .eq('user_id', userId)
-      .eq('platform', platform);
-
-    if (updateProgressError) {
-      // Rollback balance update
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: currentBalance })
-        .eq('user_id', userId);
-      return res.status(500).json({ error: 'Failed to update review progress: ' + updateProgressError.message });
-    }
-
-    // 3. Record submission directly as Completed
+    // 2. Record submission directly as Completed
     const { data: submission, error: insertError } = await supabase
       .from('review_submissions')
       .insert({
@@ -428,11 +408,13 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
       .single();
 
     if (insertError) {
+      console.error("Atomic insert failed, rolling back progress update:", insertError.message);
       // Rollback progress and balance updates
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: currentBalance })
-        .eq('user_id', userId);
+      await supabase.rpc('adjust_platform_balance', {
+        target_user_id: userId,
+        target_platform: platform,
+        amount_to_add: -payoutEarned
+      });
       await supabase
         .from('platform_balances')
         .update({
@@ -512,79 +494,6 @@ router.get('/submissions', authenticateToken, async (req: AuthenticatedRequest, 
     }));
 
     res.json(formattedSubmissions);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Internal server error' });
-  }
-});
-
-// 4. Developer Test Review Approval Override Endpoint
-router.post('/override-approve', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-
-    // Fetch all pending reviews for this user
-    const { data: pendingReviews, error: fetchError } = await supabase
-      .from('review_submissions')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'Pending');
-
-    if (fetchError || !pendingReviews || pendingReviews.length === 0) {
-      return res.json({ success: true, message: 'No pending reviews to approve.' });
-    }
-
-    for (const review of pendingReviews) {
-      // 1. Update review status to Completed
-      await supabase
-        .from('review_submissions')
-        .update({ status: 'Completed' })
-        .eq('id', review.id);
-
-      // 2. Credit payout reward to platform balances
-      const platform = review.platform;
-      const payout = parseFloat(review.payout_earned) || 1.00;
-
-      const { data: balanceRecord } = await supabase
-        .from('platform_balances')
-        .select('wallet_balance, reviews_count, current_position')
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .single();
-
-      const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-      const currentReviews = balanceRecord?.reviews_count || 0;
-      const nextPosition = (balanceRecord?.current_position || 0) + 1;
-
-      const finalBalance = Number((currentBalance + payout).toFixed(2));
-
-      // Update wallet balance for ALL platforms of this user
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: finalBalance })
-        .eq('user_id', userId);
-
-      // Update reviews count and position only for target platform
-      await supabase
-        .from('platform_balances')
-        .update({
-          reviews_count: currentReviews + 1,
-          current_position: nextPosition
-        })
-        .eq('user_id', userId)
-        .eq('platform', platform);
-
-      const { count: completedReviewCount } = await supabase
-        .from('review_submissions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('status', 'Completed');
-
-      if ((completedReviewCount || 0) === 3) {
-        await maybeAwardReferralBonus(userId, platform);
-      }
-    }
-
-    res.json({ success: true, message: 'Developer status override: Pending reviews authorized.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }

@@ -303,21 +303,21 @@ export default function DashboardPage({
             walletBalance: userData.balances.Amazon?.walletBalance || 0,
             completedOrders: userData.balances.Amazon?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number(((userData.balances.Amazon?.completedReviewsCount || 0) * 1.5).toFixed(2)),
+            profitEarned: 0,
             orders: []
           },
           Alibaba: {
             walletBalance: userData.balances.Alibaba?.walletBalance || 0,
             completedOrders: userData.balances.Alibaba?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number(((userData.balances.Alibaba?.completedReviewsCount || 0) * 1.5).toFixed(2)),
+            profitEarned: 0,
             orders: []
           },
           Shopify: {
             walletBalance: userData.balances.Shopify?.walletBalance || 0,
             completedOrders: userData.balances.Shopify?.completedReviewsCount || 0,
             pendingReviews: 0,
-            profitEarned: Number(((userData.balances.Shopify?.completedReviewsCount || 0) * 1.5).toFixed(2)),
+            profitEarned: 0,
             orders: []
           }
         });
@@ -421,10 +421,31 @@ export default function DashboardPage({
           const aliOrders = subsData.filter((x: any) => x && x.platform === 'Alibaba');
           const shoOrders = subsData.filter((x: any) => x && x.platform === 'Shopify');
 
+          const sumPayout = (orders: any[]) => {
+            return orders
+              .filter((o: any) => o && o.status === 'Completed')
+              .reduce((sum: number, o: any) => sum + (o.payout || 0), 0);
+          };
+
           return {
-            Amazon: { ...prev.Amazon, orders: amzOrders, pendingReviews: amzOrders.filter((o: any) => o && o.status === 'Pending').length },
-            Alibaba: { ...prev.Alibaba, orders: aliOrders, pendingReviews: aliOrders.filter((o: any) => o && o.status === 'Pending').length },
-            Shopify: { ...prev.Shopify, orders: shoOrders, pendingReviews: shoOrders.filter((o: any) => o && o.status === 'Pending').length }
+            Amazon: { 
+              ...prev.Amazon, 
+              orders: amzOrders, 
+              pendingReviews: amzOrders.filter((o: any) => o && o.status === 'Pending').length,
+              profitEarned: Number(sumPayout(amzOrders).toFixed(2))
+            },
+            Alibaba: { 
+              ...prev.Alibaba, 
+              orders: aliOrders, 
+              pendingReviews: aliOrders.filter((o: any) => o && o.status === 'Pending').length,
+              profitEarned: Number(sumPayout(aliOrders).toFixed(2))
+            },
+            Shopify: { 
+              ...prev.Shopify, 
+              orders: shoOrders, 
+              pendingReviews: shoOrders.filter((o: any) => o && o.status === 'Pending').length,
+              profitEarned: Number(sumPayout(shoOrders).toFixed(2))
+            }
           };
         });
       }
@@ -1164,26 +1185,6 @@ export default function DashboardPage({
     }
   };
 
-  // Simulate Admin/Merchant Approving the review and crediting real money
-  const handleSimulateAdminApproval = async () => {
-    try {
-      const token = localStorage.getItem('reviewer_auth_token');
-      const res = await fetch(`${API_BASE}/reviews/override-approve`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        showToast(`Success! Developer Simulation Approved. Balances synced!`);
-        setActiveReviewProduct(null);
-        setReviewStep(1);
-        fetchAllData();
-      } else {
-        showToast('Override approval failed.');
-      }
-    } catch (e) {
-      showToast('API network connection error.');
-    }
-  };
 
   // Handle withdraw submission
   const handleWithdrawRequest = async (e: React.FormEvent) => {

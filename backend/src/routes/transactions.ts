@@ -1,6 +1,6 @@
 import express, { Response } from 'express';
 import { supabase } from '../config/supabase.js';
-import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.js';
+import { authenticateToken, AuthenticatedRequest, requireAdmin } from '../middlewares/auth.js';
 import { broadcastToAdmins } from '../services/wsService.js';
 import { clearCache } from '../services/cacheService.js';
 
@@ -341,7 +341,7 @@ router.get('/history', authenticateToken, async (req: AuthenticatedRequest, res:
 });
 
 // 4. Developer Test Deposit Approval Override Endpoints
-router.post('/override-approve-deposit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/override-approve-deposit', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { depositId } = req.body;
     if (!depositId) {
@@ -397,7 +397,7 @@ router.post('/override-approve-deposit', authenticateToken, async (req: Authenti
   }
 });
 
-router.post('/override-reject-deposit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/override-reject-deposit', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { depositId } = req.body;
     if (!depositId) {
