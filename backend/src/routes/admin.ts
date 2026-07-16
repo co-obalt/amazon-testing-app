@@ -753,14 +753,7 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
         .update({ wallet_balance: finalBalance })
         .eq('user_id', deposit.user_id);
 
-      // 4. Mark combo cleared if applicable on target platform
-      if (clearedComboPos > 0) {
-        await supabase
-          .from('platform_balances')
-          .update({ last_cleared_combo_position: clearedComboPos })
-          .eq('user_id', deposit.user_id)
-          .eq('platform', deposit.platform);
-      }
+      // 4. Combo cleared — tracked automatically via approved deposit lookup (no extra column update needed)
 
       // 5. Set user status to active to unlock workspace
       await supabase

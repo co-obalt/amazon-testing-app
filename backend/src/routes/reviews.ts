@@ -318,7 +318,20 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
         const profitAmount = parseFloat(checkpoint.profit_override as any) || 0.00;
 
         // Check if combo checkpoint has been marked as cleared/paid
-        const isCleared = (balanceRecord.last_cleared_combo_position || 0) === checkpoint.position;
+        // Cleared = there is an approved deposit >= trigger_balance after the current batch started
+        let isCleared = false;
+        const batchStartTime = balanceRecord.last_reset_at ? new Date(balanceRecord.last_reset_at).toISOString() : new Date(0).toISOString();
+        const { data: clearingDeposit } = await supabase
+          .from('deposits')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('platform', platform)
+          .eq('status', 'Approved')
+          .gte('amount', checkpoint.trigger_balance)
+          .gte('created_at', batchStartTime)
+          .limit(1)
+          .maybeSingle();
+        isCleared = !!clearingDeposit;
 
         if (!isCleared) {
           return res.status(403).json({
@@ -368,7 +381,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     // Fetch the current balance record first
     const { data: balanceRecord, error: fetchBalError } = await supabase
       .from('platform_balances')
-      .select('wallet_balance, reviews_count, current_position, last_cleared_combo_position')
+      .select('wallet_balance, reviews_count, current_position')
       .eq('user_id', userId)
       .eq('platform', platform)
       .single();
@@ -381,12 +394,16 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     const currentReviews = balanceRecord.reviews_count || 0;
     const currentPos = balanceRecord.current_position || 0;
 
-    // 1. Perform atomic update on review progress and balance using stored procedure RPC
-    const { error: progressError } = await supabase.rpc('increment_user_review_progress', {
-      target_user_id: userId,
-      target_platform: platform,
-      payout_amount: payoutEarned
-    });
+    // 1. Atomic update on review progress and balance via direct UPDATE
+    const { error: progressError } = await supabase
+      .from('platform_balances')
+      .update({
+        reviews_count: currentReviews + 1,
+        current_position: currentPos + 1,
+        wallet_balance: Number((currentBalance + payoutEarned).toFixed(2))
+      })
+      .eq('user_id', userId)
+      .eq('platform', platform);
 
     if (progressError) {
       return res.status(500).json({ error: 'Failed to update review progress: ' + progressError.message });
@@ -420,7 +437,7 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
         .update({
           reviews_count: currentReviews,
           current_position: currentPos,
-          last_cleared_combo_position: balanceRecord.last_cleared_combo_position
+          wallet_balance: currentBalance
         })
         .eq('user_id', userId)
         .eq('platform', platform);

@@ -1,6 +1,8 @@
 -- ==========================================
 -- SUPABASE POSTGRESQL SCHEMA DESIGN
 -- Execute this script directly inside the Supabase SQL Editor
+-- Last updated: 2026-07-17
+-- NOTE: This schema is idempotent (safe to re-run on existing DBs)
 -- ==========================================
 
 -- Enable pgcrypto extension for gen_random_uuid()
@@ -48,16 +50,20 @@ CREATE TABLE IF NOT EXISTS admins (
 CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 
 -- 2. Platform Balances Table (tracks progress parameters per user category)
+-- Combo clearance is NOT stored here as a denormalized column.
+-- It is determined dynamically by checking the deposits table:
+--   SELECT * FROM deposits WHERE user_id=? AND platform=? AND status='Approved'
+--     AND amount >= trigger_balance AND created_at >= last_reset_at
+-- This avoids schema coupling and works without any extra column.
 CREATE TABLE IF NOT EXISTS platform_balances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   platform TEXT NOT NULL, -- 'Amazon' | 'Alibaba' | 'Shopify'
   wallet_balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
   reviews_count INT NOT NULL DEFAULT 0,
-  current_position INT NOT NULL DEFAULT 0, -- Current position inside the 25 reviews batch
-  last_completed_batch_at TIMESTAMP WITH TIME ZONE, -- Completed timestamp (triggers 24h reset)
-  last_reset_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  last_cleared_combo_position INT DEFAULT 0, -- Cleared combo checkpoint position
+  current_position INT NOT NULL DEFAULT 0,  -- Current position in the 25-order batch
+  last_completed_batch_at TIMESTAMP WITH TIME ZONE, -- Set on withdrawal approval (triggers 24h cooldown)
+  last_reset_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL, -- Updated on reset/new batch
   UNIQUE(user_id, platform)
 );
 
@@ -303,7 +309,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- RPC stored procedure for atomic user review verification progress increments (syncs balance to all platforms)
+-- RPC stored procedure for atomic user review verification progress increments
+-- NOTE: The backend now uses a direct UPDATE instead of calling this RPC.
+-- This function is kept here for reference / future use but does NOT reference
+-- last_cleared_combo_position (removed). Combo clearance is tracked via the
+-- deposits table, not as a column on platform_balances.
 CREATE OR REPLACE FUNCTION increment_user_review_progress(
   target_user_id UUID,
   target_platform TEXT,
@@ -316,19 +326,14 @@ DECLARE
   new_balance NUMERIC;
   new_position INT;
 BEGIN
-  -- 1. Increment position/review count and reset combo cleared position
+  -- 1. Increment position and review count on the target platform
   UPDATE platform_balances
   SET reviews_count = reviews_count + 1,
       current_position = current_position + 1,
-      last_cleared_combo_position = 0
+      wallet_balance = wallet_balance + payout_amount
   WHERE user_id = target_user_id AND platform = target_platform
-  RETURNING platform_balances.current_position INTO new_position;
-
-  -- 2. Update balance on ALL platforms of this user
-  UPDATE platform_balances
-  SET wallet_balance = wallet_balance + payout_amount
-  WHERE user_id = target_user_id
-  RETURNING platform_balances.wallet_balance INTO new_balance;
+  RETURNING platform_balances.wallet_balance, platform_balances.current_position
+    INTO new_balance, new_position;
 
   RETURN QUERY SELECT new_balance, new_position;
 END;
@@ -357,10 +362,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Upgrade script for existing tables
-ALTER TABLE platform_balances ADD COLUMN IF NOT EXISTS last_cleared_combo_position INT DEFAULT 0;
+-- ========================================
+-- Performance index for combo clearance lookups
+-- (used by reviews.ts, auth.ts, transactions.ts to check if a combo deposit
+--  was approved in the current batch instead of reading a denormalized column)
+-- ========================================
+CREATE INDEX IF NOT EXISTS idx_deposits_combo_lookup
+  ON deposits(user_id, platform, status, amount, created_at DESC);
 
+-- ========================================
+-- Upgrade helpers for existing live databases
+-- (safe to re-run — all use IF NOT EXISTS / IF EXISTS guards)
+-- ========================================
 
+-- Remove the old last_cleared_combo_position column if it exists on a legacy DB
+-- (combo clearance is now tracked via the deposits table, not this column)
+ALTER TABLE platform_balances DROP COLUMN IF EXISTS last_cleared_combo_position;
 
+-- Ensure last_reset_at and last_completed_batch_at exist on upgraded DBs
+ALTER TABLE platform_balances ADD COLUMN IF NOT EXISTS last_reset_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE platform_balances ADD COLUMN IF NOT EXISTS last_completed_batch_at TIMESTAMPTZ;
 
+-- Ensure combo_checkpoints has all required columns
+ALTER TABLE combo_checkpoints ADD COLUMN IF NOT EXISTS profit_override NUMERIC(12, 2) NOT NULL DEFAULT 0.00;
 
+-- Ensure deposits has all required fields
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS crypto_amount NUMERIC(20, 8);
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS currency TEXT;
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS remark TEXT;
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS ip_address TEXT DEFAULT '127.0.0.1';
+
+-- Ensure withdrawals has platform context
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'Amazon';
+
+-- Ensure profiles has all extended fields
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS withdrawal_password TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_photo TEXT;

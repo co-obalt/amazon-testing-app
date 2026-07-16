@@ -313,7 +313,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
     // Fetch platform balances
     const { data: balancesData } = await supabase
       .from('platform_balances')
-      .select('platform, wallet_balance, reviews_count, current_position, last_reset_at, last_cleared_combo_position')
+      .select('platform, wallet_balance, reviews_count, current_position, last_reset_at')
       .eq('user_id', userId);
 
     const formattedBalances: any = {
@@ -334,7 +334,22 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
             .eq('position', nextPos)
             .maybeSingle();
 
-          const isCleared = (b.last_cleared_combo_position || 0) === nextPos;
+          // Combo is cleared if there's an approved deposit >= trigger_balance in this batch
+          let isCleared = false;
+          if (checkpoint) {
+            const batchStart = b.last_reset_at ? new Date(b.last_reset_at).toISOString() : new Date(0).toISOString();
+            const { data: clearingDeposit } = await supabase
+              .from('deposits')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('platform', b.platform)
+              .eq('status', 'Approved')
+              .gte('amount', checkpoint.trigger_balance)
+              .gte('created_at', batchStart)
+              .limit(1)
+              .maybeSingle();
+            isCleared = !!clearingDeposit;
+          }
           const isComboBlocked = checkpoint && !isCleared;
 
           formattedBalances[b.platform] = {
