@@ -148,6 +148,7 @@ export default function App() {
             <UnderReviewPage
               username={username}
               onNavigateHome={() => setCurrentView('landing')}
+              onNavigateToLogin={() => setCurrentView('login')}
             />
           )}
 

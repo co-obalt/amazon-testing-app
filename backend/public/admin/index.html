@@ -398,7 +398,7 @@
             <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
               <div class="relative w-full max-w-md">
                 <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"></i>
-                <input type="text" id="vipUserSearch" oninput="loadVipUsersTab()" placeholder="Search user accounts..."
+                <input type="text" id="vipUserSearch" oninput="debounceVipSearch()" placeholder="Search user accounts..."
                   class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold text-xs" />
               </div>
               <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
@@ -517,6 +517,31 @@
               </div>
             </div>
 
+            <!-- Batch Status Row (visible when a batch exists) -->
+            <div id="vipPageBatchStatus" class="hidden bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="flex items-center gap-4">
+                  <div class="bg-[#131921] text-amazon-gold p-3 rounded-xl">
+                    <i data-lucide="layers" class="h-5 w-5"></i>
+                  </div>
+                  <div>
+                    <h5 class="font-black text-sm text-gray-800 uppercase tracking-wider">Active Batch</h5>
+                    <p class="text-[11px] text-gray-500 mt-0.5 font-semibold" id="vipPageBatchDetails">—</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="text-right">
+                    <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">User Progress</span>
+                    <p class="text-lg font-black text-[#131921] font-mono" id="vipPageBatchProgress">0/25</p>
+                  </div>
+                  <button onclick="resetActiveBatch()" class="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg font-bold text-xs uppercase cursor-pointer transition flex items-center gap-1.5">
+                    <i data-lucide="rotate-ccw" class="h-3.5 w-3.5"></i>
+                    Reset Batch
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- Configuration Form Area (Inline directly below cards) -->
             <div id="vipPageConfigurator"
               class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4 hidden">
@@ -536,6 +561,13 @@
                 <span>Warning: You are assigning some campaigns that this user has already completed. Saving will
                   re-assign them to this workspace, and they will appear as pending tasks for the user to review
                   again.</span>
+              </div>
+
+              <!-- Limit Banner for 25-product cap -->
+              <div id="vipPageLimitBanner"
+                class="bg-red-50 text-red-800 p-3 rounded-xl border border-red-200 text-[11px] font-bold hidden flex items-center space-x-2">
+                <i data-lucide="alert-triangle" class="h-4 w-4 text-red-600 flex-shrink-0"></i>
+                <span>Maximum 25 products per batch. Please uncheck another product before selecting a new one.</span>
               </div>
 
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -589,7 +621,8 @@
               <div class="pt-4 border-t border-gray-150 flex items-center justify-end space-x-3">
                 <button onclick="hideVipPageConfigurator()"
                   class="px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg transition-colors cursor-pointer text-xs bg-white">Cancel</button>
-                <button onclick="saveVipPagePlatformConfig()"
+                <label class="flex items-center space-x-2 text-xs font-bold text-gray-700 mt-3 cursor-pointer"><input type="checkbox" id="vipPageResetProgress" class="h-4 w-4 text-amazon-gold rounded border-gray-300 focus:ring-amazon-gold cursor-pointer"/><span>Reset user order progress (set counter to 0/25)</span></label>
+                        <button id="vipPageSaveBtn" onclick="saveVipPagePlatformConfig()"
                   class="bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0 text-xs">Save
                   VIP Campaign</button>
               </div>
@@ -905,7 +938,6 @@
                 <thead>
                   <tr class="bg-gray-100 border-b border-gray-200 text-gray-500 font-bold uppercase">
                     <th class="p-4">User</th>
-                    <th class="p-4">Platform</th>
                     <th class="p-4">Protocol</th>
                     <th class="p-4">Amount</th>
                     <th class="p-4">TxHash (Hash ID)</th>
@@ -1423,62 +1455,6 @@
           </div>
         </div>
 
-        <!-- side-by-side Configuration Form (Initially Hidden) -->
-        <div id="vipConfigurator" class="border-t border-gray-200 pt-6 space-y-4 hidden">
-          <div class="flex items-center justify-between bg-amazon-navy/5 p-3 rounded-lg border border-amazon-navy/10">
-            <h4 class="text-xs font-black text-amazon-navy uppercase tracking-wider">Configure <span
-                id="vipConfigPlatform" class="text-amazon-orange font-bold">Amazon</span> Campaign Parameters</h4>
-            <span class="text-[10px] text-gray-500 font-bold" id="vipConfigSelectedCount">0 products selected</span>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Left Side: Products Checklist -->
-            <div class="space-y-2 flex flex-col">
-              <span class="text-[9px] text-gray-400 font-black uppercase tracking-wider">Assign Products Pool</span>
-              <div
-                class="flex-1 border border-gray-200 rounded-xl bg-white p-3 overflow-hidden flex flex-col max-h-[350px]">
-                <div class="overflow-y-auto space-y-2 pr-1" id="vipProductsChecklist">
-                  <!-- Products checkboxes loaded dynamically -->
-                </div>
-              </div>
-            </div>
-
-            <!-- Right Side: Combos Configurator -->
-            <div class="space-y-2 flex flex-col">
-              <div class="flex items-center justify-between">
-                <span class="text-[9px] text-gray-400 font-black uppercase tracking-wider">Combo Checkpoints</span>
-                <button type="button" onclick="addVipComboRow()"
-                  class="px-2.5 py-1 bg-amazon-dark hover:bg-black text-white text-[9px] font-black uppercase rounded flex items-center space-x-1 cursor-pointer border-0">
-                  <i data-lucide="plus" class="h-3 w-3"></i>
-                  <span>Add Combo</span>
-                </button>
-              </div>
-              <div
-                class="flex-1 border border-gray-200 rounded-xl bg-white p-3 overflow-auto flex flex-col max-h-[350px]">
-                <table class="w-full text-left text-[10px] border-collapse">
-                  <thead>
-                    <tr class="bg-gray-50 border-b border-gray-200 text-gray-450 uppercase font-black">
-                      <th class="p-2">Position (#)</th>
-                      <th class="p-2">Amount ($)</th>
-                      <th class="p-2 text-right">Delete</th>
-                    </tr>
-                  </thead>
-                  <tbody id="vipCombosList" class="divide-y divide-gray-150">
-                    <!-- Combo input rows generated dynamically -->
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Configurator Action Buttons -->
-          <div class="pt-4 border-t border-gray-150 flex items-center justify-end space-x-3 mt-4">
-            <button onclick="hideVipConfigurator()"
-              class="px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-lg transition-colors cursor-pointer text-xs bg-white">Cancel</button>
-            <button onclick="saveVipPlatformConfig()"
-              class="bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0 text-xs">Save
-              VIP Campaign</button>
-          </div>
         </div>
       </div>
     </div>
@@ -1519,16 +1495,7 @@
         </div>
 
         <form id="createProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="space-y-1">
-            <label class="font-bold text-gray-500 uppercase text-[9px]">Select Platform</label>
-            <select id="prodPlatform" onchange="calculateCommissionDefault()"
-              class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold bg-white">
-              <option value="Amazon">Amazon (VIP 1)</option>
-              <option value="Alibaba">Alibaba (VIP 2)</option>
-              <option value="Shopify">Shopify (VIP 3)</option>
-            </select>
-          </div>
-          <div class="space-y-1">
+          <div class="md:col-span-2 space-y-1">
             <label class="font-bold text-gray-500 uppercase text-[9px]">Product Title</label>
             <input type="text" id="prodTitle" required placeholder="e.g. Wireless Noise Cancelling Earbuds"
               class="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-amazon-gold" />
@@ -2094,6 +2061,31 @@
               });
             }
           }
+
+          // Real-time batch status update when a user completes a review
+          if (message.type === 'user_review_completed') {
+            const { userId, platform, completedReviewsCount, totalRequired } = message.data;
+            // Only update if the admin is currently viewing this user's VIP panel
+            if (selectedVipUserId === userId) {
+              // Update local state
+              batchPosition = completedReviewsCount;
+              batchIsActive = completedReviewsCount > 0;
+              // Update the batch status row directly
+              const batchStatusEl = document.getElementById('vipPageBatchStatus');
+              const batchDetailsEl = document.getElementById('vipPageBatchDetails');
+              const batchProgressEl = document.getElementById('vipPageBatchProgress');
+              if (batchStatusEl && batchDetailsEl && batchProgressEl) {
+                batchProgressEl.textContent = `${completedReviewsCount}/${totalRequired}`;
+                const count = currentVipConfig && currentVipConfig[platform] ? currentVipConfig[platform].productIds.length : 25;
+                batchDetailsEl.textContent = `${platform} — ${count}/25 products assigned. ${completedReviewsCount} completed by user.`;
+              }
+              // Also refresh allUserReviews to update Done badges
+              fetch(`/api/admin/users/${userId}/reviews`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
+                .then(r => r.json())
+                .then(data => { allUserReviews = data || []; renderProductPoolTabs(platform); })
+                .catch(() => {});
+            }
+          }
         } catch (err) {
           console.error("Error parsing real-time websocket message:", err);
         }
@@ -2312,9 +2304,7 @@
           const countryText = u.country && u.country !== 'Unknown' ? u.country : 'Pakistan';
           const locationText = cityText ? `${cityText}, ${countryText}` : countryText;
 
-          const boundPlatform = (u.activeVIPs && u.activeVIPs.length > 0) ? u.activeVIPs[0] : 'Unbound';
-          const isBound = boundPlatform !== 'Unbound';
-          const boundBalance = isBound ? parseFloat(u.balances?.[boundPlatform] || 0).toFixed(2) : parseFloat(u.balances?.total || 0).toFixed(2);
+          const boundBalance = parseFloat(u.balances?.total || 0).toFixed(2);
 
           return `
           <tr class="hover:bg-gray-50 text-xs">
@@ -2379,6 +2369,7 @@
     }
 
     async function deleteUser(userId) {
+      if (!confirm('⚠️ Are you sure you want to PERMANENTLY delete this user? This action cannot be undone. All their data, orders, deposits, and withdrawals will be removed.')) return;
       try {
         const res = await fetch(`/api/admin/users/${userId}`, {
           method: 'DELETE',
@@ -2440,23 +2431,34 @@
           `).join('');
         setTimeout(() => chatEl.scrollTop = chatEl.scrollHeight, 50);
 
-        // Render Platform Balances & Reset Actions
+        // Render Wallet Balance + Platform Progress
         const balEl = document.getElementById('udBalancesList');
-        balEl.innerHTML = data.balances.map(b => `
-          <div class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-2xs">
+        const walletBalance = data.balance || 0;
+        let balHtml = `
+          <div class="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-lg shadow-2xs">
             <div>
-              <span class="font-black text-gray-900 uppercase">${b.platform}</span>
-              <div class="text-[9px] text-gray-500 mt-0.5">Progress: ${b.current_position || 0} / 25 reviews</div>
+              <span class="font-black text-green-800 uppercase">Wallet Balance</span>
             </div>
-            <div class="flex items-center space-x-3 text-right">
-              <div>
-                <div class="font-mono font-black text-green-600">$${parseFloat(b.wallet_balance).toFixed(2)}</div>
-                <div class="text-[9px] text-gray-400 uppercase mt-0.5">Total: ${b.reviews_count}</div>
-              </div>
-              <button onclick="resetUserBatch('${b.platform}')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold border border-red-200 rounded text-[9px] uppercase transition cursor-pointer">Reset Batch</button>
-            </div>
+            <div class="font-mono font-black text-green-600 text-lg">$${parseFloat(walletBalance).toFixed(2)}</div>
           </div>
-        `).join('');
+        `;
+        if (data.balances && data.balances.length > 0) {
+          balHtml += data.balances.map(b => `
+            <div class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg shadow-2xs">
+              <div>
+                <span class="font-black text-gray-900 uppercase">${b.platform}</span>
+                <div class="text-[9px] text-gray-500 mt-0.5">Progress: ${b.current_position || 0} / 25 reviews</div>
+              </div>
+              <div class="flex items-center space-x-3 text-right">
+                <div>
+                  <div class="text-[9px] text-gray-400 uppercase">Total: ${b.reviews_count}</div>
+                </div>
+                <button onclick="resetUserBatch('${b.platform}')" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold border border-red-200 rounded text-[9px] uppercase transition cursor-pointer">Reset Batch</button>
+              </div>
+            </div>
+          `).join('');
+        }
+        balEl.innerHTML = balHtml;
 
         // Render Active Checkpoints Rules List
         const comboEl = document.getElementById('udCombosList');
@@ -3015,18 +3017,21 @@
         }
 
         // Autofill the form inputs!
-        document.getElementById('prodTitle').value = data.title;
-        document.getElementById('prodImage').value = data.imageUrl;
+        document.getElementById('prodTitle').value = data.title || '';
+        document.getElementById('prodImage').value = data.imageUrl || '';
         document.getElementById('prodLink').value = url;
-        document.getElementById('prodPlatform').value = 'Amazon';
-        document.getElementById('prodPrice').value = data.price || 0.00;
+        document.getElementById('prodPrice').value = data.price || '';
+        document.getElementById('prodPayout').value = data.price ? Number((data.price * 0.04).toFixed(2)) : '';
 
-        const commission = Number((data.price * 0.04).toFixed(2)) || 1.50;
-        document.getElementById('prodPayout').value = commission;
-
-        statusEl.textContent = '✓ Successfully populated Title, Image, Merchant Link, and estimated payout!';
-        statusEl.classList.remove('text-gray-500');
-        statusEl.classList.add('text-green-600');
+        if (data.warnings && data.warnings.length > 0) {
+          statusEl.textContent = '⚠️ Partial fetch: ' + data.warnings.join('. ') + '. Please fill in the missing fields manually.';
+          statusEl.classList.remove('text-gray-500', 'text-green-600');
+          statusEl.classList.add('text-amber-600');
+        } else {
+          statusEl.textContent = '✓ Successfully populated Title, Image, Merchant Link, and estimated payout!';
+          statusEl.classList.remove('text-gray-500');
+          statusEl.classList.add('text-green-600');
+        }
       } catch (err) {
         statusEl.textContent = '❌ Scraper connection failure.';
         statusEl.classList.remove('text-gray-500');
@@ -3039,19 +3044,14 @@
 
     function calculateCommissionDefault() {
       const priceVal = parseFloat(document.getElementById('prodPrice').value) || 0;
-      const platform = document.getElementById('prodPlatform').value;
-      let pct = 0.04;
-      if (platform === 'Alibaba') pct = 0.08;
-      else if (platform === 'Shopify') pct = 0.12;
-
-      const commission = Number((priceVal * pct).toFixed(2));
+      // Products are universal — default 4% commission
+      const commission = Number((priceVal * 0.04).toFixed(2));
       document.getElementById('prodPayout').value = commission;
     }
 
     // Add Product Form Submit
     document.getElementById('createProductForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const platform = document.getElementById('prodPlatform').value;
       const title = document.getElementById('prodTitle').value;
       const imageUrl = document.getElementById('prodImage').value;
       const price = parseFloat(document.getElementById('prodPrice').value) || 0.00;
@@ -3065,7 +3065,7 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${adminToken}`
           },
-          body: JSON.stringify({ platform, title, imageUrl, price, payout, externalLink })
+          body: JSON.stringify({ title, imageUrl, price, payout, externalLink })
         });
 
         if (res.ok) {
@@ -3303,14 +3303,13 @@
         // Render deposits
         const depBody = document.getElementById('depositApprovalBody');
         depBody.innerHTML = deposits.length === 0
-          ? `<tr><td colspan="6" class="p-8 text-center text-gray-400 italic">No pending deposit requests queued</td></tr>`
+          ? `<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No pending deposit requests queued</td></tr>`
           : deposits.map(d => `
             <tr>
               <td class="p-4">
                 <div class="font-bold text-gray-900">${d.profiles?.username || 'Unknown'}</div>
                 <div class="text-[10px] text-gray-400 font-mono">${d.ip_address || '127.0.0.1'}</div>
               </td>
-              <td class="p-4 font-black uppercase text-gray-700">${d.platform}</td>
               <td class="p-4 font-mono font-bold text-gray-800">${d.protocol}</td>
               <td class="p-4 font-mono font-black text-green-600">$${parseFloat(d.amount).toFixed(2)}</td>
               <td class="p-4 font-mono text-gray-500 select-all">${d.tx_hash}</td>
@@ -3660,19 +3659,31 @@
     let selectedVipUserId = null;
     let selectedVipUsername = null;
     let currentVipConfig = null;
+    let batchIsActive = false;
+    let batchPosition = 0;
     let allVipProducts = [];
-    let allUserReviews = []; // Full user reviews including platform
+    let allUserReviews = [];
     let activeVipPlatform = null;
+    let selectedVipUserPlatform = null; // user's bound platform from profile
+    let vipSearchDebounceTimer = null;
+
+    function debounceVipSearch() {
+      clearTimeout(vipSearchDebounceTimer);
+      vipSearchDebounceTimer = setTimeout(() => loadVipUsersTab(), 300);
+    }
 
     async function loadVipUsersTab() {
       try {
         const searchVal = document.getElementById('vipUserSearch').value;
+        const tableBody = document.getElementById('vipUsersTableBody');
+        // Show loading state immediately
+        tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center"><div class="flex items-center justify-center space-x-2 text-gray-400"><div class="h-4 w-4 border-2 border-amazon-gold border-t-transparent rounded-full animate-spin"></div><span class="text-xs font-bold">Loading users...</span></div></td></tr>`;
+
         const res = await fetch(`/api/admin/users?status=active&search=${encodeURIComponent(searchVal)}`, {
           headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         const users = await res.json();
 
-        const tableBody = document.getElementById('vipUsersTableBody');
         tableBody.innerHTML = users.map(u => {
           let activeVIPBadges = '<span class="px-2 py-0.5 text-[9px] font-bold bg-gray-100 text-gray-500 rounded border">None (Locked)</span>';
           if (u.activeVIPs && u.activeVIPs.length > 0) {
@@ -3716,28 +3727,50 @@
       document.getElementById('vipStep2').classList.remove('hidden');
       hideVipPageConfigurator();
 
-      // Render immediate loading state inside card action areas
-      document.getElementById('vipPageActions-Amazon').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
-      document.getElementById('vipPageActions-Alibaba').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
-      document.getElementById('vipPageActions-Shopify').innerHTML = `<span class="text-[10px] text-gray-400 italic">Fetching parameters...</span>`;
+      // Render immediate loading spinner inside card action areas
+      const loadingSpinner = `<div class="flex items-center justify-center py-3 space-x-2 text-gray-400"><div class="h-3.5 w-3.5 border-2 border-amazon-gold border-t-transparent rounded-full animate-spin"></div><span class="text-[10px] font-bold">Loading...</span></div>`;
+      document.getElementById('vipPageActions-Amazon').innerHTML = loadingSpinner;
+      document.getElementById('vipPageActions-Alibaba').innerHTML = loadingSpinner;
+      document.getElementById('vipPageActions-Shopify').innerHTML = loadingSpinner;
 
       try {
-        // Fetch user VIP configs, products pool, and lightweight review logs in parallel (optimized)
-        const [vipRes, prodRes, reviewsRes] = await Promise.all([
+        // Fetch user VIP configs, products pool, lightweight review logs, and balance in parallel
+        const [vipRes, prodRes, reviewsRes, userRes] = await Promise.all([
           fetch(`/api/admin/users/${userId}/vip`, { headers: { 'Authorization': `Bearer ${adminToken}` } }),
           fetch('/api/admin/products', { headers: { 'Authorization': `Bearer ${adminToken}` } }),
-          fetch(`/api/admin/users/${userId}/reviews`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
+          fetch(`/api/admin/users/${userId}/reviews`, { headers: { 'Authorization': `Bearer ${adminToken}` } }),
+          fetch(`/api/admin/users/${userId}`, { headers: { 'Authorization': `Bearer ${adminToken}` } })
         ]);
 
-        const [vipData, prodData, reviewsData] = await Promise.all([
+        const [vipData, prodData, reviewsData, userData] = await Promise.all([
           vipRes.json(),
           prodRes.json(),
-          reviewsRes.json()
+          reviewsRes.json(),
+          userRes.json()
         ]);
 
         currentVipConfig = vipData;
         allVipProducts = prodData;
         allUserReviews = reviewsData || [];
+        selectedVipUserPlatform = userData.profile?.platform || null;
+
+        // Determine batch status from ACTUAL submissions in CURRENT batch (single source of truth)
+        const allPlatforms = ['Amazon', 'Alibaba', 'Shopify'];
+        const activePlatform = allPlatforms.find(p => currentVipConfig[p] && currentVipConfig[p].productIds.length > 0);
+        if (activePlatform) {
+          // Find last_reset_at for this platform from user's balance data
+          const platBalance = (userData.balances || []).find(b => b.platform === activePlatform);
+          const batchStart = platBalance?.last_reset_at ? new Date(platBalance.last_reset_at).getTime() : 0;
+          // Count only reviews created AFTER batch start (current batch only)
+          const completedCount = allUserReviews.filter(r =>
+            r.platform === activePlatform && new Date(r.created_at).getTime() >= batchStart
+          ).length;
+          batchIsActive = completedCount > 0;
+          batchPosition = completedCount;
+        } else {
+          batchIsActive = false;
+          batchPosition = 0;
+        }
 
         renderVipPageCards();
       } catch (err) {
@@ -3753,7 +3786,11 @@
       selectedVipUsername = null;
       currentVipConfig = null;
       activeVipPlatform = null;
+      selectedVipUserPlatform = null;
       allUserReviews = [];
+      // Hide batch status row
+      const batchStatusEl = document.getElementById('vipPageBatchStatus');
+      if (batchStatusEl) batchStatusEl.classList.add('hidden');
       loadVipUsersTab();
     }
 
@@ -3786,8 +3823,15 @@
         const productCount = config.productIds.length;
         const comboCount = config.combos.length;
 
+        // Check if ANY other platform is already active (has products or is bound)
+        const isAnyOtherPlatformActive = platforms.some(p => {
+          if (p === plat) return false;
+          const otherConfig = currentVipConfig[p];
+          return (otherConfig && otherConfig.productIds.length > 0) || selectedVipUserPlatform === p;
+        });
+
         if (productCount > 0) {
-          // Unlocked / Configured state
+          // Unlocked / Configured with products
           statusBadge.textContent = 'Unlocked';
           statusBadge.className = 'px-2.5 py-1 text-[10px] font-black uppercase rounded bg-green-50 text-green-700 border border-green-200';
 
@@ -3795,25 +3839,117 @@
           if (comboCount > 0) {
             comboSummary = 'bonuses: ' + config.combos.map(c => `#${c.position}=$${c.amount}`).join('; ');
           }
-          detailsText.textContent = `${productCount} product${productCount === 1 ? '' : 's'} selected. ${comboSummary}`;
+          detailsText.textContent = `${productCount} product${productCount === 1 ? '' : 's'} assigned. ${comboSummary}`;
 
           actionsContainer.innerHTML = `
             <button onclick="editVipPagePlatform('${plat}')" class="flex-1 px-4 py-2 bg-[#131921] hover:bg-black text-white font-bold rounded-lg text-xs uppercase cursor-pointer border-0">Edit Settings</button>
             <button onclick="lockVipPagePlatform('${plat}')" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-lg font-bold text-xs uppercase cursor-pointer">Lock Network</button>
           `;
-        } else {
-          // Locked state
-          statusBadge.textContent = 'Locked';
-          statusBadge.className = 'px-2.5 py-1 text-[10px] font-black uppercase rounded bg-gray-100 text-gray-600 border border-gray-200';
-          detailsText.textContent = 'No product assignments or custom checkpoints set.';
+        } else if (selectedVipUserPlatform === plat) {
+          // Configured with 0 products (was unlocked, admin cleared products)
+          statusBadge.textContent = 'Configured';
+          statusBadge.className = 'px-2.5 py-1 text-[10px] font-black uppercase rounded bg-blue-50 text-blue-700 border border-blue-200';
+          detailsText.textContent = 'Workspace configured but no products assigned. Add products to start the batch.';
 
           actionsContainer.innerHTML = `
-            <button onclick="unlockVipPagePlatform('${plat}')" class="w-full px-4 py-2 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black rounded-lg text-xs uppercase cursor-pointer border-0">Unlock & Configure</button>
+            <button onclick="editVipPagePlatform('${plat}')" class="flex-1 px-4 py-2 bg-[#131921] hover:bg-black text-white font-bold rounded-lg text-xs uppercase cursor-pointer border-0">Add Products</button>
+            <button onclick="lockVipPagePlatform('${plat}')" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded-lg font-bold text-xs uppercase cursor-pointer">Lock Network</button>
           `;
+        } else {
+          // Never configured / Locked
+          statusBadge.textContent = 'Locked';
+          statusBadge.className = 'px-2.5 py-1 text-[10px] font-black uppercase rounded bg-gray-100 text-gray-600 border border-gray-200';
+
+          if (isAnyOtherPlatformActive) {
+            // Another platform is active — disable unlock
+            detailsText.textContent = 'Another workspace is currently active. Lock it first before unlocking this one.';
+            actionsContainer.innerHTML = `
+              <button disabled class="w-full px-4 py-2 bg-gray-200 text-gray-400 font-bold rounded-lg text-xs uppercase cursor-not-allowed border-0">Unlock & Configure</button>
+            `;
+          } else {
+            detailsText.textContent = 'No product assignments or custom checkpoints set.';
+            actionsContainer.innerHTML = `
+              <button onclick="unlockVipPagePlatform('${plat}')" class="w-full px-4 py-2 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black rounded-lg text-xs uppercase cursor-pointer border-0">Unlock & Configure</button>
+            `;
+          }
         }
       });
+      // Render batch status row
+      const batchStatusEl = document.getElementById('vipPageBatchStatus');
+      const batchDetailsEl = document.getElementById('vipPageBatchDetails');
+      const batchProgressEl = document.getElementById('vipPageBatchProgress');
+      // Find the first platform with an active batch
+      const activeBatchPlatform = platforms.find(plat => {
+        const config = currentVipConfig[plat];
+        return config && config.productIds && config.productIds.length > 0;
+      });
+
+      if (activeBatchPlatform && batchStatusEl) {
+        const config = currentVipConfig[activeBatchPlatform];
+        const count = config.productIds.length;
+        // Count how many of these products have been reviewed (Done)
+        batchStatusEl.classList.remove('hidden');
+        batchDetailsEl.textContent = `${activeBatchPlatform} — ${count}/25 products assigned. ${batchPosition} completed by user.`;
+        batchProgressEl.textContent = `${batchPosition}/25`;
+        // Store the active batch platform for the reset function
+        batchStatusEl.dataset.platform = activeBatchPlatform;
+      } else if (batchStatusEl) {
+        batchStatusEl.classList.add('hidden');
+      }
+
       if (typeof lucide !== 'undefined') {
         lucide.createIcons();
+      }
+    }
+
+    async function resetActiveBatch() {
+      const batchStatusEl = document.getElementById('vipPageBatchStatus');
+      const platform = batchStatusEl ? batchStatusEl.dataset.platform : null;
+      if (!selectedVipUserId || !platform) return;
+
+      // Check if this is a first-time user (no approved withdrawals)
+      let isFirstTime = true;
+      try {
+        const histRes = await fetch(`/api/admin/users/${selectedVipUserId}`, { headers: { 'Authorization': `Bearer ${adminToken}` } });
+        if (histRes.ok) {
+          const userData = await histRes.json();
+          const withdrawals = userData.withdrawals || [];
+          isFirstTime = !withdrawals.some((w) => w.status === 'Approved');
+        }
+      } catch (e) {}
+
+      const warningMsg = isFirstTime
+        ? `⚠️ WARNING: This user has NOT completed their first withdrawal yet. They must complete a withdrawal before the admin can assign a new batch.\n\nAre you sure you want to RESET the ${platform} batch? This will clear all products (workspace stays configured) and reset progress to 0/25.`
+        : `Are you sure you want to RESET the ${platform} batch? This will clear all products (workspace stays configured) and reset the user's progress to 0/25.`;
+
+      if (!confirm(warningMsg)) return;
+
+      try {
+        // Save 0 products via VIP config endpoint (keeps workspace configured, NOT locked)
+        const saveRes = await fetch(`/api/admin/users/${selectedVipUserId}/vip`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({
+            platform,
+            productIds: [],
+            combos: [],
+            resetProgress: true
+          })
+        });
+        if (!saveRes.ok) {
+          const err = await saveRes.json();
+          showToast('Failed to reset batch: ' + (err.error || 'Server error'), 'error');
+          return;
+        }
+
+        showToast(`${platform} batch reset. Workspace stays configured with 0 products. Add new products to start the next batch.`);
+        // Reload the user's VIP data
+        await selectVipUser(selectedVipUserId, selectedVipUsername);
+      } catch (err) {
+        showToast('Network error while resetting batch.', 'error');
       }
     }
 
@@ -3825,8 +3961,9 @@
       document.getElementById('vipPageConfigPlatform').textContent = platform;
       document.getElementById('vipPageConfigurator').classList.remove('hidden');
 
-      // Update checklist title with platform target info
-      document.getElementById('vipPageProductsPoolTitle').textContent = `Assign Products Pool`;
+      // Update checklist title with platform target info and batch status
+      const assignedCount = currentVipConfig[platform] ? currentVipConfig[platform].productIds.length : 0;
+      document.getElementById('vipPageProductsPoolTitle').textContent = `Assign Products Pool${assignedCount >= 25 ? ' — Batch Full (25/25)' : ''}`;
 
       renderProductPoolTabs(platform);
 
@@ -3853,54 +3990,57 @@
       }
 
       // Categorise products:
-      // PREVIOUSLY USED = reviewed on THIS platform specifically
-      //                   OR reviewed on any platform globally (global history)
-      //                   OR currently assigned to THIS platform (current batch)
-      //                   OR assigned to OTHER platforms
-      // FRESH            = never reviewed anywhere, never assigned anywhere
+      // ASSIGNED  = currently assigned to THIS platform (the active batch)
+      // FRESH     = not assigned to this platform (may be reviewed elsewhere or never touched)
       const freshProducts = [];
-      const usedProducts = [];
-
-      // Precompute sets for performance
-      const reviewedOnThisPlatform = new Set(
-        allUserReviews.filter(r => r.platform === pltf).map(r => r.product_id)
-      );
-      const reviewedGlobally = new Set(allUserReviews.map(r => r.product_id));
+      const assignedProducts = [];
 
       allVipProducts.forEach(p => {
-        const isClaimedHere = reviewedOnThisPlatform.has(p.id);   // reviewed on THIS platform → Done badge
-        const isClaimedGlobal = reviewedGlobally.has(p.id);        // reviewed anywhere → goes to Previously Used
         const isAssignedToThisPlatform = currentVipConfig[pltf] && currentVipConfig[pltf].productIds.includes(p.id);
+        const isClaimedHere = allUserReviews.some(r => r.platform === pltf && r.product_id === p.id);
+        const isClaimedGlobal = allUserReviews.some(r => r.product_id === p.id);
         const otherAssignedPlatforms = ['Amazon', 'Alibaba', 'Shopify'].filter(plat =>
           plat !== pltf && currentVipConfig[plat] && currentVipConfig[plat].productIds.includes(p.id)
         );
-        const assignedOnOther = otherAssignedPlatforms.length > 0;
 
-        if (isClaimedGlobal || isAssignedToThisPlatform || assignedOnOther) {
-          usedProducts.push({ ...p, isClaimedHere, isAssignedToThisPlatform, otherAssignedPlatforms });
+        if (isAssignedToThisPlatform) {
+          assignedProducts.push({ ...p, isClaimedHere, isAssignedToThisPlatform: true, otherAssignedPlatforms: [] });
         } else {
-          freshProducts.push({ ...p, isClaimedHere: false, isAssignedToThisPlatform: false, otherAssignedPlatforms: [] });
+          freshProducts.push({ ...p, isClaimedHere, isAssignedToThisPlatform: false, otherAssignedPlatforms });
         }
       });
+
+      // Count how many products are already assigned to this platform (current batch size)
+      const currentAssignedCount = assignedProducts.length;
+      // Batch is full when 25 products are assigned — controls locked
+      const batchFull = currentAssignedCount >= 25;
+      // Batch is active (locked) when ANY products are assigned — after save, controls are locked
+      const controlsLocked = currentAssignedCount > 0;
 
       const makeProductRow = (p) => {
         // Pre-check ONLY if currently assigned to this specific platform
         const isChecked = p.isAssignedToThisPlatform;
+        // Assigned products are locked when batch exists (any products assigned)
+        // Available products are disabled only when batch is full (25)
+        const isDisabled = (p.isAssignedToThisPlatform && controlsLocked) || (batchFull && !p.isAssignedToThisPlatform);
         // Done badge = reviewed specifically on THIS platform
         const claimedBadge = p.isClaimedHere
           ? `<span style="display:inline-flex;align-items:center;background:#dcfce7;color:#15803d;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:5px;text-transform:uppercase;border:1px solid #86efac;">✓ Done</span>`
           : '';
-        const assignedBadge = p.otherAssignedPlatforms && p.otherAssignedPlatforms.length > 0
+        const assignedBadge = !p.isAssignedToThisPlatform && p.otherAssignedPlatforms && p.otherAssignedPlatforms.length > 0
           ? `<span style="display:inline-flex;align-items:center;background:#dbeafe;color:#1d4ed8;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:5px;text-transform:uppercase;border:1px solid #93c5fd;">📌 ${p.otherAssignedPlatforms.join(', ')}</span>`
+          : '';
+        const lockedLabel = p.isAssignedToThisPlatform && controlsLocked && !p.isClaimedHere
+          ? `<span style="display:inline-flex;align-items:center;background:#f0f9ff;color:#0369a1;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:5px;text-transform:uppercase;border:1px solid #bae6fd;">🔒 Assigned</span>`
           : '';
 
         return `
-          <label class="flex items-center space-x-3 p-2.5 hover:bg-gray-50 rounded-lg border border-gray-150 cursor-pointer text-xs font-bold text-gray-700">
-            <input type="checkbox" value="${p.id}" onchange="updateSelectedPageProductsCount()" ${isChecked ? 'checked' : ''} class="h-4 w-4 text-amazon-gold rounded border-gray-300 focus:ring-amazon-gold flex-shrink-0"/>
+          <label class="flex items-center space-x-3 p-2.5 hover:bg-gray-50 rounded-lg border border-gray-150 ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'} text-xs font-bold text-gray-700">
+            <input type="checkbox" value="${p.id}" onchange="updateSelectedPageProductsCount()" ${isChecked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} class="h-4 w-4 text-amazon-gold rounded border-gray-300 focus:ring-amazon-gold flex-shrink-0"/>
             <img src="${p.image_url}" class="h-8 w-8 object-contain rounded border bg-gray-50 p-0.5 flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=120'"/>
             <span class="flex-1 min-w-0 flex flex-col gap-0.5">
               <span class="truncate font-bold text-gray-800">${p.title}</span>
-              <span class="flex items-center gap-1 flex-wrap">${claimedBadge}${assignedBadge}</span>
+              <span class="flex items-center gap-1 flex-wrap">${claimedBadge}${assignedBadge}${lockedLabel}</span>
             </span>
             <span class="text-emerald-600 font-mono flex-shrink-0">+$${parseFloat(p.payout).toFixed(2)}</span>
           </label>
@@ -3909,11 +4049,11 @@
 
       const freshList = freshProducts.length > 0
         ? freshProducts.map(makeProductRow).join('')
-        : `<p class="text-gray-400 italic text-center text-xs py-6">All products have been reviewed or assigned to a platform already.</p>`;
+        : `<p class="text-gray-400 italic text-center text-xs py-6">All products are already assigned to this workspace.</p>`;
 
-      const usedList = usedProducts.length > 0
-        ? usedProducts.map(makeProductRow).join('')
-        : `<p class="text-gray-400 italic text-center text-xs py-6">No previously used or assigned products found.</p>`;
+      const usedList = assignedProducts.length > 0
+        ? assignedProducts.map(makeProductRow).join('')
+        : `<p class="text-gray-400 italic text-center text-xs py-6">No products currently assigned to this workspace.</p>`;
 
       // Render tab buttons into the sticky header (outside scroll area)
       const tabHeader = document.getElementById('vipPagePoolTabHeader');
@@ -3925,14 +4065,14 @@
               onclick="switchPoolTab('fresh', '${pltf}')"
               class="flex-1 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${activeProductPoolTab === 'fresh' ? 'border-amazon-gold text-amber-700 bg-amber-50' : 'border-transparent text-gray-400 hover:text-gray-700 bg-white'}"
             >
-              🆕 Fresh <span class="ml-1 bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-black">${freshProducts.length}</span>
+              🆕 Available <span class="ml-1 bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-black">${freshProducts.length}</span>
             </button>
             <button
               id="poolTab-used"
               onclick="switchPoolTab('used', '${pltf}')"
               class="flex-1 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${activeProductPoolTab === 'used' ? 'border-amazon-gold text-amber-700 bg-amber-50' : 'border-transparent text-gray-400 hover:text-gray-700 bg-white'}"
             >
-              🔁 Previously Used <span class="ml-1 bg-orange-100 text-orange-700 text-[9px] px-1.5 py-0.5 rounded font-black">${usedProducts.length}</span>
+              ✅ Assigned <span class="ml-1 bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-black">${assignedProducts.length}</span>
             </button>
           </div>
         `;
@@ -3975,7 +4115,45 @@
     function updateSelectedPageProductsCount() {
       const checkedBoxes = document.querySelectorAll('#vipPageProductsChecklist input[type="checkbox"]:checked');
       const count = checkedBoxes.length;
-      document.getElementById('vipPageConfigSelectedCount').textContent = `${count} product${count === 1 ? '' : 's'} selected`;
+
+      // Enforce max 25 limit
+      if (count > 25) {
+        const lastChecked = checkedBoxes[checkedBoxes.length - 1];
+        lastChecked.checked = false;
+        showToast('Maximum 25 products can be assigned per batch.', 'error');
+        return updateSelectedPageProductsCount();
+      }
+
+      // Color-coded count display
+      const countEl = document.getElementById('vipPageConfigSelectedCount');
+      const saveBtn = document.getElementById('vipPageSaveBtn');
+      if (count === 0) {
+        countEl.textContent = `0 products — Save to clear workspace`;
+        countEl.className = 'text-gray-500 font-bold text-[10px]';
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.className = 'bg-amber-500 hover:bg-amber-600 text-white font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0 text-xs'; }
+      } else if (count === 25) {
+        countEl.textContent = `${count}/25 products — Ready to save`;
+        countEl.className = 'text-green-700 font-black text-[10px]';
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-lg shadow-sm cursor-pointer transition-colors border-0 text-xs'; }
+      } else if (count > 20) {
+        countEl.textContent = `${count}/25 products — Select ${25 - count} more`;
+        countEl.className = 'text-amber-600 font-bold text-[10px]';
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.className = 'bg-gray-400 text-gray-200 font-black px-6 py-2.5 rounded-lg shadow-sm cursor-not-allowed border-0 text-xs'; }
+      } else {
+        countEl.textContent = `${count}/25 products — Select ${25 - count} more`;
+        countEl.className = 'text-gray-500 font-bold text-[10px]';
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.className = 'bg-gray-400 text-gray-200 font-black px-6 py-2.5 rounded-lg shadow-sm cursor-not-allowed border-0 text-xs'; }
+      }
+
+      // Show/hide the limit banner (only show when over 25, which shouldn't happen due to enforcement above)
+      const limitBanner = document.getElementById('vipPageLimitBanner');
+      if (limitBanner) {
+        if (count >= 25) {
+          limitBanner.classList.remove('hidden');
+        } else {
+          limitBanner.classList.add('hidden');
+        }
+      }
 
       // Check for checked products that have already been completed by user on THIS platform
       const reviewedOnActivePlatform = new Set(
@@ -4041,8 +4219,14 @@
       const checkedBoxes = document.querySelectorAll('#vipPageProductsChecklist input[type="checkbox"]:checked');
       const productIds = Array.from(checkedBoxes).map((cb) => cb.value);
 
-      if (productIds.length === 0) {
-        showToast('Please assign at least one product to unlock this platform.', 'error');
+      // Enforce exactly 25 products per batch
+      if (productIds.length > 25) {
+        showToast('Maximum 25 products can be assigned per batch.', 'error');
+        return;
+      }
+
+      if (productIds.length > 0 && productIds.length < 25) {
+        showToast(`A batch must contain exactly 25 products. Currently selected: ${productIds.length}/25.`, 'error');
         return;
       }
 
@@ -4071,13 +4255,19 @@
           body: JSON.stringify({
             platform: activeVipPlatform,
             productIds,
-            combos
+            combos,
+            resetProgress: document.getElementById('vipPageResetProgress') ? document.getElementById('vipPageResetProgress').checked : false
           })
         });
 
         if (res.ok) {
-          showToast(`VIP configurations for ${activeVipPlatform} successfully saved.`);
-          goBackToVipUsers();
+          const actionText = productIds.length === 0
+            ? `All ${activeVipPlatform} products cleared. User will see empty workspace.`
+            : `VIP configurations for ${activeVipPlatform} successfully saved.`;
+          showToast(actionText);
+          // Stay on step 2 — just close configurator and refresh the platform cards
+          hideVipPageConfigurator();
+          selectVipUser(selectedVipUserId, selectedVipUsername);
         } else {
           const err = await res.json();
           showToast('Failed to configure VIP parameters: ' + (err.error || 'Server error'), 'error');
@@ -4095,7 +4285,7 @@
         });
 
         if (res.ok) {
-          showToast(`${platform} parameters locked and balances reset.`);
+          showToast(`${platform} workspace locked.`);
           goBackToVipUsers();
         } else {
           showToast('Failed to relock platform.', 'error');
@@ -4237,27 +4427,33 @@
         document.getElementById('reportIdVal').textContent = `RPT-${dateStr}-${randomCode}`;
         document.getElementById('reportGenDateVal').textContent = new Date().toLocaleString();
 
-        // 2. Load Balances
+        // 2. Load Balances — single source of truth: data.balance
+        const walletBalance = data.balance || 0;
         const balances = Array.isArray(data.balances) ? data.balances : [];
-        const amazonBal = balances.find(b => b.platform === 'Amazon') || { wallet_balance: 0, reviews_count: 0 };
-        const alibabaBal = balances.find(b => b.platform === 'Alibaba') || { wallet_balance: 0, reviews_count: 0 };
-        const shopifyBal = balances.find(b => b.platform === 'Shopify') || { wallet_balance: 0, reviews_count: 0 };
+        const amazonProgress = balances.find(b => b.platform === 'Amazon') || { reviews_count: 0 };
+        const alibabaProgress = balances.find(b => b.platform === 'Alibaba') || { reviews_count: 0 };
+        const shopifyProgress = balances.find(b => b.platform === 'Shopify') || { reviews_count: 0 };
 
         document.getElementById('reportBalancesTableBody').innerHTML = `
+          <tr class="hover:bg-gray-50 bg-green-50">
+            <td class="p-2 border-r border-gray-250 font-bold">Wallet Balance (All Platforms)</td>
+            <td class="p-2 border-r border-gray-250 font-mono text-green-600 font-bold text-lg">$${parseFloat(walletBalance).toFixed(2)}</td>
+            <td class="p-2 font-mono">—</td>
+          </tr>
           <tr class="hover:bg-gray-50">
             <td class="p-2 border-r border-gray-250 font-bold">Amazon Marketplace (VIP 1)</td>
-            <td class="p-2 border-r border-gray-250 font-mono text-green-600 font-bold">$${parseFloat(amazonBal.wallet_balance).toFixed(2)}</td>
-            <td class="p-2 font-mono">${amazonBal.reviews_count} completed orders</td>
+            <td class="p-2 border-r border-gray-250 font-mono text-gray-400">—</td>
+            <td class="p-2 font-mono">${amazonProgress.reviews_count} completed orders</td>
           </tr>
           <tr class="hover:bg-gray-50">
             <td class="p-2 border-r border-gray-250 font-bold">Alibaba Wholesale (VIP 2)</td>
-            <td class="p-2 border-r border-gray-250 font-mono text-green-600 font-bold">$${parseFloat(alibabaBal.wallet_balance).toFixed(2)}</td>
-            <td class="p-2 font-mono">${alibabaBal.reviews_count} completed orders</td>
+            <td class="p-2 border-r border-gray-250 font-mono text-gray-400">—</td>
+            <td class="p-2 font-mono">${alibabaProgress.reviews_count} completed orders</td>
           </tr>
           <tr class="hover:bg-gray-50">
             <td class="p-2 border-r border-gray-250 font-bold">Shopify Merchant (VIP 3)</td>
-            <td class="p-2 border-r border-gray-250 font-mono text-green-600 font-bold">$${parseFloat(shopifyBal.wallet_balance).toFixed(2)}</td>
-            <td class="p-2 font-mono">${shopifyBal.reviews_count} completed orders</td>
+            <td class="p-2 border-r border-gray-250 font-mono text-gray-400">—</td>
+            <td class="p-2 font-mono">${shopifyProgress.reviews_count} completed orders</td>
           </tr>
         `;
 

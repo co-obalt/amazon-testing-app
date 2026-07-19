@@ -12,7 +12,7 @@ export function initializeWebSocket(server) {
             return;
         }
         try {
-            const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-eval-compliance-102';
+            const JWT_SECRET = process.env.JWT_SECRET || 'ecommerce_Vine_secret_hash_2026_secured';
             const decoded = jwt.verify(token, JWT_SECRET);
             wss.handleUpgrade(request, socket, head, (ws) => {
                 wss.emit('connection', ws, decoded);

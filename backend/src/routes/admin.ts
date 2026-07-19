@@ -1,5 +1,5 @@
 import express, { Response } from 'express';
-import { supabase } from '../config/supabase.js';
+import { supabase, upsertBalance } from '../config/supabase.js';
 import { authenticateToken, requireAdmin, AuthenticatedRequest } from '../middlewares/auth.js';
 import { mockChatMessages } from '../config/sandboxStore.js';
 import { broadcastToUser, broadcastToAdmins } from '../services/wsService.js';
@@ -311,36 +311,21 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
       }
     }
 
-    // Fetch all platform balances for these users in one query
+    // Fetch all enrichment data in parallel
     const userIds = users.map(u => u.id);
-    const { data: balances } = await supabase
-      .from('platform_balances')
-      .select('user_id, platform, wallet_balance')
-      .in('user_id', userIds);
+    const [activeWorkspacesResult, allAssignmentsResult] = await Promise.all([
+      supabase.from('user_assigned_products').select('user_id, platform').in('user_id', userIds),
+      supabase.from('admin_assigned_users').select('user_id, admin_id, admins(username)').in('user_id', userIds)
+    ]);
 
-    // Group balances by user_id
+    const activeWorkspaces = activeWorkspacesResult.data;
+    const allAssignments = allAssignmentsResult.data;
+
+    // Balance now comes directly from profiles.balance (single source of truth)
     const balanceMap: Record<string, any> = {};
-    userIds.forEach(id => {
-      balanceMap[id] = { Amazon: 0, Alibaba: 0, Shopify: 0, total: 0 };
+    users.forEach(u => {
+      balanceMap[u.id] = { total: parseFloat(u.balance as any) || 0 };
     });
-
-    if (balances) {
-      balances.forEach(b => {
-        const uId = b.user_id;
-        const plat = b.platform;
-        const bal = parseFloat(b.wallet_balance) || 0;
-        if (balanceMap[uId]) {
-          balanceMap[uId][plat] = bal;
-          balanceMap[uId].total += bal;
-        }
-      });
-    }
-
-    // Fetch active VIP platforms count for returned users only
-    const { data: activeWorkspaces } = await supabase
-      .from('user_assigned_products')
-      .select('user_id, platform')
-      .in('user_id', userIds);
 
     const activePlatsMap: Record<string, Set<string>> = {};
     userIds.forEach(id => {
@@ -354,12 +339,6 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
         }
       });
     }
-
-    // Fetch assignments for returned users only to match red dots on the frontend
-    const { data: allAssignments } = await supabase
-      .from('admin_assigned_users')
-      .select('user_id, admin_id, admins(username)')
-      .in('user_id', userIds);
 
     const assignmentMap: Record<string, { id: string; username: string }> = {};
     if (allAssignments) {
@@ -376,10 +355,15 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response) => {
     // Attach balances & active VIPs & resolved referrer username
     const enrichedUsers = users.map(u => {
       const normalizedRef = u.referred_by ? u.referred_by.trim().toUpperCase() : '';
+      // Include user's bound platform in activeVIPs (even if 0 products assigned)
+      const vipSet = new Set<string>(activePlatsMap[u.id] || []);
+      if (u.platform && !vipSet.has(u.platform)) {
+        vipSet.add(u.platform);
+      }
       return {
         ...u,
-        balances: balanceMap[u.id] || { Amazon: 0, Alibaba: 0, Shopify: 0, total: 0 },
-        activeVIPs: Array.from(activePlatsMap[u.id] || []),
+        balances: balanceMap[u.id] || { total: 0 },
+        activeVIPs: Array.from(vipSet),
         referred_by_username: normalizedRef ? (referrerMap.get(normalizedRef) || u.referred_by) : null,
         assignedAdmin: assignmentMap[u.id] || null
       };
@@ -406,31 +390,27 @@ router.get('/users/:id', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(404).json({ error: 'User profile not found' });
     }
 
-    // Fetch user balances
-    const { data: balances } = await supabase
-      .from('platform_balances')
-      .select('*')
-      .eq('user_id', id);
-
-    // Fetch user transactions
-    const { data: deposits } = await supabase.from('deposits').select('*').eq('user_id', id).order('created_at', { ascending: false });
-    const { data: withdrawals } = await supabase.from('withdrawals').select('*').eq('user_id', id).order('created_at', { ascending: false });
-    const { data: reviews } = await supabase.from('review_submissions').select('*, products(title)').eq('user_id', id).order('created_at', { ascending: false });
-
-    // Fetch IP logs, custom combo rules, and customer service operator chat transcripts
-    const { data: ipLogs } = await supabase.from('ip_logs').select('*').eq('user_id', id).order('created_at', { ascending: false });
-    const { data: comboRules } = await supabase.from('combo_checkpoints').select('*').eq('user_id', id).order('position', { ascending: true });
-    const { data: chatLogs } = await supabase.from('chat_messages').select('*').eq('user_id', id).order('created_at', { ascending: true });
+    // Fetch all remaining data in parallel
+    const [depositsResult, withdrawalsResult, reviewsResult, ipLogsResult, comboRulesResult, chatLogsResult, progressResult] = await Promise.all([
+      supabase.from('deposits').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('withdrawals').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('review_submissions').select('*, products(title)').eq('user_id', id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('ip_logs').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('combo_checkpoints').select('*').eq('user_id', id).order('position', { ascending: true }),
+      supabase.from('chat_messages').select('*').eq('user_id', id).order('created_at', { ascending: true }).limit(200),
+      supabase.from('platform_balances').select('platform, reviews_count, current_position, last_reset_at, last_completed_batch_at').eq('user_id', id)
+    ]);
 
     res.json({
       profile: user,
-      balances: balances || [],
-      deposits: deposits || [],
-      withdrawals: withdrawals || [],
-      reviews: reviews || [],
-      ipLogs: ipLogs || [],
-      comboRules: comboRules || [],
-      chatLogs: chatLogs || []
+      balance: parseFloat(user.balance as any) || 0.00,
+      balances: progressResult.data || [],
+      deposits: depositsResult.data || [],
+      withdrawals: withdrawalsResult.data || [],
+      reviews: reviewsResult.data || [],
+      ipLogs: ipLogsResult.data || [],
+      comboRules: comboRulesResult.data || [],
+      chatLogs: chatLogsResult.data || []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -443,7 +423,7 @@ router.get('/users/:id/reviews', async (req: AuthenticatedRequest, res: Response
     const { id } = req.params;
     const { data: reviews, error } = await supabase
       .from('review_submissions')
-      .select('product_id, platform')
+      .select('product_id, platform, created_at')
       .eq('user_id', id);
 
     if (error) {
@@ -551,10 +531,10 @@ router.put('/users/:id/balance', async (req: AuthenticatedRequest, res: Response
   }
   try {
     const { id } = req.params;
-    const { platform, amount } = req.body; // e.g. amount: 15.50 (adds) or -10.00 (subtracts)
+    const { amount } = req.body;
 
-    if (!platform || amount === undefined) {
-      return res.status(400).json({ error: 'Platform and amount changes are required' });
+    if (amount === undefined) {
+      return res.status(400).json({ error: 'Amount is required' });
     }
 
     const delta = parseFloat(amount);
@@ -562,35 +542,34 @@ router.put('/users/:id/balance', async (req: AuthenticatedRequest, res: Response
       return res.status(400).json({ error: 'Invalid balance delta amount' });
     }
 
-    // Get current balance record
-    const { data: current, error: fetchError } = await supabase
-      .from('platform_balances')
-      .select('wallet_balance')
-      .eq('user_id', id)
-      .eq('platform', platform)
-      .single();
+    // Fetch current balance from profiles (single source of truth)
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance')
+      .eq('id', id)
+      .maybeSingle();
 
-    if (fetchError || !current) {
-      return res.status(400).json({ error: 'Balance ledger entry not found for this platform' });
+    if (profErr || !profile) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const currentBal = parseFloat(current.wallet_balance as any) || 0.0;
+    const currentBal = parseFloat(profile.balance as any) || 0.0;
     const finalBal = Number((currentBal + delta).toFixed(2));
 
-    const { error: updateError } = await supabase
-      .from('platform_balances')
-      .update({ wallet_balance: finalBal })
-      .eq('user_id', id);
+    const { error: updateErr } = await supabase
+      .from('profiles')
+      .update({ balance: finalBal })
+      .eq('id', id);
 
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to update balance: ' + updateError.message });
+    if (updateErr) {
+      return res.status(500).json({ error: 'Failed to update balance: ' + updateErr.message });
     }
 
-    broadcastToUser(id, 'balance_update', { type: 'balance_adjustment', platform, balance: finalBal });
+    broadcastToUser(id, 'balance_update', { type: 'balance_adjustment', balance: finalBal });
     clearCache('stats');
 
     const adminId = req.user?.id || 'unknown-admin';
-    await logAdminAction(adminId, 'UPDATE_USER_BALANCE', id, `Adjusted balance on platform ${platform} by ${amount} (New balance: ${finalBal})`, req);
+    await logAdminAction(adminId, 'UPDATE_USER_BALANCE', id, `Adjusted balance by ${amount} (New balance: ${finalBal})`, req);
 
     res.json({ message: 'Balance successfully updated', balance: finalBal });
   } catch (error: any) {
@@ -713,49 +692,48 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
     }
 
     if (status === 'Approved') {
-      // 1. Fetch user's current progress/balance on the deposit platform
-      const { data: balanceRecord } = await supabase
-        .from('platform_balances')
-        .select('wallet_balance, current_position')
-        .eq('user_id', deposit.user_id)
-        .eq('platform', deposit.platform)
-        .single();
+      // SINGLE SOURCE OF TRUTH: Update profiles.balance
+      // Also check for combo checkpoint profit bonus
+      const [{ data: prof }, { data: progressRow }] = await Promise.all([
+        supabase.from('profiles').select('balance').eq('id', deposit.user_id).maybeSingle(),
+        supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+      ]);
 
-      const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-      const currentPos = balanceRecord?.current_position || 0;
-      const nextPosition = currentPos + 1;
+      if (prof) {
+        const currentBalance = parseFloat(prof.balance as any) || 0.0;
+        const depositAmount = parseFloat(deposit.amount);
+        const currentPos = progressRow?.current_position || 0;
+        const nextPosition = currentPos + 1;
 
-      // 2. Check if a combo checkpoint is configured for this position
-      const { data: checkpoint } = await supabase
-        .from('combo_checkpoints')
-        .select('trigger_balance, profit_override')
-        .eq('user_id', deposit.user_id)
-        .eq('platform', deposit.platform)
-        .eq('position', nextPosition)
-        .maybeSingle();
+        // Check if this deposit clears a combo checkpoint
+        const { data: checkpoint } = await supabase
+          .from('combo_checkpoints')
+          .select('trigger_balance, profit_override')
+          .eq('user_id', deposit.user_id)
+          .eq('position', nextPosition)
+          .maybeSingle();
 
-      let finalBalance = currentBalance + parseFloat(deposit.amount);
-      let clearedComboPos = 0;
+        let finalBalance = Number((currentBalance + depositAmount).toFixed(2));
 
-      if (checkpoint) {
-        // This is a combo payment approval!
-        // Credit the deposit amount + the custom combo profit override!
-        const profitOverride = parseFloat(checkpoint.profit_override as any) || 0.00;
-        finalBalance = Number((currentBalance + parseFloat(deposit.amount) + profitOverride).toFixed(2));
-        clearedComboPos = nextPosition;
+        if (checkpoint) {
+          // Combo deposit approved — add profit bonus
+          const profitOverride = parseFloat(checkpoint.profit_override as any) || 0.00;
+          finalBalance = Number((currentBalance + depositAmount + profitOverride).toFixed(2));
+        }
+
+        const { error: balUpdateErr } = await supabase
+          .from('profiles')
+          .update({ balance: finalBalance })
+          .eq('id', deposit.user_id);
+
+        if (balUpdateErr) {
+          console.error('Failed to update balance on approve:', balUpdateErr);
+        }
       } else {
-        finalBalance = Number((currentBalance + parseFloat(deposit.amount)).toFixed(2));
+        console.error('Failed to fetch profile for balance update');
       }
 
-      // 3. Update wallet balance for ALL platforms of this user
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: finalBalance })
-        .eq('user_id', deposit.user_id);
-
-      // 4. Combo cleared — tracked automatically via approved deposit lookup (no extra column update needed)
-
-      // 5. Set user status to active to unlock workspace
+      // Set user status to active to unlock workspace
       await supabase
         .from('profiles')
         .update({ status: 'active' })
@@ -879,23 +857,31 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Withdrawal already audited and processed' });
     }
 
-    // Refund target balance first if rejected (atomic check)
+    // Refund balance if rejected
     if (status === 'Rejected') {
-      const refundPlatform = wRecord.platform || platform;
-      if (!refundPlatform) {
-        return res.status(400).json({ error: 'Platform identifier is required to process refund logs' });
-      }
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', wRecord.user_id)
+        .maybeSingle();
 
-      // Perform atomic balance refund using database RPC
-      const { error: refundError } = await supabase.rpc('adjust_platform_balance', {
-        target_user_id: wRecord.user_id,
-        target_platform: refundPlatform,
-        amount_to_add: parseFloat(wRecord.amount)
-      });
+      if (!profErr && prof) {
+        const currentBal = parseFloat(prof.balance as any) || 0.0;
+        const refundAmount = parseFloat(wRecord.amount);
+        const newBal = Number((currentBal + refundAmount).toFixed(2));
 
-      if (refundError) {
-        console.error("Atomic refund failed during withdrawal rejection:", refundError.message);
-        return res.status(500).json({ error: 'Failed to process refund: ' + refundError.message });
+        const { error: refundErr } = await supabase
+          .from('profiles')
+          .update({ balance: newBal })
+          .eq('id', wRecord.user_id);
+
+        if (refundErr) {
+          console.error("Refund failed during withdrawal rejection:", refundErr.message);
+          return res.status(500).json({ error: 'Failed to process refund: ' + refundErr.message });
+        }
+      } else {
+        console.error("Could not fetch profile for refund:", profErr);
+        return res.status(500).json({ error: 'Failed to process refund: user profile not found' });
       }
     }
 
@@ -911,20 +897,13 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       return res.status(500).json({ error: 'Failed to update withdrawal status: ' + updateError.message });
     }
 
-    // If approved, reset user's order progress and start the 24h cooldown
-    if (status === 'Approved') {
-      const targetPlatform = wRecord.platform || platform;
-      if (targetPlatform) {
-        await supabase
-          .from('platform_balances')
-          .update({
-            current_position: 0,
-            last_completed_batch_at: new Date().toISOString(),
-            last_reset_at: new Date().toISOString()
-          })
-          .eq('user_id', wRecord.user_id)
-          .eq('platform', targetPlatform);
-      }
+    // If approved, start the 24h cooldown
+    if (status === 'Approved' && wRecord.platform) {
+      await supabase
+        .from('platform_balances')
+        .update({ last_completed_batch_at: new Date().toISOString() })
+        .eq('user_id', wRecord.user_id)
+        .eq('platform', wRecord.platform);
     }
 
     // Broadcast real-time withdrawal status to the withdrawing user
@@ -1216,14 +1195,12 @@ router.post('/users/:id/reset-batch', async (req: AuthenticatedRequest, res: Res
       .from('platform_balances')
       .update({
         current_position: 0,
+        reviews_count: 0,
         last_completed_batch_at: null,
         last_reset_at: new Date().toISOString()
       })
-      .eq('user_id', id);
-
-    if (platform) {
-      query = query.eq('platform', platform);
-    }
+      .eq('user_id', id)
+      .eq('platform', platform);
 
     const { error } = await query;
     if (error) {
@@ -1276,41 +1253,37 @@ router.post('/users/:id/bonus', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: `Cannot grant bonus: User does not have ${platform} category unlocked.` });
     }
 
-    // Fetch active balance
-    const { data: balanceRecord, error: fetchError } = await supabase
-      .from('platform_balances')
-      .select('wallet_balance')
-      .eq('user_id', id)
-      .eq('platform', platform)
-      .single();
+    // SINGLE SOURCE OF TRUTH: Update profiles.balance
+    const { data: prof, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance')
+      .eq('id', id)
+      .maybeSingle();
 
-    if (fetchError || !balanceRecord) {
-      return res.status(404).json({ error: 'User balance record not found' });
+    if (profErr || !prof) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const updatedBalance = Number((parseFloat(balanceRecord.wallet_balance as any) + numericAmount).toFixed(2));
+    const updatedBalance = Number((parseFloat(prof.balance as any) + numericAmount).toFixed(2));
 
-    // Update balance
-    const { error: updateError } = await supabase
-      .from('platform_balances')
-      .update({ wallet_balance: updatedBalance })
-      .eq('user_id', id);
+    const { error: balErr } = await supabase
+      .from('profiles')
+      .update({ balance: updatedBalance })
+      .eq('id', id);
 
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to award bonus: ' + updateError.message });
+    if (balErr) {
+      return res.status(500).json({ error: 'Failed to update balance: ' + balErr.message });
     }
 
-    // Insert into dedicated bonus_grants ledger (NOT deposits — bonuses are not user deposits)
     await supabase.from('bonus_grants').insert({
       user_id: id,
-      platform,
+      platform: platform,
       amount: numericAmount,
       note: note || 'Admin Granted Bonus',
       granted_at: new Date().toISOString()
     });
 
-    // Send real-time balance update notification via WebSocket
-    broadcastToUser(id, 'balance_update', { type: 'bonus', amount: numericAmount, platform });
+    broadcastToUser(id, 'balance_update', { type: 'bonus', amount: numericAmount });
     clearCache('stats');
 
     const auditAdminId = req.user?.id || 'unknown-admin';
@@ -1355,103 +1328,185 @@ router.post('/scrape-amazon', async (req: AuthenticatedRequest, res: Response) =
       targetUrl = 'https://' + targetUrl;
     }
 
+    // Extract ASIN from URL and try clean product page URL first
+    let cleanUrl = targetUrl;
+    const asinMatch = targetUrl.match(/\/dp\/([A-Z0-9]{10})/i);
+    if (asinMatch) {
+      const asin = asinMatch[1];
+      // Extract domain (amazon.com, amazon.co.uk, etc.)
+      const domainMatch = targetUrl.match(/amazon\.([a-z.]+)/i);
+      const domain = domainMatch ? `amazon.${domainMatch[1]}` : 'www.amazon.com';
+      cleanUrl = `https://${domain}/dp/${asin}`;
+    }
+
     let title = '';
     let imageUrl = '';
     let price = 0.00;
 
-    // Parse fallback title slug from the URL in case the fetch fails or gets blocked
-    let urlTitleGuess = '';
     try {
-      const parsedUrl = new URL(targetUrl);
-      const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
-      const dpIndex = pathParts.indexOf('dp');
-      if (dpIndex > 0) {
-        urlTitleGuess = pathParts[dpIndex - 1];
-      } else if (pathParts.length > 0 && !pathParts[0].includes('dp')) {
-        urlTitleGuess = pathParts[0];
-      }
-      
-      if (urlTitleGuess) {
-        urlTitleGuess = urlTitleGuess
-          .split(/[-_]+/)
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-      }
-    } catch (e) {
-      console.warn("Failed to guess title from URL path:", e);
-    }
-
-    try {
-      // Fetch the page with standard headers to avoid anti-bot blocks
-      const response = await fetch(targetUrl, {
+      // Try clean product URL first, then original URL as fallback
+      let response = await fetch(cleanUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1'
+        },
+        redirect: 'follow'
       });
+
+      // If clean URL failed, try original URL
+      if (!response.ok && cleanUrl !== targetUrl) {
+        response = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1'
+          },
+          redirect: 'follow'
+        });
+      }
 
       if (response.ok) {
         const html = await response.text();
 
-        // 1. Title
-        const titleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i) ||
-                           html.match(/<meta\s+name=["']title["']\s+content=["'](.*?)["']/i) ||
-                           html.match(/<title>(.*?)<\/title>/i);
-        if (titleMatch && titleMatch[1]) {
-          title = titleMatch[1]
-            .replace(/&amp;/g, '&')
-            .replace(/&quot;/g, '"')
-            .replace(/&#039;/g, "'")
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .trim();
-          title = title.replace(/^Amazon\.com\s*:\s*/i, '');
-        }
-
-        // 2. Image URL
-        const imageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i) ||
-                           html.match(/<meta\s+name=["']twitter:image["']\s+content=["'](.*?)["']/i) ||
-                           html.match(/data-a-dynamic-image=["']\{(.*?)\}/i) ||
-                           html.match(/["']large["']\s*:\s*["'](https:\/\/images-na\.ssl-images-amazon\.com\/images\/I\/.*?)["']/i);
-        if (imageMatch && imageMatch[1]) {
-          imageUrl = imageMatch[1].replace(/\\/g, '');
-          if (!imageUrl.startsWith('https://')) {
-            const urlMatch = imageUrl.match(/(https:\/\/.*?\.jpg)/);
-            if (urlMatch) {
-              imageUrl = urlMatch[1];
-            }
+        // 1. Title — try multiple patterns in priority order
+        const titlePatterns = [
+          /<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i,
+          /<meta\s+name=["']title["']\s+content=["']([^"']+)["']/i,
+          /<meta\s+itemprop=["']name["']\s+content=["']([^"']+)["']/i,
+          /<span\s+id=["']productTitle["'][^>]*>([^<]+)<\/span>/i,
+          /<title>([^<]+)<\/title>/i
+        ];
+        for (const pattern of titlePatterns) {
+          const match = html.match(pattern);
+          if (match && match[1] && match[1].trim().length > 3) {
+            title = match[1]
+              .replace(/&amp;/g, '&')
+              .replace(/&quot;/g, '"')
+              .replace(/&#039;/g, "'")
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&mdash;/g, '—')
+              .replace(/&ndash;/g, '–')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;quot;/g, '"')
+              .trim();
+            title = title.replace(/^Amazon\.com\s*[\|:\-]\s*/i, '').replace(/\s*[\|:\-]\s*Amazon\.com$/i, '').trim();
+            if (title.length >= 4 && !/^image$/i.test(title)) break;
+            title = '';
           }
         }
 
-        // 3. Price
-        const priceMatch = html.match(/<span\s+class=["']a-offscreen["']>(.*?)<\/span>/i) ||
-                           html.match(/<meta\s+property=["']product:price:amount["']\s+content=["'](.*?)["']/i) ||
-                           html.match(/["']priceAmount["']\s*:\s*(.*?)\s*,/i);
-        if (priceMatch && priceMatch[1]) {
-          const cleanPrice = priceMatch[1].replace(/[^0-9.]/g, '');
-          price = parseFloat(cleanPrice) || 0.00;
+        // 2. Image URL — try multiple patterns
+        const imagePatterns = [
+          /<meta\s+property=["']og:image["']\s+content=["'](https?:\/\/[^"']+)["']/i,
+          /<meta\s+name=["']twitter:image["']\s+content=["'](https?:\/\/[^"']+)["']/i,
+          /<meta\s+itemprop=["']image["']\s+content=["'](https?:\/\/[^"']+)["']/i,
+          /"large"\s*:\s*"(https:\/\/images-na\.ssl-images-amazon\.com\/images\/I\/[^"]+)"/i,
+          /"hiRes"\s*:\s*"(https:\/\/images-na\.ssl-images-amazon\.com\/images\/I\/[^"]+)"/i,
+          /id=["']imgBlkFront["'][^>]*src=["'](https?:\/\/[^"']+)["']/i,
+          /id=["']landingImage["'][^>]*src=["'](https?:\/\/[^"']+)["']/i,
+          /src="(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i,
+          /src="(https:\/\/images-na\.ssl-images-amazon\.com\/images\/I\/[^"]+)"/i
+        ];
+        for (const pattern of imagePatterns) {
+          const match = html.match(pattern);
+          if (match && match[1] && match[1].startsWith('http')) {
+            imageUrl = match[1].replace(/\\u002F/g, '/').replace(/\\/g, '');
+            // Reject non-product images
+            if (!imageUrl.includes('unsplash.com') && !imageUrl.includes('placeholder') && !imageUrl.includes('fls-na.amazon')) {
+              break;
+            }
+            imageUrl = '';
+          }
+        }
+
+        // 3. Price — try many patterns including JSON-LD, meta tags, and various HTML formats
+        const allPricePatterns = [
+          // JSON-LD structured data (most reliable)
+          /"price"\s*:\s*"?([0-9]+\.?[0-9]*)"?\s*,\s*"priceCurrency"\s*:\s*"USD"/i,
+          /"priceCurrency"\s*:\s*"USD"\s*,\s*"price"\s*:\s*"?([0-9]+\.?[0-9]*)"?\s*/i,
+          // a-offscreen with $ (standard Amazon price display)
+          /<span\s+class=["']a-offscreen["']>\$([0-9,.]+)<\/span>/i,
+          // a-price whole + fraction
+          /<span\s+class=["']a-price-whole["']>([0-9,]+)<\/span>\s*<span\s+class=["']a-price-fraction["']>([0-9]+)<\/span>/i,
+          // Meta tags
+          /<meta\s+property=["']product:price:amount["']\s+content=["']([0-9,.]+)["']/i,
+          /<meta\s+property=["']product:price:currency["']\s+content=["']USD["']/i,
+          /<meta\s+itemprop=["']price["']\s+content=["']([0-9,.]+)["']/i,
+          // data-a-price
+          /data-a-color=["']price["'][^>]*>.*?\$([0-9,.]+)/is,
+          // priceAmount in JSON
+          /"priceAmount"\s*:\s*([0-9.]+)/i,
+          // Any $ price in the page (last resort, look for reasonable product prices)
+          /\$([0-9]{1,4}\.[0-9]{2})\b/
+        ];
+        for (const pattern of allPricePatterns) {
+          const match = html.match(pattern);
+          if (match) {
+            let cleanPrice = '';
+            if (match[2]) {
+              // Whole + fraction pattern
+              cleanPrice = match[1].replace(/[^0-9]/g, '') + '.' + match[2];
+            } else {
+              cleanPrice = match[1].replace(/[^0-9.]/g, '');
+            }
+            const parsed = parseFloat(cleanPrice);
+            // Reasonable product price range: $0.01 - $9,999
+            if (parsed > 0 && parsed < 10000) {
+              price = parsed;
+              break;
+            }
+          }
         }
       }
     } catch (fetchError) {
-      console.warn("Scraper page fetch failure, using URL guess fallbacks:", fetchError);
+      console.warn("Scraper page fetch failure:", fetchError);
     }
 
-    // Fallbacks if scrape failed or was blocked
-    if (!title) {
-      title = urlTitleGuess || 'Amazon Custom Product';
+    // Validate extracted data — return partial results if some fields found
+    const warnings: string[] = [];
+    if (!title || title.length < 4) {
+      warnings.push('Title could not be extracted');
     }
-    if (!imageUrl) {
-      imageUrl = 'https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?w=500';
+    if (!imageUrl || !imageUrl.startsWith('http')) {
+      warnings.push('Image could not be extracted');
     }
     if (!price || price <= 0) {
-      price = parseFloat((19.99 + Math.random() * 60).toFixed(2));
+      warnings.push('Price could not be extracted — enter manually');
     }
 
+    // If nothing was extracted at all, return error
+    if (warnings.length === 3) {
+      return res.status(400).json({ error: 'Amazon blocked the request or the page could not be parsed. Please enter all product details manually.' });
+    }
+
+    // Return what we have (partial success is better than nothing)
     res.json({
-      title,
-      imageUrl,
-      price
+      title: title || '',
+      imageUrl: imageUrl || '',
+      price: price || 0,
+      warnings: warnings.length > 0 ? warnings : undefined
     });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to scrape Amazon product: ' + error.message });
@@ -1687,34 +1742,21 @@ router.get('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =>
   try {
     const { id } = req.params;
 
-    // Fetch all assigned products for the user (graceful fallback if table is not yet created)
-    let assignedProducts: any[] = [];
-    try {
-      const { data: apData, error: apErr } = await supabase
+    // Fetch all assigned products and checkpoints in parallel
+    const [apResult, cpResult] = await Promise.all([
+      supabase
         .from('user_assigned_products')
         .select('product_id, platform')
-        .eq('user_id', id);
-      if (!apErr && apData) {
-        assignedProducts = apData;
-      }
-    } catch (e) {
-      console.warn("Gracefully fallback assigned products:", e);
-    }
-
-    // Fetch all combo checkpoints for the user (graceful fallback)
-    let checkpoints: any[] = [];
-    try {
-      const { data: cpData, error: cpErr } = await supabase
+        .eq('user_id', id),
+      supabase
         .from('combo_checkpoints')
         .select('id, platform, position, trigger_balance, profit_override')
         .eq('user_id', id)
-        .order('position', { ascending: true });
-      if (!cpErr && cpData) {
-        checkpoints = cpData;
-      }
-    } catch (e) {
-      console.warn("Gracefully fallback checkpoints:", e);
-    }
+        .order('position', { ascending: true })
+    ]);
+
+    const assignedProducts = apResult.data || [];
+    const checkpoints = cpResult.data || [];
 
     // Group by platform
     const result: Record<string, { productIds: string[], combos: any[] }> = {
@@ -1754,10 +1796,43 @@ router.get('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =>
 router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { platform, productIds, combos } = req.body;
+    const { platform, productIds, combos, resetProgress } = req.body;
 
     if (!platform || !Array.isArray(productIds)) {
       return res.status(400).json({ error: 'Platform and productIds array are required' });
+    }
+
+    // Enforce max 25 products per batch
+    if (productIds.length > 25) {
+      return res.status(400).json({ error: 'Maximum 25 products can be assigned per batch.' });
+    }
+
+    // If resetProgress is requested, check if user is first-time (never withdrawn)
+    // First-time users MUST complete a withdrawal before new orders can be assigned
+    if (resetProgress) {
+      const { data: withdrawals } = await supabase
+        .from('withdrawals')
+        .select('id')
+        .eq('user_id', id)
+        .eq('status', 'Approved')
+        .limit(1);
+
+      if (!withdrawals || withdrawals.length === 0) {
+        // First-time user — check if they have any completed reviews at all
+        const { data: balance } = await supabase
+          .from('platform_balances')
+          .select('reviews_count')
+          .eq('user_id', id)
+          .eq('platform', platform)
+          .maybeSingle();
+
+        if (balance && (balance.reviews_count || 0) >= 25) {
+          return res.status(400).json({
+            error: 'This user must complete their first withdrawal before new orders can be assigned.',
+            requiresWithdrawal: true
+          });
+        }
+      }
     }
 
     // 1. Clear existing assigned products for this user & platform
@@ -1771,7 +1846,7 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
       return res.status(500).json({ error: 'Failed to clear assigned products: ' + delApErr.message });
     }
 
-    // 2. Insert new assigned products (upsert to handle re-assignments without duplicate errors)
+    // 2. Insert new assigned products
     if (productIds.length > 0) {
       const inserts = productIds.map(pId => ({
         user_id: id,
@@ -1785,7 +1860,6 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
       if (insApErr) {
         return res.status(500).json({ error: 'Failed to save assigned products: ' + insApErr.message });
       }
-
     }
 
     // 3. Clear existing combo checkpoints for this user & platform
@@ -1817,6 +1891,20 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
       }
     }
 
+    // 5. Reset user progress if requested (new batch assignment)
+    if (resetProgress) {
+      await supabase
+        .from('platform_balances')
+        .update({
+          current_position: 0,
+          reviews_count: 0,
+          last_reset_at: new Date().toISOString(),
+          last_completed_batch_at: null
+        })
+        .eq('user_id', id)
+        .eq('platform', platform);
+    }
+
     // Update user profile bound platform if null
     const { data: userProfile } = await supabase
       .from('profiles')
@@ -1831,7 +1919,8 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
         .eq('id', id);
     }
 
-    // Send WebSocket notification to user that VIP is unlocked/updated
+    // Send WebSocket notification to user that new orders are assigned
+    broadcastToUser(id, 'balance_update', { type: 'new_orders_assigned', platform, productCount: productIds.length });
     broadcastToUser(id, 'balance_update', { type: 'vip_unlocked', platform, productCount: productIds.length });
 
     res.json({ success: true, message: `VIP ${platform} configuration successfully saved.` });
@@ -1840,7 +1929,7 @@ router.post('/users/:id/vip', async (req: AuthenticatedRequest, res: Response) =
   }
 });
 
-// 24. Lock/Remove User VIP Platform Configuration (Delete assignments and checkpoints)
+// 24. Lock/Remove User VIP Platform Configuration (Delete assignments, checkpoints, and unbind platform)
 router.delete('/users/:id/vip/:platform', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id, platform } = req.params;
@@ -1850,24 +1939,15 @@ router.delete('/users/:id/vip/:platform', async (req: AuthenticatedRequest, res:
     // Delete combo checkpoints
     await supabase.from('combo_checkpoints').delete().eq('user_id', id).eq('platform', platform);
 
-    // Re-evaluate remaining platforms to update profile's primary platform binding
-    const { data: assigned } = await supabase
-      .from('user_assigned_products')
-      .select('platform')
-      .eq('user_id', id);
+    // Clear profile.platform so user panel shows workspace as locked
+    await supabase.from('profiles').update({ platform: null }).eq('id', id);
 
-    const remaining = Array.from(new Set((assigned || []).map((a: any) => a.platform)));
-    const nextBound = remaining.length > 0 ? remaining[0] : null;
+    // NOTE: Do NOT touch platform_balances at all — balance, position, reviews are untouched
+    // Locking a workspace only removes products and checkpoints
 
-    await supabase
-      .from('profiles')
-      .update({ platform: nextBound })
-      .eq('id', id);
-
-    // Send WebSocket lock event to user
     broadcastToUser(id, 'balance_update', { type: 'vip_locked', platform });
 
-    res.json({ success: true, message: `VIP ${platform} workspace successfully locked.` });
+    res.json({ success: true, message: `VIP ${platform} workspace locked.` });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }

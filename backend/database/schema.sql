@@ -401,3 +401,13 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS withdrawal_password TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_photo TEXT;
+
+-- Safety net: enforce max 25 position at database level
+ALTER TABLE platform_balances DROP CONSTRAINT IF EXISTS check_position_limit;
+ALTER TABLE platform_balances ADD CONSTRAINT check_position_limit CHECK (current_position >= 0 AND current_position <= 25);
+
+-- ========================================
+-- SINGLE SOURCE OF TRUTH: profiles.balance
+-- ========================================
+-- Add balance column to profiles (safe migration, idempotent)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00;

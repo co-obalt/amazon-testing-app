@@ -5,11 +5,13 @@ import { Check, Clock, ShieldAlert } from 'lucide-react';
 interface UnderReviewPageProps {
   username: string;
   onNavigateHome: () => void;
+  onNavigateToLogin?: () => void;
 }
 
 export default function UnderReviewPage({
   username,
   onNavigateHome,
+  onNavigateToLogin,
 }: UnderReviewPageProps) {
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col justify-between font-sans">
@@ -91,6 +93,22 @@ export default function UnderReviewPage({
             <p className="text-[10px] text-gray-400 leading-normal max-w-xs mx-auto">
               Our review team will audit and process your registration. New accounts are processed in up to 24 hours.
             </p>
+            <div className="flex items-center justify-center space-x-3 pt-2">
+              <button
+                onClick={onNavigateHome}
+                className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-lg border border-gray-300 transition-colors cursor-pointer"
+              >
+                Back to Home
+              </button>
+              {onNavigateToLogin && (
+                <button
+                  onClick={onNavigateToLogin}
+                  className="px-5 py-2 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                >
+                  Back to Login
+                </button>
+              )}
+            </div>
           </div>
         </motion.div>
       </main>

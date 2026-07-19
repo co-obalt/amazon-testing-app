@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_BASE } from '../config';
 import {
@@ -83,6 +83,7 @@ interface AssignedProduct {
   id: string;
   title: string;
   image: string;
+  price: number;
   payout: number;
   externalLink: string;
   assignedAt?: string;
@@ -114,23 +115,29 @@ export default function DashboardPage({
   });
   const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'orders' | 'withdraw' | 'profile' | 'invitation' | 'customer-service' | 'terms' | 'about-us' | 'faq'>('home');
   const [selectedOrderCategory, setSelectedOrderCategory] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
-  const handleTabSwitch = (tab: typeof activeTab) => {
+  const handleTabSwitch = useCallback((tab: typeof activeTab) => {
     setActiveTab(tab);
     if (tab === 'orders') {
       setSelectedOrderCategory(null);
     }
+    // Reset Amazon search state when switching tabs
+    setAmazonSearchResults([]);
+    setAmazonSearchQuery('');
+    setAmazonSearchError(null);
     if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
-  };
+  }, []);
   const [activePlatform, setActivePlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
+  const activePlatformRef = useRef(activePlatform);
+  useEffect(() => { activePlatformRef.current = activePlatform; }, [activePlatform]);
   const [enabledPlatform, setEnabledPlatform] = useState<'Amazon' | 'Alibaba' | 'Shopify' | null>(null);
   const [unlockedPlatforms, setUnlockedPlatforms] = useState<string[]>([]);
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isComboSuccessModalOpen, setIsComboSuccessModalOpen] = useState(false);
-  const [comboSuccessDetails, setComboSuccessDetails] = useState<{ position: number; payout: number; checkpointAmount: number } | null>(null);
+  const [comboSuccessDetails, setComboSuccessDetails] = useState<{ position: number; payout: number; checkpointAmount: number; profitBonus: number } | null>(null);
 
   // Deposit Request and VIP Unlock States
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
@@ -150,6 +157,7 @@ export default function DashboardPage({
   // Real-time refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>('Never synced');
+  const [wsRefreshTick, setWsRefreshTick] = useState(0); // increments on every WS-triggered refresh
 
   // Amazon Real-Time Product Search state
   const [amazonSearchQuery, setAmazonSearchQuery] = useState('');
@@ -171,8 +179,12 @@ export default function DashboardPage({
     ];
   });
 
+  // Debounce localStorage write for notifications
   useEffect(() => {
-    localStorage.setItem('user_notifications', JSON.stringify(notifications));
+    const timeout = setTimeout(() => {
+      localStorage.setItem('user_notifications', JSON.stringify(notifications));
+    }, 500);
+    return () => clearTimeout(timeout);
   }, [notifications]);
 
   // Gigs Search and Filters
@@ -312,7 +324,10 @@ export default function DashboardPage({
   const [chatInputText, setChatInputText] = useState('');
   const [isChatTyping, setIsChatTyping] = useState(false);
 
-  const fetchAllData = async () => {
+  // Use a ref to always hold the latest fetchAllData for WebSocket callback
+  const fetchAllDataRef = useRef<() => Promise<any>>(null);
+
+  const fetchAllData = useCallback(async () => {
     const token = localStorage.getItem('reviewer_auth_token');
     if (!token) {
       onLogout();
@@ -390,9 +405,26 @@ export default function DashboardPage({
             setActivePlatform(unlocked[0]);
           }
         } else {
+          // No platform configured — don't default to Amazon
           setEnabledPlatform(null);
-          if (!activePlatform) {
-            setActivePlatform('Amazon');
+          if (activePlatform) setActivePlatform(null);
+        }
+
+        // Check for cleared combo checkpoints to show the congratulations modal immediately upon deposit approval
+        const activePlat = activePlatform || userData.platform;
+        const activePlatData = activePlat ? userData.balances?.[activePlat] : null;
+        if (activePlatData?.comboDetails?.isCleared) {
+          const comboPos = activePlatData.comboDetails.position;
+          const shownKey = `combo_cleared_shown_${userData.id}_${activePlat}_${comboPos}`;
+          if (!localStorage.getItem(shownKey)) {
+            setComboSuccessDetails({
+              position: comboPos,
+              checkpointAmount: activePlatData.comboDetails.triggerBalance,
+              profitBonus: activePlatData.comboDetails.profitAmount,
+              payout: activePlatData.comboDetails.triggerBalance + activePlatData.comboDetails.profitAmount
+            });
+            setIsComboSuccessModalOpen(true);
+            localStorage.setItem(shownKey, 'true');
           }
         }
       }
@@ -481,21 +513,24 @@ export default function DashboardPage({
           };
 
           return {
-            Amazon: { 
-              ...prev.Amazon, 
-              orders: amzOrders, 
+            Amazon: {
+              ...prev.Amazon,
+              orders: amzOrders,
+              completedOrders: amzOrders.filter((o: any) => o && o.status === 'Completed').length,
               pendingReviews: amzOrders.filter((o: any) => o && o.status === 'Pending').length,
               profitEarned: Number(sumPayout(amzOrders).toFixed(2))
             },
-            Alibaba: { 
-              ...prev.Alibaba, 
-              orders: aliOrders, 
+            Alibaba: {
+              ...prev.Alibaba,
+              orders: aliOrders,
+              completedOrders: aliOrders.filter((o: any) => o && o.status === 'Completed').length,
               pendingReviews: aliOrders.filter((o: any) => o && o.status === 'Pending').length,
               profitEarned: Number(sumPayout(aliOrders).toFixed(2))
             },
-            Shopify: { 
-              ...prev.Shopify, 
-              orders: shoOrders, 
+            Shopify: {
+              ...prev.Shopify,
+              orders: shoOrders,
+              completedOrders: shoOrders.filter((o: any) => o && o.status === 'Completed').length,
               pendingReviews: shoOrders.filter((o: any) => o && o.status === 'Pending').length,
               profitEarned: Number(sumPayout(shoOrders).toFixed(2))
             }
@@ -524,18 +559,25 @@ export default function DashboardPage({
       }
 
       setLastRefreshed(new Date().toLocaleTimeString());
+      return userData;
     } catch (err) {
       console.warn("Active session data sync error:", err);
+      return null;
     } finally {
       setIsDataLoading(false);
     }
-  };
+  }, [onLogout]);
+
+  // Keep ref current so WebSocket callback always calls latest version
+  useEffect(() => {
+    fetchAllDataRef.current = fetchAllData;
+  }, [fetchAllData]);
 
   useEffect(() => {
     fetchAllData();
-    const interval = setInterval(fetchAllData, 60000); // Low-frequency fallback poll
+    const interval = setInterval(fetchAllData, 60000);
     return () => clearInterval(interval);
-  }, [activePlatform]);
+  }, []); // fetchAllData fetches ALL platforms — no need to re-run on platform switch
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -574,9 +616,46 @@ export default function DashboardPage({
             message.type === 'approval_notice' ||
             message.type === 'vip_unlocked' ||
             message.type === 'vip_locked' ||
-            message.type === 'vip_configured'
+            message.type === 'vip_configured' ||
+            message.type === 'new_chat_message'
           ) {
-            fetchAllData();
+            // Use ref to always call latest fetchAllData (avoids stale closure)
+            if (fetchAllDataRef.current) fetchAllDataRef.current();
+            // Signal assigned products to re-fetch IMMEDIATELY
+            setWsRefreshTick(t => t + 1);
+
+            // CRITICAL: On vip_locked (batch reset), immediately clear assigned products
+            // so user CANNOT submit reviews on deleted products
+            const payloadType = message.data?.type || message.type;
+            if (payloadType === 'vip_locked' || payloadType === 'vip_configured' || payloadType === 'new_orders_assigned' || payloadType === 'vip_unlocked') {
+              // Force re-fetch assigned products for active platform
+              const token = localStorage.getItem('reviewer_auth_token');
+              const currentPlat = activePlatformRef.current;
+              if (token && currentPlat) {
+                fetch(`${API_BASE}/reviews/products?platform=${currentPlat}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (Array.isArray(data)) {
+                      setAssignedProducts(data.map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        image: p.image_url,
+                        price: parseFloat(p.price) || 0,
+                        payout: parseFloat(p.payout),
+                        externalLink: p.external_link,
+                        assignedAt: p.assignedAt || new Date(0).toISOString()
+                      })));
+                    } else {
+                      setAssignedProducts([]);
+                    }
+                  })
+                  .catch(() => {
+                    setAssignedProducts([]);
+                  });
+              }
+            }
 
             let notifText = '';
             let notifType = 'system';
@@ -585,9 +664,9 @@ export default function DashboardPage({
               const payload = message.data;
               notifType = payload.type || 'bonus';
               if (payload.type === 'bonus') {
-                notifText = `🎉 Admin granted you a $${parseFloat(payload.amount).toFixed(2)} bonus on platform ${payload.platform}!`;
+                notifText = `🎉 Admin granted you a $${parseFloat(payload.amount).toFixed(2)} bonus!`;
               } else if (payload.type === 'deposit') {
-                notifText = `💰 Your deposit of $${parseFloat(payload.amount).toFixed(2)} on platform ${payload.platform} was ${payload.status}!`;
+                notifText = `💰 Your deposit of $${parseFloat(payload.amount).toFixed(2)} was ${payload.status}!`;
               } else if (payload.type === 'withdrawal') {
                 if (payload.status === 'Approved') {
                   notifText = `✅ Your withdrawal request of $${parseFloat(payload.amount).toFixed(2)} was Approved!`;
@@ -601,10 +680,10 @@ export default function DashboardPage({
                 notifText = `🔒 Category ${payload.platform} has been Locked by the Admin.`;
                 notifType = 'vip';
               } else if (payload.type === 'vip_configured') {
-                notifText = `⚙️ New campaigns have been configured for you on platform ${payload.platform}.`;
+                notifText = `⚙️ New campaigns have been configured for you.`;
                 notifType = 'vip';
               } else if (payload.type === 'balance_adjustment') {
-                notifText = `👛 Admin updated your wallet balance on platform ${payload.platform} to $${parseFloat(payload.balance).toFixed(2)} USD!`;
+                notifText = `👛 Admin updated your wallet balance to $${parseFloat(payload.balance).toFixed(2)} USD!`;
                 notifType = 'wallet';
               }
             } else if (message.type === 'vip_unlocked') {
@@ -614,7 +693,7 @@ export default function DashboardPage({
               notifText = `🔒 Category ${message.data.platform} has been Locked by the Admin.`;
               notifType = 'vip';
             } else if (message.type === 'vip_configured') {
-              notifText = `⚙️ New campaigns have been configured for you on platform ${message.data.platform}.`;
+              notifText = `⚙️ New campaigns have been configured for you.`;
               notifType = 'vip';
             }
 
@@ -630,6 +709,18 @@ export default function DashboardPage({
                 ...prev
               ]);
               showToast(notifText);
+            } else if (message.type === 'new_chat_message') {
+              // Admin sent a message — re-fetch chat history
+              const token = localStorage.getItem('reviewer_auth_token');
+              if (token) {
+                fetch(`${API_BASE}/chat/history`, { headers: { 'Authorization': `Bearer ${token}` } })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (Array.isArray(data)) setChatMessages(data);
+                  })
+                  .catch(() => {});
+              }
+              showToast(`💬 New message from support: ${message.data?.text || ''}`);
             } else {
               showToast(`⚡ Real-time workspace updates synchronized successfully.`);
             }
@@ -665,19 +756,23 @@ export default function DashboardPage({
     };
   }, []);
 
-  // Shuffling effect for Available Campaigns Pool marquee
+  // Shuffling effect for Available Campaigns Pool — only reshuffle when allCampaigns actually changes
   useEffect(() => {
     if (allCampaigns.length === 0) return;
     setShuffledCampaigns([...allCampaigns].sort(() => Math.random() - 0.5));
     const interval = setInterval(() => {
       setShuffledCampaigns(prev => {
         if (prev.length <= 1) return prev;
+        // Fisher-Yates partial shuffle (swap 2 random elements only)
         const next = [...prev];
-        return next.sort(() => Math.random() - 0.5);
+        const i = Math.floor(Math.random() * next.length);
+        const j = Math.floor(Math.random() * next.length);
+        [next[i], next[j]] = [next[j], next[i]];
+        return next;
       });
-    }, 7000);
+    }, 10000); // Increased from 7s to 10s to reduce render churn
     return () => clearInterval(interval);
-  }, [allCampaigns]);
+  }, [allCampaigns.length]); // Only re-run when count changes, not on content change
 
   // Scroll arrow dynamic visibility logic
   const handleScroll = () => {
@@ -697,7 +792,7 @@ export default function DashboardPage({
   };
 
   useEffect(() => {
-    setTimeout(handleScroll, 100);
+    requestAnimationFrame(handleScroll);
   }, [shuffledCampaigns]);
 
   // Handle new secure cashout withdrawal request submission
@@ -769,6 +864,7 @@ export default function DashboardPage({
             id: p.id,
             title: p.title,
             image: p.image_url,
+            price: parseFloat(p.price) || 0,
             payout: parseFloat(p.payout),
             externalLink: p.external_link,
             assignedAt: p.assignedAt || new Date(0).toISOString()
@@ -780,7 +876,7 @@ export default function DashboardPage({
       .catch(() => {
         setAssignedProducts([]);
       });
-  }, [activePlatform]);
+  }, [activePlatform, wsRefreshTick]); // Re-fetch when WS signals new data OR platform changes
 
   // Settings States
   const [settingsUsername, setSettingsUsername] = useState(username);
@@ -869,9 +965,15 @@ export default function DashboardPage({
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
 
-  const currentPlatformData = activePlatform
-    ? platformsData[activePlatform]
-    : { walletBalance: 0, completedOrders: 0, pendingReviews: 0, profitEarned: 0, lastResetAt: undefined, isComboBlocked: false, comboDetails: null, orders: [] };
+  const currentPlatformData = useMemo(() => {
+    if (activePlatform) return platformsData[activePlatform];
+    // No active platform — find first one with a non-zero balance
+    const platforms = ['Amazon', 'Alibaba', 'Shopify'] as const;
+    for (const p of platforms) {
+      if (platformsData[p].walletBalance > 0) return platformsData[p];
+    }
+    return { walletBalance: 0, completedOrders: 0, pendingReviews: 0, profitEarned: 0, lastResetAt: undefined, isComboBlocked: false, comboDetails: null, orders: [] };
+  }, [activePlatform, platformsData]);
 
   // Helper to copy text to clipboard
   const handleCopyText = (text: string, label: string) => {
@@ -880,25 +982,23 @@ export default function DashboardPage({
   };
 
   // Handle active category selection
-  const handleSelectPlatform = (platform: 'Amazon' | 'Alibaba' | 'Shopify') => {
+  const handleSelectPlatform = useCallback((platform: 'Amazon' | 'Alibaba' | 'Shopify') => {
     if (unlockedPlatforms.length <= 1 && enabledPlatform && enabledPlatform !== platform) {
       showToast(`Workspace locked to ${enabledPlatform}. You cannot switch to another network.`);
       return;
     }
     setActivePlatform(platform);
     showToast(`Switched workspace to ${platform}. loaded corresponding tasks.`);
-  };
+  }, [unlockedPlatforms, enabledPlatform, showToast]);
 
   // Real-time synchronization
-  const handleRefreshBalance = () => {
+  const handleRefreshBalance = useCallback(() => {
     setIsRefreshing(true);
-    setTimeout(() => {
+    fetchAllData().finally(() => {
       setIsRefreshing(false);
-      const now = new Date().toLocaleTimeString();
-      setLastRefreshed(now);
       showToast(`Real-time balances synchronized successfully with decentralized ledger nodes!`);
-    }, 850);
-  };
+    });
+  }, [fetchAllData, showToast]);
 
   // Export orders to CSV
   const handleDownloadCSV = () => {
@@ -1149,8 +1249,9 @@ export default function DashboardPage({
     setIsSubmittingReview(true);
     try {
       const token = localStorage.getItem('reviewer_auth_token');
-      // Generate a mock order ID
       const randomOrderId = 'ORD-' + Math.random().toString(36).substring(2, 12).toUpperCase();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch(`${API_BASE}/reviews/submit`, {
         method: 'POST',
         headers: {
@@ -1161,8 +1262,10 @@ export default function DashboardPage({
           productId: activeReviewProduct.id,
           orderId: randomOrderId,
           reviewText: selectedTextCode
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (!res.ok) {
@@ -1177,44 +1280,66 @@ export default function DashboardPage({
           setIsComboModalOpen(true);
           return;
         }
+        // If already submitted in this batch, silently advance to next product
+        if (data.error && data.error.includes('already submitted')) {
+          const remainingPending = assignedProducts.filter(p => p.id !== activeReviewProduct.id);
+          const nextProduct = remainingPending[0] || null;
+          setActiveReviewProduct(nextProduct);
+          if (nextProduct) setReviewStep(1);
+          setReviewStars(0);
+          setSelectedTextCode(null);
+          setIsSubmittingReview(false);
+          fetchAllData().catch(() => {});
+          return;
+        }
         showToast(data.error || 'Submission failed');
         return;
       }
 
       const actualPayout = data.payoutEarned !== undefined ? data.payoutEarned : activeReviewProduct.payout;
-      if (data.isCombo) {
-        const comboVal = data.checkpointAmount || 0;
-        const profitVal = Math.max(0, actualPayout - comboVal);
-        showToast(`🎉 Congratulations! You cleared a Special Combo checkpoint! Total reward of $${actualPayout.toFixed(2)} USD (Combo: $${comboVal.toFixed(2)} + Profit: $${profitVal.toFixed(2)}) credited to your wallet.`);
-
-        // Add to notification center bell list
-        setNotifications(prev => [
-          {
-            id: Date.now(),
-            text: `🎉 Congratulations! You cleared a Special Combo checkpoint! Total reward of $${actualPayout.toFixed(2)} USD (Combo: $${comboVal.toFixed(2)} + Profit: $${profitVal.toFixed(2)}) credited to your wallet.`,
-            type: 'bonus',
-            status: 'unread',
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          },
-          ...prev
-        ]);
-
-        // Open congratulations success popup modal
-        setComboSuccessDetails({
-          position: currentPlatformData.completedOrders + 1,
-          payout: actualPayout,
-          checkpointAmount: comboVal
-        });
-        setIsComboSuccessModalOpen(true);
-      } else {
-        showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
+      
+      // Optimistically update completedOrders and walletBalance immediately from server response
+      const activePlat = activePlatform || enabledPlatform || 'Amazon';
+      if (data.completedReviewsCount !== undefined || data.walletBalance !== undefined) {
+        setPlatformsData(prev => ({
+          ...prev,
+          [activePlat]: {
+            ...prev[activePlat],
+            completedOrders: data.completedReviewsCount !== undefined ? data.completedReviewsCount : prev[activePlat].completedOrders,
+            walletBalance: data.walletBalance !== undefined ? data.walletBalance : prev[activePlat].walletBalance
+          }
+        }));
       }
+
+      showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
 
       // Clear input state parameters
       setReviewStars(0);
       setSelectedTextCode(null);
 
-      // Automatically find next campaign product to open (skip already completed or pending ones!)
+      // ============================================================
+      // COMBO CHECKPOINT INTERCEPT
+      // If submitting this review triggered a Special Combo checkpoint for the next campaign
+      // (i.e. the NEXT position is now a pending/unpaid combo), STOP the
+      // auto-advance, close the review wizard, and surface the Combo modal.
+      // ============================================================
+      if (data.nextComboBlocked && data.nextComboDetails) {
+        setActiveReviewProduct(null); // close the review wizard — no auto-advance
+        setComboModalDetails({
+          triggerBalance: data.nextComboDetails.triggerBalance,
+          profitAmount: data.nextComboDetails.profitAmount,
+          currentBalance: data.nextComboDetails.currentBalance || 0,
+          position: data.nextComboDetails.position
+        });
+        setIsComboModalOpen(true);
+        showToast("⚠️ Special Combo Order triggered! Please complete the payment to continue.");
+        setIsSubmittingReview(false);
+        // Refresh all user data in the background asynchronously
+        fetchAllData().catch(err => { console.log('Background reload error:', err); });
+        return;
+      }
+
+      // No combo triggered — proceed with normal auto-advance to next campaign product.
       const remainingPending = assignedProducts.filter(p => {
         if (p.id === activeReviewProduct.id) return false;
         const isCompleted = currentPlatformData.orders.some(o =>
@@ -1222,12 +1347,7 @@ export default function DashboardPage({
           o.status === 'Completed' &&
           new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
         );
-        const isPending = currentPlatformData.orders.some(o =>
-          o.productId === p.id &&
-          o.status === 'Pending' &&
-          new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
-        );
-        return !isCompleted && !isPending;
+        return !isCompleted;
       });
 
       const nextProduct = remainingPending[0] || null;
@@ -1240,12 +1360,15 @@ export default function DashboardPage({
       }
 
       setIsSubmittingReview(false);
-
-      // Refresh all user data in the background (non-blocking)
-      fetchAllData().catch(err => console.log('Background reload error:', err));
+      // Refresh all user data in the background asynchronously
+      fetchAllData().catch(err => { console.log('Background reload error:', err); });
     } catch (err) {
       setIsSubmittingReview(false);
-      showToast('Server connection error. Failed to submit evaluation.');
+      if (err.name === 'AbortError') {
+        showToast('Request timed out. Please try again.');
+      } else {
+        showToast('Server connection error. Failed to submit evaluation.');
+      }
     }
   };
 
@@ -1348,7 +1471,7 @@ export default function DashboardPage({
       setNewDepositRemark('');
       setIsComboDeposit(false);
       setComboDepositAmount(null);
-      showToast(`Deposit request submitted for ${targetPlatform}! Awaiting audit verification by our review team.`);
+      showToast(`Deposit request submitted! Awaiting audit verification by our review team.`);
       fetchAllData();
     } catch (err) {
       showToast('Server connection error. Failed to submit deposit.');
@@ -1477,7 +1600,7 @@ export default function DashboardPage({
             <div className="bg-amazon-dark border border-gray-800 rounded px-1.5 py-0.5 md:px-3 md:py-1 text-right min-w-[55px] md:min-w-[70px]">
               <p className="text-[7px] md:text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none">Wallet</p>
               <p className="text-[10px] md:text-xs font-mono font-black text-green-500 mt-0.5 leading-none">
-                ${activePlatform ? currentPlatformData.walletBalance.toFixed(2) : '0.00'}
+                ${currentPlatformData.walletBalance.toFixed(2)}
               </p>
             </div>
           </div>
@@ -1820,10 +1943,10 @@ export default function DashboardPage({
                         <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Completed Orders</p>
                         <h3 className="text-lg md:text-2xl font-mono font-black text-gray-900 mt-0.5 md:mt-1">{currentPlatformData.completedOrders}</h3>
                       </div>
-                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-semibold truncate" title={25 - currentPlatformData.completedOrders > 0 ? `${25 - currentPlatformData.completedOrders} remaining` : "✓ Unlocked!"}>
-                        {25 - currentPlatformData.completedOrders > 0
-                          ? `${25 - currentPlatformData.completedOrders} remaining`
-                          : "✓ Unlocked!"}
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 font-semibold truncate" title={assignedProducts.length > 0 && (assignedProducts.length - currentPlatformData.completedOrders) > 0 ? `${assignedProducts.length - currentPlatformData.completedOrders} remaining` : (assignedProducts.length > 0 ? "✓ Unlocked!" : "No products assigned")}>
+                        {assignedProducts.length > 0 && (assignedProducts.length - currentPlatformData.completedOrders) > 0
+                          ? `${assignedProducts.length - currentPlatformData.completedOrders} remaining`
+                          : (assignedProducts.length > 0 ? "✓ Unlocked!" : "No products assigned")}
                       </p>
                     </div>
 
@@ -1855,8 +1978,8 @@ export default function DashboardPage({
                     {/* Dynamic Progress Bar Block */}
                     {(() => {
                       const completedCount = currentPlatformData.completedOrders;
-                      const targetCount = 25;
-                      const progressPercentage = Math.min(100, Math.round((completedCount / targetCount) * 100));
+                      const targetCount = assignedProducts.length || 25;
+                      const progressPercentage = targetCount > 0 ? Math.min(100, Math.round((completedCount / targetCount) * 100)) : 0;
                       const remainingReviews = Math.max(0, targetCount - completedCount);
 
                       return (
@@ -2241,20 +2364,11 @@ export default function DashboardPage({
                           <div className="text-xs leading-relaxed font-medium">
                             <strong className="text-red-900 font-bold">Special Combo Deposit Lock Active</strong>
                             <p className="mt-0.5 text-red-700">
-                              You are executing a locked deposit request of <strong className="font-mono">${newDepositAmount}</strong> to satisfy the micro-campaign criteria. This field is locked and cannot be manually modified.
+                              {selectedProtocol === 'BTC'
+                                ? <>Deposit approximately <strong className="font-mono">${comboDepositAmount || newDepositAmount}</strong> USD worth of BTC to satisfy the micro-campaign criteria. Enter the BTC amount matching this USD value.</>
+                                : <>You are executing a locked deposit request of <strong className="font-mono">${newDepositAmount}</strong> to satisfy the micro-campaign criteria. This field is locked.</>
+                              }
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsComboDeposit(false);
-                                setComboDepositAmount(null);
-                                setNewDepositAmount('');
-                                setNewDepositRemark('');
-                              }}
-                              className="text-xxs font-black text-red-900 underline mt-2 hover:text-black cursor-pointer font-sans"
-                            >
-                              Cancel Combo Deposit & Make Normal Deposit
-                            </button>
                           </div>
                         </div>
                       )}
@@ -2263,17 +2377,19 @@ export default function DashboardPage({
                         <div className="space-y-1">
                           <label className="text-[10px] text-gray-505 uppercase font-black">
                             Amount ({selectedProtocol === 'BTC' ? 'BTC' : 'USDT'})
-                            {isComboDeposit && <span className="text-red-600 font-bold ml-1.5">(Locked)</span>}
+                            {isComboDeposit && selectedProtocol !== 'BTC' && <span className="text-red-600 font-bold ml-1.5">(Locked)</span>}
+                            {isComboDeposit && selectedProtocol === 'BTC' && <span className="text-amber-600 font-bold ml-1.5">(≈${comboDepositAmount || newDepositAmount} USD)</span>}
                           </label>
                           <input
                             type="number"
                             step="any"
                             required
-                            disabled={isComboDeposit}
-                            placeholder="Enter amount (e.g. 20.00)"
+                            disabled={isComboDeposit && selectedProtocol !== 'BTC'}
+                            readOnly={isComboDeposit && selectedProtocol !== 'BTC'}
+                            placeholder={isComboDeposit && selectedProtocol === 'BTC' ? `e.g. ${(parseFloat(comboDepositAmount || newDepositAmount || '10') / 70000).toFixed(6)}` : "Enter amount (e.g. 20.00)"}
                             value={newDepositAmount}
                             onChange={(e) => setNewDepositAmount(e.target.value)}
-                            className={`w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 ${isComboDeposit ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''
+                            className={`w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 ${isComboDeposit && selectedProtocol !== 'BTC' ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''}
                               }`}
                           />
                         </div>
@@ -2748,7 +2864,7 @@ export default function DashboardPage({
                           : 'border-transparent text-gray-400 hover:text-gray-655'
                           }`}
                       >
-                        Completed Tasks ({currentPlatformData.orders.length})
+                        Completed Tasks ({currentPlatformData.completedOrders})
                       </button>
                     </div>
 
@@ -2881,19 +2997,41 @@ export default function DashboardPage({
                           ) : (
                             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
                               <p className="font-bold text-gray-500">
-                                {ordersSubTab === 'pending'
-                                  ? (currentPlatformData.completedOrders >= 25
-                                    ? "Today's 25 campaign tasks have been completed!"
-                                    : "All assigned campaign tasks have been completed!")
-                                  : "You have not completed any campaign tasks yet."}
+                                {assignedProducts.length === 0
+                                  ? "No products assigned to this workspace yet."
+                                  : ordersSubTab === 'pending'
+                                    ? (currentPlatformData.completedOrders >= assignedProducts.length
+                                      ? "You have completed all orders for today!"
+                                      : "All assigned campaign tasks have been completed!")
+                                    : "You have not completed any campaign tasks yet."}
                               </p>
                               <p className="text-[11px] text-gray-400 mt-1">
-                                {ordersSubTab === 'pending'
-                                  ? (currentPlatformData.completedOrders >= 25
-                                    ? "The next batch will unlock in 24 hours. Your task count will reset to 1/25 on the next daily routine session."
-                                    : "Check back later or wait for administrators to unlock new batches.")
-                                  : "Select pending campaigns to complete evaluation compliance tasks."}
+                                {assignedProducts.length === 0
+                                  ? "Wait for the administrator to assign campaign products."
+                                  : ordersSubTab === 'pending'
+                                    ? (currentPlatformData.completedOrders >= assignedProducts.length
+                                        ? (withdrawals.some((w: any) => w.status === 'Approved')
+                                            ? `All ${assignedProducts.length}/${assignedProducts.length} orders completed. Waiting for admin to assign new orders.`
+                                            : `All ${assignedProducts.length}/${assignedProducts.length} orders completed. You must complete a withdrawal before the admin can assign your next batch.`)
+                                        : "Check back later or wait for administrators to unlock new batches.")
+                                    : "Select pending campaigns to complete evaluation compliance tasks."}
                               </p>
+                              {ordersSubTab === 'pending' && assignedProducts.length > 0 && currentPlatformData.completedOrders >= assignedProducts.length && !withdrawals.some((w: any) => w.status === 'Approved') && (
+                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 inline-block">
+                                  <p className="text-[11px] text-amber-800 font-bold">
+                                    Withdrawal Required for Next Batch
+                                  </p>
+                                  <p className="text-[10px] text-amber-600 mt-1">
+                                    Complete a withdrawal (minimum $1) to unlock your next batch of orders.
+                                  </p>
+                                  <button
+                                    onClick={() => setActiveTab('withdraw')}
+                                    className="mt-2 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg cursor-pointer transition"
+                                  >
+                                    Withdraw Now
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -2977,7 +3115,7 @@ export default function DashboardPage({
                           <span>Export CSV</span>
                         </button>
 
-                        {currentPlatformData.completedOrders >= 25 ? (
+                        {(currentPlatformData.completedOrders >= 25 || withdrawals.some((w: any) => w.status === 'Approved')) ? (
                           <button
                             onClick={() => setIsWithdrawOpen(true)}
                             className="bg-green-600 hover:bg-green-700 text-white font-black text-xs px-4 py-2.5 rounded-lg shadow transition flex items-center space-x-1.5 cursor-pointer"
@@ -2995,7 +3133,7 @@ export default function DashboardPage({
                               <span>Withdrawal Locked</span>
                             </button>
                             <p className="text-[9px] text-amber-600 font-bold leading-none font-sans mt-1">
-                              Requires 25+ orders ({currentPlatformData.completedOrders}/25).
+                              Complete {assignedProducts.length} orders first ({currentPlatformData.completedOrders}/{assignedProducts.length}).
                             </p>
                           </div>
                         )}
@@ -3111,8 +3249,8 @@ export default function DashboardPage({
             {/* ================================== WITHDRAW ================================== */}
             {activeTab === 'withdraw' && (
               <div className="space-y-6 animate-fadeIn text-left">
-                {enabledPlatform === null || currentPlatformData.completedOrders < 25 ? (
-                  /* Case 1: Workspace not activated OR completed orders < 25 (Locked) */
+                {enabledPlatform === null || (currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) ? (
+                  /* Case 1: Workspace not activated OR first-time user with < 25 orders (Locked) */
                   <div className="bg-white rounded-xl border border-gray-200 p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs my-6 animate-fadeIn">
                     <div className="h-14 w-14 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-100 animate-pulse">
                       <Lock className="h-6 w-6" />
@@ -3126,7 +3264,7 @@ export default function DashboardPage({
                       ) : (
                         <div className="space-y-3">
                           <p className="text-xs text-gray-500 leading-relaxed font-sans font-medium">
-                            Minimum compliance threshold requires 25 completed reviews. Currently completed: <strong className="text-red-655 font-mono">{currentPlatformData.completedOrders}/25</strong>.
+                            Minimum compliance threshold requires {assignedProducts.length} completed reviews. Currently completed: <strong className="text-red-655 font-mono">{currentPlatformData.completedOrders}/{assignedProducts.length}</strong>.
                           </p>
                         </div>
                       )}
@@ -3144,7 +3282,7 @@ export default function DashboardPage({
                           onClick={() => setActiveTab('orders')}
                           className="px-6 py-2.5 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer border border-[#a88734]"
                         >
-                          Complete Orders ({currentPlatformData.completedOrders}/25)
+                          Complete Orders ({currentPlatformData.completedOrders}/{assignedProducts.length})
                         </button>
                       )}
                     </div>
@@ -3159,6 +3297,19 @@ export default function DashboardPage({
                       </p>
                     </div>
 
+                    {/* First-time user: mandatory withdrawal notice */}
+                    {currentPlatformData.completedOrders >= 25 && !withdrawals.some((w: any) => w.status === 'Approved') && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start space-x-3 text-amber-800">
+                        <ShieldAlert className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                        <div className="text-xs leading-relaxed font-semibold">
+                          <strong className="text-amber-900 font-bold">First Batch Withdrawal Required:</strong>
+                          <p className="mt-0.5 text-amber-700 font-sans">
+                            You have completed your first batch of 25 orders. A withdrawal is required before the admin can assign your next batch of orders. You may withdraw any amount (minimum $1).
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                       {/* Left Column: Withdrawal Form */}
                       <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-xs">
@@ -3166,14 +3317,14 @@ export default function DashboardPage({
                           <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">New Payout Request</h3>
                           <p className="text-xs text-gray-400 mt-0.5 font-sans">Withdraw funds from your active workspace balance.</p>
                         </div>
-                        {/* Warning notices if locked */}
-                        {currentPlatformData.completedOrders < 25 && (
+                        {/* Warning notices if locked — only for first-time users */}
+                        {currentPlatformData.completedOrders < assignedProducts.length && !withdrawals.some((w: any) => w.status === 'Approved') && (
                           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start space-x-3 text-red-800">
                             <Lock className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-600" />
                             <div className="text-xs leading-relaxed font-semibold">
                               <strong className="text-red-900 font-bold">Withdrawal Locked:</strong>
                               <p className="mt-0.5 text-red-700 font-sans">
-                                Minimum compliance threshold requires 25 completed reviews. Currently completed: {currentPlatformData.completedOrders}/25. Please complete more task evaluations to authorize withdrawals.
+                                Minimum compliance threshold requires {assignedProducts.length} completed reviews. Currently completed: {currentPlatformData.completedOrders}/{assignedProducts.length}. Please complete more task evaluations to authorize withdrawals.
                               </p>
                             </div>
                           </div>
@@ -3247,7 +3398,7 @@ export default function DashboardPage({
                                 type="number"
                                 step="any"
                                 required
-                                disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                                disabled={(currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) || !isAddressBound}
                                 placeholder="Min 1.00"
                                 value={newWithdrawAmount}
                                 onChange={(e) => setNewWithdrawAmount(e.target.value)}
@@ -3259,7 +3410,7 @@ export default function DashboardPage({
                               <input
                                 type="password"
                                 required
-                                disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                                disabled={(currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) || !isAddressBound}
                                 placeholder="Enter your withdrawal password"
                                 value={newWithdrawPassword}
                                 onChange={(e) => setNewWithdrawPassword(e.target.value)}
@@ -3270,7 +3421,7 @@ export default function DashboardPage({
 
                           <button
                             type="submit"
-                            disabled={currentPlatformData.completedOrders < 25 || !isAddressBound}
+                            disabled={(currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) || !isAddressBound}
                             className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed border-0"
                           >
                             Submit Payout Request
@@ -4637,7 +4788,7 @@ export default function DashboardPage({
                   <div className="pt-1.5 md:pt-2">
                     <button
                       type="submit"
-                      disabled={reviewStars === 0 || selectedTextCode === null || isSubmittingReview}
+                      disabled={reviewStars === 0 || selectedTextCode === null || isSubmittingReview || currentPlatformData.completedOrders >= assignedProducts.length}
                       className="w-full py-2.5 md:py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 border-0 text-amazon-dark disabled:cursor-not-allowed font-black text-xs rounded-lg transition-colors cursor-pointer text-center uppercase tracking-wider flex items-center justify-center space-x-2"
                     >
                       {isSubmittingReview ? (
@@ -4649,7 +4800,7 @@ export default function DashboardPage({
                         <>
                           <span>Submit and Open Next Order</span>
                           <span className="bg-amazon-dark/10 px-2 py-0.5 rounded text-[10px] font-mono">
-                            {currentPlatformData.completedOrders + 1}/25
+                            {currentPlatformData.completedOrders + 1}/{assignedProducts.length}
                           </span>
                         </>
                       )}
@@ -4871,15 +5022,20 @@ export default function DashboardPage({
               </div>
 
               <div className="bg-yellow-50/70 border border-yellow-200 rounded-xl p-4 space-y-3 text-xs">
-                {/* Top: Combo Reward Amount */}
+                {/* Top: Combo Deposit */}
                 <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
-                  <span className="text-gray-655 font-bold">Combo Reward Amount:</span>
+                  <span className="text-gray-655 font-bold">Combo Deposit:</span>
                   <span className="font-mono font-black text-gray-900">${comboSuccessDetails.checkpointAmount.toFixed(2)}</span>
                 </div>
                 {/* Middle: Profit Bonus */}
                 <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
                   <span className="text-gray-655 font-bold text-amber-700 font-sans">Profit Bonus:</span>
-                  <span className="font-mono font-black text-amber-700">${Math.max(0, comboSuccessDetails.payout - comboSuccessDetails.checkpointAmount).toFixed(2)}</span>
+                  <span className="font-mono font-black text-amber-700">${comboSuccessDetails.profitBonus.toFixed(2)}</span>
+                </div>
+                {/* Middle: Previous Balance */}
+                <div className="flex justify-between items-center pb-2 border-b border-yellow-200/50">
+                  <span className="text-gray-655 font-bold text-gray-500 font-sans">Previous Balance:</span>
+                  <span className="font-mono font-bold text-gray-550">${(currentPlatformData.walletBalance - comboSuccessDetails.checkpointAmount - comboSuccessDetails.profitBonus).toFixed(2)} USD</span>
                 </div>
                 {/* Bottom: Total Available Balance */}
                 <div className="flex justify-between items-center pt-1 font-bold">
@@ -4890,7 +5046,7 @@ export default function DashboardPage({
 
               <div className="mt-6">
                 <button
-                  onClick={() => setIsComboSuccessModalOpen(false)}
+                  onClick={() => { setIsComboSuccessModalOpen(false); setActiveTab('orders'); }}
                   className="w-full bg-[#FF9900] hover:bg-[#e68a00] text-white font-black text-xs py-3.5 rounded-xl shadow-md transition text-center uppercase tracking-wider cursor-pointer font-sans"
                 >
                   Awesome, Let's Continue!

@@ -192,19 +192,18 @@ router.post('/register', async (req: Request, res: Response) => {
       console.warn('WebSocket registration alert dispatch error:', wsErr);
     }
 
-    // Create default platform balances
-    const balances = [
-      { user_id: newUser.id, platform: 'Amazon', wallet_balance: 0.00, reviews_count: 0 },
-      { user_id: newUser.id, platform: 'Alibaba', wallet_balance: 0.00, reviews_count: 0 },
-      { user_id: newUser.id, platform: 'Shopify', wallet_balance: 0.00, reviews_count: 0 }
+    // Create platform progress rows (3 platforms — reviews system queries by platform name)
+    const platformRows = [
+      { user_id: newUser.id, platform: 'Amazon', wallet_balance: 0.00, reviews_count: 0, current_position: 0 },
+      { user_id: newUser.id, platform: 'Alibaba', wallet_balance: 0.00, reviews_count: 0, current_position: 0 },
+      { user_id: newUser.id, platform: 'Shopify', wallet_balance: 0.00, reviews_count: 0, current_position: 0 }
     ];
-
-    const { error: balanceError } = await supabase
+    const { error: progressError } = await supabase
       .from('platform_balances')
-      .insert(balances);
+      .insert(platformRows);
 
-    if (balanceError) {
-      console.error('Failed to create balances:', balanceError);
+    if (progressError) {
+      console.error('Failed to create platform rows:', progressError);
     }
 
     // Capture and log initial IP configuration
@@ -310,11 +309,27 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       return res.status(404).json({ error: 'Active reviewer profile not found.' });
     }
 
-    // Fetch platform balances
-    const { data: balancesData } = await supabase
+    // Fetch review progress for user's active platform
+    const userPlatform = profile.platform || 'Amazon';
+    const { data: progressRow } = await supabase
       .from('platform_balances')
-      .select('platform, wallet_balance, reviews_count, current_position, last_reset_at')
-      .eq('user_id', userId);
+      .select('reviews_count, current_position, last_reset_at')
+      .eq('user_id', userId)
+      .eq('platform', userPlatform)
+      .maybeSingle();
+
+    const checkpoints = (await supabase
+      .from('combo_checkpoints').select('*').eq('user_id', userId).order('position', { ascending: true })).data || [];
+
+    const batchStart = progressRow?.last_reset_at ? new Date(progressRow.last_reset_at).toISOString() : new Date(0).toISOString();
+    const { count: completedCount } = await supabase
+      .from('review_submissions').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('status', 'Completed').gte('created_at', batchStart);
+
+    const count = completedCount || 0;
+
+    // SINGLE SOURCE OF TRUTH: profile.balance
+    const walletBalance = parseFloat(profile.balance as any) || 0.00;
 
     const formattedBalances: any = {
       Amazon: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null },
@@ -322,49 +337,31 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       Shopify: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null }
     };
 
-    if (balancesData) {
-      for (const b of balancesData) {
-        if (formattedBalances[b.platform]) {
-          const nextPos = (b.current_position || 0) + 1;
-          const { data: checkpoint } = await supabase
-            .from('combo_checkpoints')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('platform', b.platform)
-            .eq('position', nextPos)
-            .maybeSingle();
-
-          // Combo is cleared if there's an approved deposit >= trigger_balance in this batch
-          let isCleared = false;
-          if (checkpoint) {
-            const batchStart = b.last_reset_at ? new Date(b.last_reset_at).toISOString() : new Date(0).toISOString();
-            const { data: clearingDeposit } = await supabase
-              .from('deposits')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('platform', b.platform)
-              .eq('status', 'Approved')
-              .gte('amount', checkpoint.trigger_balance)
-              .gte('created_at', batchStart)
-              .limit(1)
-              .maybeSingle();
-            isCleared = !!clearingDeposit;
-          }
-          const isComboBlocked = checkpoint && !isCleared;
-
-          formattedBalances[b.platform] = {
-            walletBalance: parseFloat(b.wallet_balance as any) || 0.00,
-            completedReviewsCount: b.current_position || 0,
-            lastResetAt: b.last_reset_at,
-            isComboBlocked: !!isComboBlocked,
-            comboDetails: isComboBlocked ? {
-              position: nextPos,
-              triggerBalance: parseFloat(checkpoint.trigger_balance as any) || 0.00,
-              profitAmount: parseFloat(checkpoint.profit_override as any) || 0.00
-            } : null
-          };
-        }
+    {
+      const nextPos = count + 1;
+      // Sync progress if out of date
+      if (progressRow && count !== (progressRow.current_position || 0)) {
+        Promise.resolve(supabase.from('platform_balances').update({ current_position: count, reviews_count: count }).eq('user_id', userId).eq('platform', profile.platform || 'Amazon')).catch(() => {});
       }
+
+      const cp = checkpoints.find((c: any) => c.position === nextPos) || null;
+      let isCleared = false;
+      if (cp) {
+        const { count: req } = await supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).lte('position', nextPos);
+        const { count: act } = await supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'Approved').gte('amount', cp.trigger_balance).gte('created_at', batchStart);
+        isCleared = (act || 0) >= (req || 0);
+      }
+
+      const universalBalance = {
+        walletBalance,
+        completedReviewsCount: count,
+        lastResetAt: progressRow?.last_reset_at || null,
+        isComboBlocked: !!(cp && !isCleared),
+        comboDetails: cp ? { position: nextPos, triggerBalance: parseFloat(cp.trigger_balance as any) || 0, profitAmount: parseFloat(cp.profit_override as any) || 0, isCleared } : null
+      };
+      formattedBalances.Amazon = universalBalance;
+      formattedBalances.Alibaba = universalBalance;
+      formattedBalances.Shopify = universalBalance;
     }
 
     // Fetch global system config (deposit addresses, links, notification banner text)
@@ -405,6 +402,12 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       } catch (saveErr) {
         console.warn("Failed to auto-bind platform profile:", saveErr);
       }
+    }
+
+    // Keep workspace active if user has a bound platform, even if no products are assigned
+    // This allows admin to reset batch (delete products) and re-assign new ones
+    if (boundPlatform && !unlockedPlatforms.includes(boundPlatform)) {
+      unlockedPlatforms.push(boundPlatform);
     }
 
     res.json({

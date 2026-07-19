@@ -20,3 +20,25 @@ if (!supabaseKey || supabaseKey.includes('your-supabase-anon-key')) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Safe upsert: update first, if no rows affected then insert
+export async function upsertBalance(userId: string, data: Record<string, any>) {
+  const { data: existing } = await supabase
+    .from('platform_balances')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('platform', data.platform || 'main')
+    .maybeSingle();
+
+  if (existing) {
+    return supabase
+      .from('platform_balances')
+      .update(data)
+      .eq('user_id', userId)
+      .eq('platform', data.platform || 'main');
+  } else {
+    return supabase
+      .from('platform_balances')
+      .insert({ user_id: userId, ...data });
+  }
+}

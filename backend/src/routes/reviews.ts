@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.js';
-import { broadcastToUser } from '../services/wsService.js';
+import { broadcastToUser, broadcastToAdmins } from '../services/wsService.js';
 
 const router = express.Router();
 
@@ -22,7 +22,7 @@ async function maybeAwardReferralBonus(referredUserId?: string, platform?: strin
 
     const { data: referrerProfile, error: referrerError } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, balance')
       .eq('referral_code', referredProfile.referred_by)
       .maybeSingle();
 
@@ -30,32 +30,14 @@ async function maybeAwardReferralBonus(referredUserId?: string, platform?: strin
       return;
     }
 
-    const { data: existingBalance } = await supabase
-      .from('platform_balances')
-      .select('*')
-      .eq('user_id', referrerProfile.id)
-      .eq('platform', platform)
-      .maybeSingle();
-
     const bonusAmount = 1.50;
-    if (existingBalance) {
-      const updatedBalance = Number((parseFloat(existingBalance.wallet_balance as any) + bonusAmount).toFixed(2));
-      await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: updatedBalance })
-        .eq('user_id', referrerProfile.id)
-        .eq('platform', platform);
-    } else {
-      await supabase
-        .from('platform_balances')
-        .insert({
-          user_id: referrerProfile.id,
-          platform,
-          wallet_balance: bonusAmount,
-          reviews_count: 0,
-          current_position: 0
-        });
-    }
+    const currentBalance = parseFloat(referrerProfile.balance as any) || 0.0;
+    const updatedBalance = Number((currentBalance + bonusAmount).toFixed(2));
+
+    await supabase
+      .from('profiles')
+      .update({ balance: updatedBalance })
+      .eq('id', referrerProfile.id);
 
     await supabase.from('deposits').insert({
       user_id: referrerProfile.id,
@@ -192,276 +174,199 @@ router.get('/products', authenticateToken, async (req: AuthenticatedRequest, res
   }
 });
 
-// 2. Submit Review Draft for Verification
+// 2. Submit Review Draft for Verification — OPTIMIZED: parallel queries, no redundant fetches
 router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const { productId, orderId, reviewText } = req.body;
 
+    // Fast-fail: input validation (no DB calls)
     if (!productId || !reviewText) {
       return res.status(400).json({ error: 'Product ID and feedback template selection are required' });
     }
-
     if (typeof reviewText !== 'string' || reviewText.trim().length === 0) {
       return res.status(400).json({ error: 'Invalid review text format' });
     }
-
     if (reviewText.length > 500) {
       return res.status(400).json({ error: 'Review text exceeds maximum allowed length of 500 characters' });
+    }
+    if (!['01', '02', '03'].includes(reviewText)) {
+      return res.status(400).json({ error: 'Invalid feedback selection. Please select one of the three preset text templates.' });
     }
 
     const finalOrderId = orderId || ('ORD-' + Math.random().toString(36).substring(2, 12).toUpperCase());
 
-    // Fetch product details
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', productId)
-      .single();
+    const isDbConfigured = process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('your-project-id') &&
+                           process.env.SUPABASE_KEY && !process.env.SUPABASE_KEY.includes('your-supabase-anon-key');
+
+    // Dev sandbox mode — no DB calls at all
+    if (userId === 'user-dev-uuid' || userId === 'admin-dev-uuid' || !isDbConfigured) {
+      return res.status(201).json({
+        message: 'Review draft successfully recorded and approved (Sandbox Mode).',
+        submission: { id: 'submission-dev-uuid', user_id: userId, product_id: productId, order_id: finalOrderId, review_text: reviewText, payout_earned: 1.00, status: 'Completed' },
+        payoutEarned: 1.00, completedReviewsCount: 1
+      });
+    }
+
+    // ========== PHASE 1: Parallel fetch everything we need upfront ==========
+    const [{ data: product, error: productError }, { data: assignment, error: assignError }] = await Promise.all([
+      supabase.from('products').select('payout').eq('id', productId).single(),
+      supabase.from('user_assigned_products').select('platform, created_at').eq('user_id', userId).eq('product_id', productId).single()
+    ]);
 
     if (productError || !product) {
       return res.status(404).json({ error: 'Product campaign not found' });
     }
-
-    const isDbConfigured = process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('your-project-id') &&
-                           process.env.SUPABASE_KEY && !process.env.SUPABASE_KEY.includes('your-supabase-anon-key');
-
-    // Resolve the platform context by looking up the user's assignment mapping
-    let platform = 'Amazon';
-    let assignedAt = new Date(0).toISOString();
-    if (userId !== 'user-dev-uuid' && userId !== 'admin-dev-uuid' && isDbConfigured) {
-      const { data: assignment, error: assignError } = await supabase
-        .from('user_assigned_products')
-        .select('platform, created_at')
-        .eq('user_id', userId)
-        .eq('product_id', productId)
-        .single();
-
-      if (assignError || !assignment) {
-        return res.status(400).json({ error: 'This campaign product is not assigned to your active workspace.' });
-      }
-      platform = assignment.platform;
-      assignedAt = assignment.created_at;
+    if (assignError || !assignment) {
+      return res.status(400).json({ error: 'This campaign product is not assigned to your active workspace.' });
     }
 
-    let nextPosition = 1;
-    let payoutEarned = parseFloat(product.payout) || 1.00;
-    let checkpoint: any = null;
+    const platform = assignment.platform;
+    const payoutEarned = parseFloat(product.payout) || 1.00;
 
-    if (userId !== 'user-dev-uuid' && userId !== 'admin-dev-uuid' && isDbConfigured) {
-      // 1. Fetch user's current progress position on the active platform
-      const { data: balanceRecord, error: balanceFetchError } = await supabase
+    // Fetch balance record + profile balance + duplicate check — all in parallel
+    const batchStartTime = new Date(0).toISOString(); // will refine after we get balance record
+    const [{ data: balanceRecord }, { data: prof }] = await Promise.all([
+      supabase.from('platform_balances').select('*').eq('user_id', userId).eq('platform', platform).maybeSingle(),
+      supabase.from('profiles').select('balance').eq('id', userId).maybeSingle()
+    ]);
+
+    // Auto-create platform row if missing
+    let bal = balanceRecord;
+    if (!bal) {
+      const { data: newRow } = await supabase
         .from('platform_balances')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .single();
+        .insert({ user_id: userId, platform, wallet_balance: 0, reviews_count: 0, current_position: 0 })
+        .select('*').single();
+      bal = newRow;
+    }
+    if (!bal) {
+      return res.status(400).json({ error: 'Could not initialise progress tracking.' });
+    }
 
-      if (balanceFetchError || !balanceRecord) {
-        return res.status(400).json({ error: `Could not verify balance details for platform ${platform}.` });
+    const currentBalance = prof ? (parseFloat(prof.balance as any) || 0.0) : 0.0;
+    const currentPos = bal.current_position || 0;
+    const nextPosition = currentPos + 1;
+    const batchStart = bal.last_reset_at ? new Date(bal.last_reset_at).toISOString() : new Date(0).toISOString();
+
+    // ========== PHASE 2: Business rule checks ==========
+    // Cooldown
+    if (bal.last_completed_batch_at) {
+      const hoursElapsed = (Date.now() - new Date(bal.last_completed_batch_at).getTime()) / (1000 * 60 * 60);
+      if (hoursElapsed < 24) {
+        const hoursLeft = Math.max(0, Math.ceil(24 - hoursElapsed));
+        const minutesLeft = Math.max(0, Math.ceil((24 - hoursElapsed) * 60) % 60);
+        return res.status(400).json({ error: `Your withdrawal has been processed. You can start the next batch in ${hoursLeft}h ${minutesLeft}m.`, cooldownActive: true, hoursRemaining: hoursLeft, minutesRemaining: minutesLeft });
+      } else {
+        supabase.from('platform_balances').update({ last_completed_batch_at: null, last_reset_at: new Date().toISOString() }).eq('user_id', userId).eq('platform', platform);
+        bal.last_completed_batch_at = null;
       }
-      nextPosition = (balanceRecord.current_position || 0) + 1;
+    }
 
-      // 2. Batch lock rules:
-      // - If last_completed_batch_at is set: a withdrawal was approved. Lock until 24h has elapsed.
-      // - If current_position >= 25 but no withdrawal yet: user must submit withdrawal to continue.
-      // - Partial batches (1-24) are NEVER auto-reset — progress is frozen until user resumes.
-      if (balanceRecord.last_completed_batch_at) {
-        const completedTime = new Date(balanceRecord.last_completed_batch_at).getTime();
-        const hoursElapsed = (Date.now() - completedTime) / (1000 * 60 * 60);
-        if (hoursElapsed < 24) {
-          const hoursLeft = Math.max(0, Math.ceil(24 - hoursElapsed));
-          const minutesLeft = Math.max(0, Math.ceil((24 - hoursElapsed) * 60) % 60);
-          return res.status(400).json({
-            error: `Your withdrawal has been processed. You can start the next batch in ${hoursLeft}h ${minutesLeft}m. Please check back later.`,
-            cooldownActive: true,
-            hoursRemaining: hoursLeft,
-            minutesRemaining: minutesLeft
-          });
-        } else {
-          // 24h has elapsed — clear the cooldown flag and allow work
-          await supabase
-            .from('platform_balances')
-            .update({
-              last_completed_batch_at: null,
-              last_reset_at: new Date().toISOString()
-            })
-            .eq('user_id', userId)
-            .eq('platform', platform);
+    // 25 order limit
+    if (currentPos >= 25) {
+      return res.status(400).json({ error: 'All 25 orders completed. Wait for admin to assign new orders.', batchComplete: true });
+    }
 
-          balanceRecord.last_completed_batch_at = null;
-        }
-      }
+    // Combo checkpoint + duplicate submission — parallel
+    const [{ data: checkpoint }, { data: existingSubmission }] = await Promise.all([
+      supabase.from('combo_checkpoints').select('*').eq('user_id', userId).eq('platform', platform).eq('position', nextPosition).maybeSingle(),
+      supabase.from('review_submissions').select('id').eq('user_id', userId).eq('product_id', productId).eq('platform', platform).gte('created_at', batchStart).limit(1)
+    ]);
 
-      // If 25 orders are complete but withdrawal has not been approved yet — block new orders
-      if (balanceRecord.current_position >= 25) {
-        return res.status(400).json({
-          error: 'You have completed all 25 orders for this batch. Please submit a withdrawal request to begin a new batch.',
-          batchComplete: true
+    if (existingSubmission && existingSubmission.length > 0) {
+      return res.status(400).json({ error: 'You have already submitted a review verification request for this campaign in the current batch.' });
+    }
+
+    if (checkpoint) {
+      const [{ count: reqD }, { count: actD }] = await Promise.all([
+        supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).lte('position', nextPosition),
+        supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).eq('status', 'Approved').gte('amount', checkpoint.trigger_balance).gte('created_at', batchStart)
+      ]);
+      if ((actD || 0) < (reqD || 0)) {
+        return res.status(403).json({
+          error: 'COMBO_BLOCK',
+          triggerBalance: parseFloat(checkpoint.trigger_balance as any) || 0.00,
+          profitAmount: parseFloat(checkpoint.profit_override as any) || 0.00,
+          currentBalance: Number((currentBalance + payoutEarned).toFixed(2)),
+          position: nextPosition
         });
       }
-
-      nextPosition = balanceRecord.current_position + 1;
-
-      // 3. Verify combo checkpoints triggers
-      const { data: checkpointData } = await supabase
-        .from('combo_checkpoints')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .eq('position', nextPosition)
-        .maybeSingle();
-      checkpoint = checkpointData;
-
-      if (checkpoint) {
-        const comboAmount = parseFloat(checkpoint.trigger_balance as any) || 0.00;
-        const profitAmount = parseFloat(checkpoint.profit_override as any) || 0.00;
-
-        // Check if combo checkpoint has been marked as cleared/paid
-        // Cleared = there is an approved deposit >= trigger_balance after the current batch started
-        let isCleared = false;
-        const batchStartTime = balanceRecord.last_reset_at ? new Date(balanceRecord.last_reset_at).toISOString() : new Date(0).toISOString();
-        const { data: clearingDeposit } = await supabase
-          .from('deposits')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('platform', platform)
-          .eq('status', 'Approved')
-          .gte('amount', checkpoint.trigger_balance)
-          .gte('created_at', batchStartTime)
-          .limit(1)
-          .maybeSingle();
-        isCleared = !!clearingDeposit;
-
-        if (!isCleared) {
-          return res.status(403).json({
-            error: 'COMBO_BLOCK',
-            triggerBalance: comboAmount,
-            profitAmount: profitAmount,
-            currentBalance: parseFloat(balanceRecord.wallet_balance as any) || 0.00,
-            position: nextPosition
-          });
-        }
-
-        // Paid/cleared combo payout is 0 here since reward was credited during deposit approval
-        payoutEarned = 0.00;
-      }
     }
 
-    // Check if user has already submitted a review for this product in the current assignment window
-    if (userId !== 'user-dev-uuid' && userId !== 'admin-dev-uuid' && isDbConfigured) {
-      const { data: existingSubmission } = await supabase
-        .from('review_submissions')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('product_id', productId)
-        .eq('platform', platform)
-        .gte('created_at', assignedAt)
-        .limit(1);
+    // ========== PHASE 3: Write — balance + progress parallel ==========
+    const newBalance = Number((currentBalance + payoutEarned).toFixed(2));
 
-      if (existingSubmission && existingSubmission.length > 0) {
-        return res.status(400).json({ error: 'You have already submitted a review verification request for this campaign.' });
-      }
+    const [{ error: balErr }, { data: updateResult, error: progressError }] = await Promise.all([
+      supabase.from('profiles').update({ balance: newBalance }).eq('id', userId),
+      supabase.from('platform_balances').update({ reviews_count: (bal.reviews_count || 0) + 1, current_position: nextPosition }).eq('user_id', userId).eq('platform', platform).eq('current_position', currentPos).select('current_position')
+    ]);
+
+    if (balErr) {
+      return res.status(500).json({ error: 'Failed to update balance: ' + balErr.message });
+    }
+    if (progressError || !updateResult || updateResult.length === 0) {
+      supabase.from('profiles').update({ balance: currentBalance }).eq('id', userId);
+      return res.status(400).json({ error: progressError ? 'Failed to update review progress: ' + progressError.message : 'Order limit reached. Another submission was processed concurrently.' });
     }
 
-    // Validate code representation (01, 02, 03)
-    if (!['01', '02', '03'].includes(reviewText)) {
-      return res.status(400).json({
-        error: 'Invalid feedback selection. Please select one of the three preset text templates.'
-      });
-    }
-
-    if (userId === 'user-dev-uuid' || userId === 'admin-dev-uuid' || !isDbConfigured) {
-      return res.status(201).json({
-        message: 'Review draft successfully recorded and approved (Sandbox Mode).',
-        submission: { id: 'submission-dev-uuid', user_id: userId, product_id: productId, order_id: finalOrderId, review_text: reviewText, payout_earned: payoutEarned, status: 'Completed' }
-      });
-    }
-
-    // Fetch the current balance record first
-    const { data: balanceRecord, error: fetchBalError } = await supabase
-      .from('platform_balances')
-      .select('wallet_balance, reviews_count, current_position')
-      .eq('user_id', userId)
-      .eq('platform', platform)
-      .single();
-
-    if (fetchBalError || !balanceRecord) {
-      return res.status(500).json({ error: 'Failed to retrieve platform balance: ' + (fetchBalError?.message || 'Record not found') });
-    }
-
-    const currentBalance = parseFloat(balanceRecord.wallet_balance as any) || 0.0;
-    const currentReviews = balanceRecord.reviews_count || 0;
-    const currentPos = balanceRecord.current_position || 0;
-
-    // 1. Atomic update on review progress and balance via direct UPDATE
-    const { error: progressError } = await supabase
-      .from('platform_balances')
-      .update({
-        reviews_count: currentReviews + 1,
-        current_position: currentPos + 1,
-        wallet_balance: Number((currentBalance + payoutEarned).toFixed(2))
-      })
-      .eq('user_id', userId)
-      .eq('platform', platform);
-
-    if (progressError) {
-      return res.status(500).json({ error: 'Failed to update review progress: ' + progressError.message });
-    }
-
-    // 2. Record submission directly as Completed
+    // Insert submission
     const { data: submission, error: insertError } = await supabase
       .from('review_submissions')
-      .insert({
-        user_id: userId,
-        product_id: productId,
-        order_id: finalOrderId,
-        review_text: reviewText,
-        payout_earned: payoutEarned,
-        status: 'Completed',
-        platform: platform
-      })
-      .select()
-      .single();
+      .insert({ user_id: userId, product_id: productId, order_id: finalOrderId, review_text: reviewText, payout_earned: payoutEarned, status: 'Completed', platform })
+      .select().single();
 
     if (insertError) {
-      console.error("Atomic insert failed, rolling back progress update:", insertError.message);
-      // Rollback progress and balance updates
-      await supabase.rpc('adjust_platform_balance', {
-        target_user_id: userId,
-        target_platform: platform,
-        amount_to_add: -payoutEarned
-      });
-      await supabase
-        .from('platform_balances')
-        .update({
-          reviews_count: currentReviews,
-          current_position: currentPos,
-          wallet_balance: currentBalance
-        })
-        .eq('user_id', userId)
-        .eq('platform', platform);
-
+      console.error("Insert failed, rolling back:", insertError.message);
+      await Promise.all([
+        supabase.from('profiles').update({ balance: currentBalance }).eq('id', userId),
+        supabase.from('platform_balances').update({ reviews_count: bal.reviews_count || 0, current_position: currentPos }).eq('user_id', userId).eq('platform', platform).eq('current_position', nextPosition),
+        supabase.from('review_submissions').delete().eq('user_id', userId).eq('product_id', productId).eq('order_id', finalOrderId)
+      ]);
       return res.status(500).json({ error: 'Failed to record review: ' + insertError.message });
     }
 
-    // Also check referral bonus
+    // ========== PHASE 4: Post-write — fire and forget ==========
+    // Referral bonus (fire & forget — don't block response)
     const { count: completedReviewCount } = await supabase
-      .from('review_submissions')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('status', 'Completed');
-
+      .from('review_submissions').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'Completed');
     if ((completedReviewCount || 0) === 3) {
-      await maybeAwardReferralBonus(userId, platform);
+      maybeAwardReferralBonus(userId, platform);
     }
+
+    // Next combo check
+    const nextCampaignPos = currentPos + 2;
+    let nextComboBlocked = false;
+    let nextComboDetails = null;
+
+    const { data: nextCheckpoint } = await supabase
+      .from('combo_checkpoints').select('*').eq('user_id', userId).eq('platform', platform).eq('position', nextCampaignPos).maybeSingle();
+
+    if (nextCheckpoint) {
+      const [{ count: reqD }, { count: actD }] = await Promise.all([
+        supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).lte('position', nextCampaignPos),
+        supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).eq('status', 'Approved').gte('amount', nextCheckpoint.trigger_balance).gte('created_at', batchStart)
+      ]);
+      nextComboBlocked = (actD || 0) < (reqD || 0);
+      if (nextComboBlocked) {
+        nextComboDetails = { position: nextCampaignPos, triggerBalance: parseFloat(nextCheckpoint.trigger_balance as any) || 0.00, profitAmount: parseFloat(nextCheckpoint.profit_override as any) || 0.00, currentBalance: newBalance };
+      }
+    }
+
+    broadcastToUser(userId!, 'balance_update', { type: 'review_completed', balance: newBalance });
+    broadcastToAdmins('user_review_completed', { userId, platform, completedReviewsCount: currentPos + 1, totalRequired: 25 });
 
     res.status(201).json({
       message: 'Review successfully submitted and commission credited to your account.',
       submission,
       isCombo: !!checkpoint,
       checkpointAmount: checkpoint ? parseFloat(checkpoint.trigger_balance as any) : 0,
-      payoutEarned: payoutEarned
+      profitBonus: checkpoint ? parseFloat(checkpoint.profit_override as any) || 0 : 0,
+      payoutEarned,
+      completedReviewsCount: currentPos + 1,
+      walletBalance: newBalance,
+      nextComboBlocked,
+      nextComboDetails
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -472,6 +377,19 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
 router.get('/submissions', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
+
+    // Fetch batch start times per platform to filter submissions to current batch only
+    const { data: balances } = await supabase
+      .from('platform_balances')
+      .select('platform, last_reset_at')
+      .eq('user_id', userId);
+
+    const batchStartMap: Record<string, string> = {};
+    if (balances) {
+      for (const b of balances) {
+        batchStartMap[b.platform] = b.last_reset_at || new Date(0).toISOString();
+      }
+    }
 
     const { data: submissions, error } = await supabase
       .from('review_submissions')
@@ -495,20 +413,25 @@ router.get('/submissions', authenticateToken, async (req: AuthenticatedRequest, 
       return res.status(500).json({ error: 'Failed to fetch submissions: ' + error.message });
     }
 
-    // Format list for frontend consumption
-    const formattedSubmissions = (submissions || []).map((sub: any) => ({
-      id: sub.id,
-      productId: sub.product_id,
-      productTitle: sub.product?.title || 'Unknown Product',
-      productImage: sub.product?.image_url || '',
-      platform: sub.platform || '',
-      orderId: sub.order_id,
-      reviewText: sub.review_text,
-      payout: parseFloat(sub.payout_earned) || 0.00,
-      status: sub.status,
-      createdAt: sub.created_at,
-      date: new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-    }));
+    // Filter submissions to current batch only (created at or after last_reset_at)
+    const formattedSubmissions = (submissions || [])
+      .filter((sub: any) => {
+        const batchStart = batchStartMap[sub.platform] || new Date(0).toISOString();
+        return new Date(sub.created_at).getTime() >= new Date(batchStart).getTime();
+      })
+      .map((sub: any) => ({
+        id: sub.id,
+        productId: sub.product_id,
+        productTitle: sub.product?.title || 'Unknown Product',
+        productImage: sub.product?.image_url || '',
+        platform: sub.platform || '',
+        orderId: sub.order_id,
+        reviewText: sub.review_text,
+        payout: parseFloat(sub.payout_earned) || 0.00,
+        status: sub.status,
+        createdAt: sub.created_at,
+        date: new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+      }));
 
     res.json(formattedSubmissions);
   } catch (error: any) {

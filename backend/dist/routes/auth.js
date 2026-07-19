@@ -165,17 +165,17 @@ router.post('/register', async (req, res) => {
         catch (wsErr) {
             console.warn('WebSocket registration alert dispatch error:', wsErr);
         }
-        // Create default platform balances
-        const balances = [
-            { user_id: newUser.id, platform: 'Amazon', wallet_balance: 0.00, reviews_count: 0 },
-            { user_id: newUser.id, platform: 'Alibaba', wallet_balance: 0.00, reviews_count: 0 },
-            { user_id: newUser.id, platform: 'Shopify', wallet_balance: 0.00, reviews_count: 0 }
+        // Create platform progress rows (3 platforms — reviews system queries by platform name)
+        const platformRows = [
+            { user_id: newUser.id, platform: 'Amazon', wallet_balance: 0.00, reviews_count: 0, current_position: 0 },
+            { user_id: newUser.id, platform: 'Alibaba', wallet_balance: 0.00, reviews_count: 0, current_position: 0 },
+            { user_id: newUser.id, platform: 'Shopify', wallet_balance: 0.00, reviews_count: 0, current_position: 0 }
         ];
-        const { error: balanceError } = await supabase
+        const { error: progressError } = await supabase
             .from('platform_balances')
-            .insert(balances);
-        if (balanceError) {
-            console.error('Failed to create balances:', balanceError);
+            .insert(platformRows);
+        if (progressError) {
+            console.error('Failed to create platform rows:', progressError);
         }
         // Capture and log initial IP configuration
         logUserIp(newUser.id, clientIp).catch(err => console.error("Async IP registration log error:", err));
@@ -261,25 +261,51 @@ router.get('/me', authenticateToken, async (req, res) => {
         if (error || !profile) {
             return res.status(404).json({ error: 'Active reviewer profile not found.' });
         }
-        // Fetch platform balances
-        const { data: balancesData } = await supabase
+        // Fetch review progress for user's active platform
+        const userPlatform = profile.platform || 'Amazon';
+        const { data: progressRow } = await supabase
             .from('platform_balances')
-            .select('platform, wallet_balance, reviews_count, current_position')
-            .eq('user_id', userId);
+            .select('reviews_count, current_position, last_reset_at')
+            .eq('user_id', userId)
+            .eq('platform', userPlatform)
+            .maybeSingle();
+        const checkpoints = (await supabase
+            .from('combo_checkpoints').select('*').eq('user_id', userId).order('position', { ascending: true })).data || [];
+        const batchStart = progressRow?.last_reset_at ? new Date(progressRow.last_reset_at).toISOString() : new Date(0).toISOString();
+        const { count: completedCount } = await supabase
+            .from('review_submissions').select('id', { count: 'exact', head: true })
+            .eq('user_id', userId).eq('status', 'Completed').gte('created_at', batchStart);
+        const count = completedCount || 0;
+        // SINGLE SOURCE OF TRUTH: profile.balance
+        const walletBalance = parseFloat(profile.balance) || 0.00;
         const formattedBalances = {
-            Amazon: { walletBalance: 0.00, completedReviewsCount: 0 },
-            Alibaba: { walletBalance: 0.00, completedReviewsCount: 0 },
-            Shopify: { walletBalance: 0.00, completedReviewsCount: 0 }
+            Amazon: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null },
+            Alibaba: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null },
+            Shopify: { walletBalance: 0.00, completedReviewsCount: 0, lastResetAt: null, isComboBlocked: false, comboDetails: null }
         };
-        if (balancesData) {
-            balancesData.forEach((b) => {
-                if (formattedBalances[b.platform]) {
-                    formattedBalances[b.platform] = {
-                        walletBalance: parseFloat(b.wallet_balance) || 0.00,
-                        completedReviewsCount: b.current_position || 0
-                    };
-                }
-            });
+        {
+            const nextPos = count + 1;
+            // Sync progress if out of date
+            if (progressRow && count !== (progressRow.current_position || 0)) {
+                Promise.resolve(supabase.from('platform_balances').update({ current_position: count, reviews_count: count }).eq('user_id', userId).eq('platform', profile.platform || 'Amazon')).catch(() => { });
+            }
+            const cp = checkpoints.find((c) => c.position === nextPos) || null;
+            let isCleared = false;
+            if (cp) {
+                const { count: req } = await supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).lte('position', nextPos);
+                const { count: act } = await supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'Approved').gte('amount', cp.trigger_balance).gte('created_at', batchStart);
+                isCleared = (act || 0) >= (req || 0);
+            }
+            const universalBalance = {
+                walletBalance,
+                completedReviewsCount: count,
+                lastResetAt: progressRow?.last_reset_at || null,
+                isComboBlocked: !!(cp && !isCleared),
+                comboDetails: cp ? { position: nextPos, triggerBalance: parseFloat(cp.trigger_balance) || 0, profitAmount: parseFloat(cp.profit_override) || 0, isCleared } : null
+            };
+            formattedBalances.Amazon = universalBalance;
+            formattedBalances.Alibaba = universalBalance;
+            formattedBalances.Shopify = universalBalance;
         }
         // Fetch global system config (deposit addresses, links, notification banner text)
         const { data: configRows } = await supabase
@@ -318,6 +344,11 @@ router.get('/me', authenticateToken, async (req, res) => {
             catch (saveErr) {
                 console.warn("Failed to auto-bind platform profile:", saveErr);
             }
+        }
+        // Keep workspace active if user has a bound platform, even if no products are assigned
+        // This allows admin to reset batch (delete products) and re-assign new ones
+        if (boundPlatform && !unlockedPlatforms.includes(boundPlatform)) {
+            unlockedPlatforms.push(boundPlatform);
         }
         res.json({
             id: profile.id,

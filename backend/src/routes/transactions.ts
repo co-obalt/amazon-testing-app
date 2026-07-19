@@ -1,5 +1,5 @@
 import express, { Response } from 'express';
-import { supabase } from '../config/supabase.js';
+import { supabase, upsertBalance } from '../config/supabase.js';
 import { authenticateToken, AuthenticatedRequest, requireAdmin } from '../middlewares/auth.js';
 import { broadcastToAdmins } from '../services/wsService.js';
 import { clearCache } from '../services/cacheService.js';
@@ -178,25 +178,42 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
     const boundAddress = profile.bound_usdt_address.trim();
 
-    // Fetch active platform balance
-    const { data: balanceRecord, error: fetchError } = await supabase
+    // Fetch review progress from platform_balances for the user's active platform
+    const { data: progressRow } = await supabase
       .from('platform_balances')
-      .select('*')
+      .select('current_position, last_reset_at')
       .eq('user_id', userId)
       .eq('platform', platform)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !balanceRecord) {
-      return res.status(400).json({ error: `Could not verify balance details for platform ${platform}.` });
+    // SINGLE SOURCE OF TRUTH: Read balance from profiles
+    const { data: prof, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profErr || !prof) {
+      return res.status(400).json({ error: 'Could not verify balance details.' });
     }
 
-    const currentBalance = parseFloat(balanceRecord.wallet_balance) || 0.0;
+    const currentBalance = parseFloat(prof.balance as any) || 0.0;
     if (currentBalance < numericAmount) {
-      return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
     }
 
     // Enforce 25-order compliance gate before allowing withdrawal
-    const currentPosition = parseInt(balanceRecord.current_position as any) || 0;
+    const currentPosition = progressRow ? (parseInt(progressRow.current_position as any) || 0) : 0;
+
+    // Check if user has any approved withdrawal ever
+    const { data: pastWithdrawals } = await supabase
+      .from('withdrawals')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'Approved')
+      .limit(1);
+
+    const hasWithdrawnBefore = pastWithdrawals && pastWithdrawals.length > 0;
 
     // Verify user doesn't have an uncleared combo (check via approved deposits in current batch)
     const nextPos = currentPosition + 1;
@@ -210,18 +227,27 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
     let isCleared = false;
     if (checkpoint) {
-      const batchStart = balanceRecord.last_reset_at ? new Date(balanceRecord.last_reset_at).toISOString() : new Date(0).toISOString();
-      const { data: clearingDeposit } = await supabase
+      const batchStart = progressRow?.last_reset_at ? new Date(progressRow.last_reset_at).toISOString() : new Date(0).toISOString();
+
+      // Count how many combo checkpoints exist at or before this position
+      const { count: requiredDeposits } = await supabase
+        .from('combo_checkpoints')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('platform', platform)
+        .lte('position', nextPos);
+
+      // Count how many approved deposits >= trigger_balance exist in the batch
+      const { count: actualDeposits } = await supabase
         .from('deposits')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('platform', platform)
         .eq('status', 'Approved')
         .gte('amount', checkpoint.trigger_balance)
-        .gte('created_at', batchStart)
-        .limit(1)
-        .maybeSingle();
-      isCleared = !!clearingDeposit;
+        .gte('created_at', batchStart);
+
+      isCleared = (actualDeposits || 0) >= (requiredDeposits || 0);
     }
     if (checkpoint && !isCleared) {
       return res.status(400).json({
@@ -229,7 +255,8 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
-    if (currentPosition < 25) {
+    // 25-order gate: only enforced for first-time users who have never withdrawn
+    if (!hasWithdrawnBefore && currentPosition < 25) {
       const remaining = 25 - currentPosition;
       return res.status(400).json({
         error: `Withdrawal is locked. You must complete all 25 orders before withdrawing. You have ${remaining} order(s) remaining.`,
@@ -239,38 +266,19 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
-    // Try to perform atomic balance subtraction via database RPC first (concurrency protection)
-    let updatedBalance: number;
-    const { data: rpcData, error: rpcError } = await supabase.rpc('decrement_platform_balance', {
-      target_user_id: userId,
-      target_platform: platform,
-      amount_to_subtract: numericAmount
-    });
+    // Deduct balance from profiles (single source of truth)
+    const updatedBalance = Number((currentBalance - numericAmount).toFixed(2));
+    if (updatedBalance < 0) {
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
 
-    if (rpcError) {
-      if (rpcError.message?.includes('Insufficient balance') || rpcError.message?.includes('new_balance < 0')) {
-        return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
-      }
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ balance: updatedBalance })
+      .eq('id', userId);
 
-      // Log warning and use fallback non-atomic subtraction if RPC is not deployed yet
-      console.warn("RPC decrement_platform_balance failed, falling back to non-atomic update:", rpcError.message);
-
-      const updatedBal = Number((currentBalance - numericAmount).toFixed(2));
-      if (updatedBal < 0) {
-        return res.status(400).json({ error: 'Insufficient wallet balance for this platform' });
-      }
-
-      const { error: updateError } = await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: updatedBal })
-        .eq('user_id', userId);
-
-      if (updateError) {
-        return res.status(500).json({ error: 'Failed to update balance ledger: ' + updateError.message });
-      }
-      updatedBalance = updatedBal;
-    } else {
-      updatedBalance = parseFloat(rpcData as any);
+    if (updateError) {
+      return res.status(500).json({ error: 'Failed to update balance: ' + updateError.message });
     }
 
     // Queue withdrawal request
@@ -288,12 +296,12 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       .single();
 
     if (insertError) {
-      // Revert the balance subtraction on failure
+      // Revert the balance deduction on failure
       const revertedBalance = Number((updatedBalance + numericAmount).toFixed(2));
       await supabase
-        .from('platform_balances')
-        .update({ wallet_balance: revertedBalance })
-        .eq('user_id', userId);
+        .from('profiles')
+        .update({ balance: revertedBalance })
+        .eq('id', userId);
 
       return res.status(500).json({ error: 'Failed to queue withdrawal request: ' + insertError.message });
     }
@@ -401,21 +409,42 @@ router.post('/override-approve-deposit', authenticateToken, requireAdmin, async 
       .update({ status: 'Approved' })
       .eq('id', depositId);
 
-    // Credit platform balance
-    const { data: balanceRecord } = await supabase
-      .from('platform_balances')
-      .select('wallet_balance')
-      .eq('user_id', deposit.user_id)
-      .eq('platform', deposit.platform)
-      .single();
+    // Credit balance from profiles (single source of truth) + combo profit
+    const [{ data: prof }, { data: progressRow }] = await Promise.all([
+      supabase.from('profiles').select('balance').eq('id', deposit.user_id).maybeSingle(),
+      supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+    ]);
 
-    const currentBalance = parseFloat(balanceRecord?.wallet_balance as any) || 0.0;
-    const finalBalance = Number((currentBalance + parseFloat(deposit.amount)).toFixed(2));
+    if (prof) {
+      const currentBalance = parseFloat(prof.balance as any) || 0.0;
+      const depositAmount = parseFloat(deposit.amount);
+      const currentPos = progressRow?.current_position || 0;
+      const nextPosition = currentPos + 1;
 
-    await supabase
-      .from('platform_balances')
-      .update({ wallet_balance: finalBalance })
-      .eq('user_id', deposit.user_id);
+      const { data: checkpoint } = await supabase
+        .from('combo_checkpoints')
+        .select('profit_override')
+        .eq('user_id', deposit.user_id)
+        .eq('position', nextPosition)
+        .maybeSingle();
+
+      let finalBalance = Number((currentBalance + depositAmount).toFixed(2));
+      if (checkpoint) {
+        const profitOverride = parseFloat(checkpoint.profit_override as any) || 0.00;
+        finalBalance = Number((currentBalance + depositAmount + profitOverride).toFixed(2));
+      }
+
+      const { error: balErr } = await supabase
+        .from('profiles')
+        .update({ balance: finalBalance })
+        .eq('id', deposit.user_id);
+
+      if (balErr) {
+        console.error('Failed to update balance on override-approve:', balErr);
+      }
+    } else {
+      console.error('Failed to fetch profile for override-approve');
+    }
 
     // Unlock profile status
     await supabase
