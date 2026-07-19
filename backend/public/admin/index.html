@@ -2305,6 +2305,7 @@
           const locationText = cityText ? `${cityText}, ${countryText}` : countryText;
 
           const boundBalance = parseFloat(u.balances?.total || 0).toFixed(2);
+          const boundPlatform = (u.activeVIPs && u.activeVIPs.length > 0) ? u.activeVIPs[0] : 'Unbound';
 
           return `
           <tr class="hover:bg-gray-50 text-xs">
