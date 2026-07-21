@@ -696,7 +696,7 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
       // Also check for combo checkpoint profit bonus
       const [{ data: prof }, { data: progressRow }] = await Promise.all([
         supabase.from('profiles').select('balance').eq('id', deposit.user_id).maybeSingle(),
-        supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+        supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).eq('platform', deposit.platform).maybeSingle()
       ]);
 
       if (prof) {
@@ -705,11 +705,12 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
         const currentPos = progressRow?.current_position || 0;
         const nextPosition = currentPos + 1;
 
-        // Check if this deposit clears a combo checkpoint
+        // Check if this deposit clears a combo checkpoint (filtered by platform)
         const { data: checkpoint } = await supabase
           .from('combo_checkpoints')
           .select('trigger_balance, profit_override')
           .eq('user_id', deposit.user_id)
+          .eq('platform', deposit.platform)
           .eq('position', nextPosition)
           .maybeSingle();
 
@@ -857,31 +858,34 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Withdrawal already audited and processed' });
     }
 
-    // Refund balance if rejected
-    if (status === 'Rejected') {
+    // Deduct balance on approval (balance is held in escrow, not deducted at submission)
+    if (status === 'Approved') {
       const { data: prof, error: profErr } = await supabase
         .from('profiles')
         .select('balance')
         .eq('id', wRecord.user_id)
         .maybeSingle();
 
-      if (!profErr && prof) {
-        const currentBal = parseFloat(prof.balance as any) || 0.0;
-        const refundAmount = parseFloat(wRecord.amount);
-        const newBal = Number((currentBal + refundAmount).toFixed(2));
+      if (profErr || !prof) {
+        return res.status(500).json({ error: 'Failed to fetch user profile for balance deduction' });
+      }
 
-        const { error: refundErr } = await supabase
-          .from('profiles')
-          .update({ balance: newBal })
-          .eq('id', wRecord.user_id);
+      const currentBal = parseFloat(prof.balance as any) || 0.0;
+      const withdrawAmount = parseFloat(wRecord.amount);
+      const newBal = Number((currentBal - withdrawAmount).toFixed(2));
 
-        if (refundErr) {
-          console.error("Refund failed during withdrawal rejection:", refundErr.message);
-          return res.status(500).json({ error: 'Failed to process refund: ' + refundErr.message });
-        }
-      } else {
-        console.error("Could not fetch profile for refund:", profErr);
-        return res.status(500).json({ error: 'Failed to process refund: user profile not found' });
+      if (newBal < 0) {
+        return res.status(400).json({ error: 'Insufficient balance for this withdrawal' });
+      }
+
+      const { error: deductErr } = await supabase
+        .from('profiles')
+        .update({ balance: newBal })
+        .eq('id', wRecord.user_id);
+
+      if (deductErr) {
+        console.error("Balance deduction failed during withdrawal approval:", deductErr.message);
+        return res.status(500).json({ error: 'Failed to deduct balance: ' + deductErr.message });
       }
     }
 
@@ -892,8 +896,18 @@ router.put('/withdrawals/:id/status', async (req: AuthenticatedRequest, res: Res
       .eq('id', id);
 
     if (updateError) {
-      // Note: If this fails for a rejected status, the balance was already refunded.
-      // This is a rare DB connectivity error, but it is safe because the user is credited.
+      // If approval deduction fails after status update, revert the balance
+      if (status === 'Approved') {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', wRecord.user_id)
+          .maybeSingle();
+        if (prof) {
+          const revertBal = Number((parseFloat(prof.balance as any) + parseFloat(wRecord.amount)).toFixed(2));
+          await supabase.from('profiles').update({ balance: revertBal }).eq('id', wRecord.user_id);
+        }
+      }
       return res.status(500).json({ error: 'Failed to update withdrawal status: ' + updateError.message });
     }
 

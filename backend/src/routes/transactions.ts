@@ -266,22 +266,7 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
-    // Deduct balance from profiles (single source of truth)
-    const updatedBalance = Number((currentBalance - numericAmount).toFixed(2));
-    if (updatedBalance < 0) {
-      return res.status(400).json({ error: 'Insufficient wallet balance' });
-    }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ balance: updatedBalance })
-      .eq('id', userId);
-
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to update balance: ' + updateError.message });
-    }
-
-    // Queue withdrawal request
+    // Queue withdrawal request (balance is deducted on admin approval, not here)
     const { data: newWithdrawal, error: insertError } = await supabase
       .from('withdrawals')
       .insert({
@@ -296,13 +281,6 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
       .single();
 
     if (insertError) {
-      // Revert the balance deduction on failure
-      const revertedBalance = Number((updatedBalance + numericAmount).toFixed(2));
-      await supabase
-        .from('profiles')
-        .update({ balance: revertedBalance })
-        .eq('id', userId);
-
       return res.status(500).json({ error: 'Failed to queue withdrawal request: ' + insertError.message });
     }
 
@@ -412,7 +390,7 @@ router.post('/override-approve-deposit', authenticateToken, requireAdmin, async 
     // Credit balance from profiles (single source of truth) + combo profit
     const [{ data: prof }, { data: progressRow }] = await Promise.all([
       supabase.from('profiles').select('balance').eq('id', deposit.user_id).maybeSingle(),
-      supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+      supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).eq('platform', deposit.platform).maybeSingle()
     ]);
 
     if (prof) {
@@ -425,6 +403,7 @@ router.post('/override-approve-deposit', authenticateToken, requireAdmin, async 
         .from('combo_checkpoints')
         .select('profit_override')
         .eq('user_id', deposit.user_id)
+        .eq('platform', deposit.platform)
         .eq('position', nextPosition)
         .maybeSingle();
 

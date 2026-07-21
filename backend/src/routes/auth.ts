@@ -319,12 +319,12 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       .maybeSingle();
 
     const checkpoints = (await supabase
-      .from('combo_checkpoints').select('*').eq('user_id', userId).order('position', { ascending: true })).data || [];
+      .from('combo_checkpoints').select('*').eq('user_id', userId).eq('platform', userPlatform).order('position', { ascending: true })).data || [];
 
     const batchStart = progressRow?.last_reset_at ? new Date(progressRow.last_reset_at).toISOString() : new Date(0).toISOString();
     const { count: completedCount } = await supabase
       .from('review_submissions').select('id', { count: 'exact', head: true })
-      .eq('user_id', userId).eq('status', 'Completed').gte('created_at', batchStart);
+      .eq('user_id', userId).eq('platform', userPlatform).eq('status', 'Completed').gte('created_at', batchStart);
 
     const count = completedCount || 0;
 
@@ -347,8 +347,8 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res: Resp
       const cp = checkpoints.find((c: any) => c.position === nextPos) || null;
       let isCleared = false;
       if (cp) {
-        const { count: req } = await supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).lte('position', nextPos);
-        const { count: act } = await supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'Approved').gte('amount', cp.trigger_balance).gte('created_at', batchStart);
+        const { count: req } = await supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', userPlatform).lte('position', nextPos);
+        const { count: act } = await supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', userPlatform).eq('status', 'Approved').gte('amount', cp.trigger_balance).gte('created_at', batchStart);
         isCleared = (act || 0) >= (req || 0);
       }
 

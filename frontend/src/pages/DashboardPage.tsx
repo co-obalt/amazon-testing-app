@@ -124,6 +124,9 @@ export default function DashboardPage({
     setAmazonSearchResults([]);
     setAmazonSearchQuery('');
     setAmazonSearchError(null);
+    // Reset combo deposit state when switching tabs
+    setIsComboDeposit(false);
+    setComboDepositAmount(null);
     if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
@@ -136,6 +139,14 @@ export default function DashboardPage({
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isSubmittingDeposit, setIsSubmittingDeposit] = useState(false);
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isBindingWallet, setIsBindingWallet] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isSavingPIN, setIsSavingPIN] = useState(false);
+  const [isSavingAlerts, setIsSavingAlerts] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isComboSuccessModalOpen, setIsComboSuccessModalOpen] = useState(false);
   const [comboSuccessDetails, setComboSuccessDetails] = useState<{ position: number; payout: number; checkpointAmount: number; profitBonus: number } | null>(null);
 
@@ -168,7 +179,7 @@ export default function DashboardPage({
   // Notifications state
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<{ id: any, text: string, type: string, status: string, date: string }[]>(() => {
-    const saved = localStorage.getItem('user_notifications');
+    const saved = localStorage.getItem(`user_notifications_${username}`);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -182,7 +193,7 @@ export default function DashboardPage({
   // Debounce localStorage write for notifications
   useEffect(() => {
     const timeout = setTimeout(() => {
-      localStorage.setItem('user_notifications', JSON.stringify(notifications));
+      localStorage.setItem(`user_notifications_${username}`, JSON.stringify(notifications));
     }, 500);
     return () => clearTimeout(timeout);
   }, [notifications]);
@@ -583,10 +594,17 @@ export default function DashboardPage({
     let ws: WebSocket | null = null;
     let reconnectTimeout: any = null;
     let isCleanCleanup = false;
+    let consecutiveFailures = 0;
 
     function connectWS() {
       const token = localStorage.getItem('reviewer_auth_token');
       if (!token) return;
+
+      // Stop reconnecting after too many failures (token likely expired)
+      if (consecutiveFailures >= 3) {
+        console.error("WebSocket: Too many connection failures, stopping reconnection. Please re-login.");
+        return;
+      }
 
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       let wsHost = 'localhost:5000';
@@ -736,9 +754,15 @@ export default function DashboardPage({
         }
       };
 
+      ws.onopen = () => {
+        consecutiveFailures = 0;
+      };
+
       ws.onclose = () => {
         if (!isCleanCleanup) {
-          reconnectTimeout = setTimeout(connectWS, 5000);
+          consecutiveFailures++;
+          const delay = Math.min(5000 * consecutiveFailures, 30000);
+          reconnectTimeout = setTimeout(connectWS, delay);
         }
       };
     }
@@ -798,6 +822,7 @@ export default function DashboardPage({
   // Handle new secure cashout withdrawal request submission
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingWithdraw) return;
     const amount = parseFloat(newWithdrawAmount);
     if (isNaN(amount) || amount < 1) {
       showToast("Minimum withdrawal is $1.00.");
@@ -816,6 +841,7 @@ export default function DashboardPage({
       return;
     }
 
+    setIsSubmittingWithdraw(true);
     try {
       const token = localStorage.getItem('reviewer_auth_token');
       const res = await fetch(`${API_BASE}/transactions/withdraw`, {
@@ -842,6 +868,8 @@ export default function DashboardPage({
       fetchAllData();
     } catch (err) {
       showToast('Server connection error. Failed to submit withdrawal.');
+    } finally {
+      setIsSubmittingWithdraw(false);
     }
   };
 
@@ -904,18 +932,6 @@ export default function DashboardPage({
   const [settingsSubTab, setSettingsSubTab] = useState<'account' | 'notifications' | 'wallet' | 'danger'>('account');
   const [faqSearch, setFaqSearch] = useState('');
   const [activeFaqId, setActiveFaqId] = useState<number | null>(null);
-
-  // Referral lists
-  const referralLeaderboard = [
-    { rank: "🥇", username: "user_abc", count: 15 },
-    { rank: "🥈", username: "user_xyz", count: 12 },
-    { rank: "🥉", username: "user_def", count: 8 },
-  ];
-
-  const referralHistory = [
-    { name: "John Doe", date: "Jul 09, 2026", status: "Active", bonus: 1.50 },
-    { name: "Jane Smith", date: "Jul 07, 2026", status: "Pending", bonus: 0.00 },
-  ];
 
   // Separated balances/orders per platform so they NEVER mix. Starting with 0 balance for network lock flow
   const [platformsData, setPlatformsData] = useState<Record<'Amazon' | 'Alibaba' | 'Shopify', PlatformStats>>({
@@ -1028,6 +1044,7 @@ export default function DashboardPage({
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingPassword) return;
     if (oldPassword !== profilePassword) {
       showToast("Error: Current login password does not match.");
       return;
@@ -1040,15 +1057,20 @@ export default function DashboardPage({
       showToast("Error: Confirm password does not match new password.");
       return;
     }
-    setProfilePassword(newPassword);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    showToast("✓ Login security password changed successfully.");
+    setIsSavingPassword(true);
+    setTimeout(() => {
+      setProfilePassword(newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast("✓ Login security password changed successfully.");
+      setIsSavingPassword(false);
+    }, 500);
   };
 
   const handleChangeWithdrawalPassword = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingPIN) return;
     if (oldWithdrawalPassword !== withdrawalPassword) {
       showToast("Error: Current withdrawal PIN does not match.");
       return;
@@ -1061,11 +1083,15 @@ export default function DashboardPage({
       showToast("Error: Confirm withdrawal PIN does not match new withdrawal PIN.");
       return;
     }
-    setWithdrawalPassword(newWithdrawalPassword);
-    setOldWithdrawalPassword('');
-    setNewWithdrawalPassword('');
-    setConfirmWithdrawalPassword('');
-    showToast("✓ Withdrawal PIN changed successfully.");
+    setIsSavingPIN(true);
+    setTimeout(() => {
+      setWithdrawalPassword(newWithdrawalPassword);
+      setOldWithdrawalPassword('');
+      setNewWithdrawalPassword('');
+      setConfirmWithdrawalPassword('');
+      showToast("✓ Withdrawal PIN changed successfully.");
+      setIsSavingPIN(false);
+    }, 500);
   };
 
   const triggerUserImageAttach = () => {
@@ -1282,7 +1308,14 @@ export default function DashboardPage({
         }
         // If already submitted in this batch, silently advance to next product
         if (data.error && data.error.includes('already submitted')) {
-          const remainingPending = assignedProducts.filter(p => p.id !== activeReviewProduct.id);
+          const remainingPending = assignedProducts.filter(p => {
+            if (p.id === activeReviewProduct.id) return false;
+            return !currentPlatformData.orders.some(o =>
+              o.productId === p.id &&
+              o.status === 'Completed' &&
+              new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
+            );
+          });
           const nextProduct = remainingPending[0] || null;
           setActiveReviewProduct(nextProduct);
           if (nextProduct) setReviewStep(1);
@@ -1313,6 +1346,25 @@ export default function DashboardPage({
 
       showToast(`✓ Evaluation submitted successfully! +$${actualPayout.toFixed(2)} USD credited.`);
 
+      // Optimistically add the new submission to orders immediately
+      const newOrder = {
+        id: data.submission?.id || Date.now().toString(),
+        productId: activeReviewProduct.id,
+        productTitle: activeReviewProduct.title,
+        productImage: activeReviewProduct.image,
+        status: 'Completed',
+        payout: actualPayout,
+        createdAt: new Date().toISOString(),
+        platform: activePlatform || 'Amazon'
+      };
+      setPlatformsData(prev => ({
+        ...prev,
+        [activePlat]: {
+          ...prev[activePlat],
+          orders: [...prev[activePlat].orders, newOrder]
+        }
+      }));
+
       // Clear input state parameters
       setReviewStars(0);
       setSelectedTextCode(null);
@@ -1342,12 +1394,11 @@ export default function DashboardPage({
       // No combo triggered — proceed with normal auto-advance to next campaign product.
       const remainingPending = assignedProducts.filter(p => {
         if (p.id === activeReviewProduct.id) return false;
-        const isCompleted = currentPlatformData.orders.some(o =>
+        return !currentPlatformData.orders.some(o =>
           o.productId === p.id &&
           o.status === 'Completed' &&
           new Date(o.createdAt).getTime() >= new Date(currentPlatformData.lastResetAt || 0).getTime()
         );
-        return !isCompleted;
       });
 
       const nextProduct = remainingPending[0] || null;
@@ -1376,6 +1427,7 @@ export default function DashboardPage({
   // Handle withdraw submission
   const handleWithdrawRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingWithdraw) return;
     if (currentPlatformData.isComboBlocked && currentPlatformData.comboDetails) {
       showToast("❌ Withdrawal locked! Please pay and complete your pending Special Combo order first.");
       return;
@@ -1394,6 +1446,7 @@ export default function DashboardPage({
       return;
     }
 
+    setIsSubmittingWithdraw(true);
     try {
       const token = localStorage.getItem('reviewer_auth_token');
       const res = await fetch(`${API_BASE}/transactions/withdraw`, {
@@ -1418,12 +1471,15 @@ export default function DashboardPage({
       fetchAllData();
     } catch (err) {
       showToast('Server connection error. Failed to queue withdrawal.');
+    } finally {
+      setIsSubmittingWithdraw(false);
     }
   };
 
   // Submit deposit request
   const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingDeposit) return;
     const amount = parseFloat(newDepositAmount);
     if (isNaN(amount) || amount <= 0) {
       showToast("Please enter a valid deposit amount.");
@@ -1441,6 +1497,7 @@ export default function DashboardPage({
       }
     }
 
+    setIsSubmittingDeposit(true);
     try {
       const token = localStorage.getItem('reviewer_auth_token');
       const res = await fetch(`${API_BASE}/transactions/deposit`, {
@@ -1475,6 +1532,8 @@ export default function DashboardPage({
       fetchAllData();
     } catch (err) {
       showToast('Server connection error. Failed to submit deposit.');
+    } finally {
+      setIsSubmittingDeposit(false);
     }
   };
 
@@ -1925,7 +1984,7 @@ export default function DashboardPage({
 
                 <div className="space-y-6 animate-fadeIn">
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                     {/* Card 1: Total Balance */}
                     <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
                       <div>
@@ -1969,6 +2028,28 @@ export default function DashboardPage({
                       </div>
                       <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
                         Cumulative payout
+                      </p>
+                    </div>
+
+                    {/* Card 5: Invitation */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Invitation</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-purple-600 mt-0.5 md:mt-1">0</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                        {referralCode ? `Code: ${referralCode}` : 'Share your code'}
+                      </p>
+                    </div>
+
+                    {/* Card 6: Withdraw */}
+                    <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-[9px] md:text-xxs text-gray-400 uppercase font-black tracking-wider">Withdraw</p>
+                        <h3 className="text-lg md:text-2xl font-mono font-black text-cyan-600 mt-0.5 md:mt-1">${withdrawals.filter((w: any) => w.status === 'Approved').reduce((sum: number, w: any) => sum + parseFloat(w.amount || 0), 0).toFixed(2)}</h3>
+                      </div>
+                      <p className="text-[9px] md:text-[10px] text-gray-500 mt-2 md:mt-4 border-t border-gray-100 pt-2 truncate">
+                        {withdrawals.length > 0 ? `${withdrawals.length} request${withdrawals.length > 1 ? 's' : ''} made` : 'No withdrawals yet'}
                       </p>
                     </div>
                   </div>
@@ -2419,9 +2500,20 @@ export default function DashboardPage({
 
                       <button
                         type="submit"
-                        className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] text-amazon-dark font-black text-xs rounded-lg transition-colors cursor-pointer text-center"
+                        disabled={isSubmittingDeposit}
+                        className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed"
                       >
-                        Submit deposit
+                        {isSubmittingDeposit ? (
+                          <span className="flex items-center justify-center">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Submitting...
+                          </span>
+                        ) : (
+                          'Submit deposit'
+                        )}
                       </button>
                     </form>
                   </div>
@@ -3421,10 +3513,20 @@ export default function DashboardPage({
 
                           <button
                             type="submit"
-                            disabled={(currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) || !isAddressBound}
+                            disabled={(currentPlatformData.completedOrders < 25 && !withdrawals.some((w: any) => w.status === 'Approved')) || !isAddressBound || isSubmittingWithdraw}
                             className="w-full py-3 bg-amazon-gold hover:bg-[#e2b600] disabled:bg-gray-200 text-amazon-dark disabled:text-gray-400 font-black text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed border-0"
                           >
-                            Submit Payout Request
+                            {isSubmittingWithdraw ? (
+                              <span className="flex items-center justify-center">
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing...
+                              </span>
+                            ) : (
+                              'Submit Payout Request'
+                            )}
                           </button>
                         </form>
                       </div>
@@ -3594,6 +3696,8 @@ export default function DashboardPage({
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
+                            if (isSavingProfile) return;
+                            setIsSavingProfile(true);
                             const token = localStorage.getItem('reviewer_auth_token');
                             try {
                               const res = await fetch(`${API_BASE}/auth/update-profile`, {
@@ -3613,6 +3717,8 @@ export default function DashboardPage({
                               }
                             } catch (err) {
                               showToast("Server connection error. Failed to save details.");
+                            } finally {
+                              setIsSavingProfile(false);
                             }
                           }}
                           className="space-y-4 text-xs"
@@ -3667,9 +3773,20 @@ export default function DashboardPage({
                           <div className="pt-2">
                             <button
                               type="submit"
-                              className="px-6 py-2 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center"
+                              disabled={isSavingProfile}
+                              className="px-6 py-2 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed"
                             >
-                              Save Identity Settings
+                              {isSavingProfile ? (
+                                <span className="flex items-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Saving...
+                                </span>
+                              ) : (
+                                'Save Identity Settings'
+                              )}
                             </button>
                           </div>
                         </form>
@@ -3690,6 +3807,8 @@ export default function DashboardPage({
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
+                            if (isBindingWallet) return;
+                            setIsBindingWallet(true);
                             const token = localStorage.getItem('reviewer_auth_token');
                             try {
                               const res = await fetch(`${API_BASE}/auth/bind-usdt`, {
@@ -3710,6 +3829,8 @@ export default function DashboardPage({
                               }
                             } catch (err) {
                               showToast("Server connection error. Failed to save address.");
+                            } finally {
+                              setIsBindingWallet(false);
                             }
                           }}
                           className="space-y-4 text-xs"
@@ -3742,9 +3863,20 @@ export default function DashboardPage({
                           <div className="pt-2">
                             <button
                               type="submit"
-                              className="px-6 py-2 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center"
+                              disabled={isBindingWallet}
+                              className="px-6 py-2 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed"
                             >
-                              Link Payout Wallet
+                              {isBindingWallet ? (
+                                <span className="flex items-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Linking...
+                                </span>
+                              ) : (
+                                'Link Payout Wallet'
+                              )}
                             </button>
                           </div>
                         </form>
@@ -3838,9 +3970,20 @@ export default function DashboardPage({
                           <div className="pt-2">
                             <button
                               type="submit"
-                              className="w-full py-2.5 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center"
+                              disabled={isSavingPassword}
+                              className="w-full py-2.5 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed"
                             >
-                              Update Account Password
+                              {isSavingPassword ? (
+                                <span className="flex items-center justify-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Updating...
+                                </span>
+                              ) : (
+                                'Update Account Password'
+                              )}
                             </button>
                           </div>
                         </form>
@@ -3893,9 +4036,20 @@ export default function DashboardPage({
                           <div className="pt-2">
                             <button
                               type="submit"
-                              className="w-full py-2.5 bg-[#131921] hover:bg-black text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center"
+                              disabled={isSavingPIN}
+                              className="w-full py-2.5 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer text-center disabled:cursor-not-allowed"
                             >
-                              Update Withdrawal PIN
+                              {isSavingPIN ? (
+                                <span className="flex items-center justify-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Updating...
+                                </span>
+                              ) : (
+                                'Update Withdrawal PIN'
+                              )}
                             </button>
                           </div>
                         </form>
@@ -4238,7 +4392,12 @@ export default function DashboardPage({
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          showToast("Security credentials updated successfully!");
+                          if (isSavingSettings) return;
+                          setIsSavingSettings(true);
+                          setTimeout(() => {
+                            showToast("Security credentials updated successfully!");
+                            setIsSavingSettings(false);
+                          }, 500);
                         }}
                         className="space-y-4 animate-fadeIn"
                       >
@@ -4309,9 +4468,20 @@ export default function DashboardPage({
 
                         <button
                           type="submit"
-                          className="px-5 py-2.5 bg-[#131921] hover:bg-black text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                          disabled={isSavingSettings}
+                          className="px-5 py-2.5 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white text-xs font-bold rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed"
                         >
-                          Update Profile Credentials
+                          {isSavingSettings ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Updating...
+                            </span>
+                          ) : (
+                            'Update Profile Credentials'
+                          )}
                         </button>
                       </form>
                     )}
@@ -4364,10 +4534,28 @@ export default function DashboardPage({
                         </div>
 
                         <button
-                          onClick={() => showToast("Alert configurations synchronized!")}
-                          className="px-5 py-2.5 bg-[#131921] hover:bg-black text-white text-xs font-bold rounded-lg transition-all cursor-pointer mt-4"
+                          onClick={() => {
+                            if (isSavingAlerts) return;
+                            setIsSavingAlerts(true);
+                            setTimeout(() => {
+                              showToast("Alert configurations synchronized!");
+                              setIsSavingAlerts(false);
+                            }, 500);
+                          }}
+                          disabled={isSavingAlerts}
+                          className="px-5 py-2.5 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white text-xs font-bold rounded-lg transition-all cursor-pointer mt-4 disabled:cursor-not-allowed"
                         >
-                          Save Alert Preferences
+                          {isSavingAlerts ? (
+                            <span className="flex items-center">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Saving...
+                            </span>
+                          ) : (
+                            'Save Alert Preferences'
+                          )}
                         </button>
                       </div>
                     )}
@@ -4378,10 +4566,12 @@ export default function DashboardPage({
                         onSubmit={async (e) => {
                           e.preventDefault();
                           if (isAddressBound) return;
+                          if (isBindingWallet) return;
                           if (!defaultWalletAddress.trim()) {
                             showToast("Wallet address cannot be empty.");
                             return;
                           }
+                          setIsBindingWallet(true);
                           try {
                             const token = localStorage.getItem('reviewer_auth_token');
                             const res = await fetch(`${API_BASE}/auth/bind-usdt`, {
@@ -4401,6 +4591,8 @@ export default function DashboardPage({
                             }
                           } catch (err) {
                             showToast("Connection error binding address.");
+                          } finally {
+                            setIsBindingWallet(false);
                           }
                         }}
                         className="space-y-4 animate-fadeIn"
@@ -4441,9 +4633,20 @@ export default function DashboardPage({
                         {!isAddressBound && (
                           <button
                             type="submit"
-                            className="px-5 py-2.5 bg-[#131921] hover:bg-black text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                            disabled={isBindingWallet}
+                            className="px-5 py-2.5 bg-[#131921] hover:bg-black disabled:bg-gray-400 text-white text-xs font-bold rounded-lg transition-all cursor-pointer disabled:cursor-not-allowed"
                           >
-                            Lock Wallet Coordinates
+                            {isBindingWallet ? (
+                              <span className="flex items-center">
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Locking...
+                              </span>
+                            ) : (
+                              'Lock Wallet Coordinates'
+                            )}
                           </button>
                         )}
                       </form>
@@ -4885,10 +5088,20 @@ export default function DashboardPage({
 
                 <button
                   type="submit"
-                  disabled={!isAddressBound}
+                  disabled={!isAddressBound || isSubmittingWithdraw}
                   className="w-full bg-[#131921] hover:bg-black text-white font-black text-xs py-3 rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isAddressBound ? "Confirm Secure Cashout Release" : "Please Bind Address First"}
+                  {isSubmittingWithdraw ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </span>
+                  ) : (
+                    isAddressBound ? "Confirm Secure Cashout Release" : "Please Bind Address First"
+                  )}
                 </button>
               </form>
             </motion.div>
