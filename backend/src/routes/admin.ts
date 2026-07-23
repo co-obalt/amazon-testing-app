@@ -681,19 +681,8 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
       return res.status(400).json({ error: 'Deposit request already audited and processed' });
     }
 
-    // Update deposit status
-    const { error: updateError } = await supabase
-      .from('deposits')
-      .update({ status })
-      .eq('id', id);
-
-    if (updateError) {
-      return res.status(500).json({ error: 'Failed to update status: ' + updateError.message });
-    }
-
     if (status === 'Approved') {
-      // SINGLE SOURCE OF TRUTH: Update profiles.balance
-      // Also check for combo checkpoint profit bonus
+      // SINGLE SOURCE OF TRUTH: Update profiles.balance BEFORE marking deposit as approved
       const [{ data: prof }, { data: progressRow }] = await Promise.all([
         supabase.from('profiles').select('balance').eq('id', deposit.user_id).maybeSingle(),
         supabase.from('platform_balances').select('current_position').eq('user_id', deposit.user_id).eq('platform', deposit.platform).maybeSingle()
@@ -703,21 +692,40 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
         const currentBalance = parseFloat(prof.balance as any) || 0.0;
         const depositAmount = parseFloat(deposit.amount);
         const currentPos = progressRow?.current_position || 0;
-        const nextPosition = currentPos + 1;
 
-        // Check if this deposit clears a combo checkpoint (filtered by platform)
-        const { data: checkpoint } = await supabase
-          .from('combo_checkpoints')
-          .select('trigger_balance, profit_override')
-          .eq('user_id', deposit.user_id)
-          .eq('platform', deposit.platform)
-          .eq('position', nextPosition)
-          .maybeSingle();
+        // Check if remark contains combo position identifier (e.g. "Combo Payment for Position 10")
+        const comboRemarkMatch = (deposit.remark || '').match(/Combo Payment for Position (\d+)/i);
+        const comboPosition = comboRemarkMatch ? parseInt(comboRemarkMatch[1]) : null;
+
+        // Find the combo checkpoint for this deposit
+        let checkpoint = null;
+        if (comboPosition) {
+          // Combo deposit: look for the specific position from the remark
+          const { data: cp } = await supabase
+            .from('combo_checkpoints')
+            .select('trigger_balance, profit_override')
+            .eq('user_id', deposit.user_id)
+            .eq('platform', deposit.platform)
+            .eq('position', comboPosition)
+            .maybeSingle();
+          checkpoint = cp;
+        } else {
+          // Regular deposit: check if it matches the next combo position
+          const nextPosition = currentPos + 1;
+          const { data: cp } = await supabase
+            .from('combo_checkpoints')
+            .select('trigger_balance, profit_override')
+            .eq('user_id', deposit.user_id)
+            .eq('platform', deposit.platform)
+            .eq('position', nextPosition)
+            .maybeSingle();
+          checkpoint = cp;
+        }
 
         let finalBalance = Number((currentBalance + depositAmount).toFixed(2));
 
         if (checkpoint) {
-          // Combo deposit approved — add profit bonus
+          // Combo deposit approved — add deposit amount + profit bonus
           const profitOverride = parseFloat(checkpoint.profit_override as any) || 0.00;
           finalBalance = Number((currentBalance + depositAmount + profitOverride).toFixed(2));
         }
@@ -728,10 +736,12 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
           .eq('id', deposit.user_id);
 
         if (balUpdateErr) {
-          console.error('Failed to update balance on approve:', balUpdateErr);
+          console.error('Failed to update balance on deposit approve:', balUpdateErr);
+          return res.status(500).json({ error: 'Failed to credit balance: ' + balUpdateErr.message });
         }
       } else {
         console.error('Failed to fetch profile for balance update');
+        return res.status(500).json({ error: 'User profile not found for balance update' });
       }
 
       // Set user status to active to unlock workspace
@@ -739,6 +749,16 @@ router.put('/deposits/:id/status', async (req: AuthenticatedRequest, res: Respon
         .from('profiles')
         .update({ status: 'active' })
         .eq('id', deposit.user_id);
+    }
+
+    // Update deposit status AFTER balance is credited
+    const { error: updateError } = await supabase
+      .from('deposits')
+      .update({ status })
+      .eq('id', id);
+
+    if (updateError) {
+      return res.status(500).json({ error: 'Failed to update status: ' + updateError.message });
     }
 
     // Broadcast real-time balance update to the depositing user

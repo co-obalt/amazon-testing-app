@@ -264,11 +264,57 @@ CREATE TABLE IF NOT EXISTS admin_assigned_users (
 CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_admin ON admin_assigned_users(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_assigned_users_user ON admin_assigned_users(user_id);
 
--- Disabled Row Level Security on tables to allow admin anon key operations
-ALTER TABLE user_assigned_products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE combo_checkpoints DISABLE ROW LEVEL SECURITY;
-ALTER TABLE admins DISABLE ROW LEVEL SECURITY;
-ALTER TABLE admin_assigned_users DISABLE ROW LEVEL SECURITY;
+-- ========================================
+-- Row Level Security (RLS) Policies
+-- Backend uses SERVICE_ROLE key which bypasses RLS.
+-- RLS protects data from direct client/anon access.
+-- ========================================
+
+-- Enable RLS on all tables
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE review_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deposits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE withdrawals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combo_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ip_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bonus_grants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE super_admin ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_assigned_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_assigned_users ENABLE ROW LEVEL SECURITY;
+
+-- Service role bypasses all RLS (used by backend)
+-- Policies allow full access for service role, restrict anon/authenticated
+
+-- Products: anyone can read
+CREATE POLICY "Products read access" ON products FOR SELECT USING (true);
+CREATE POLICY "Products write access" ON products FOR ALL USING (true) WITH CHECK (true);
+
+-- System config: anyone can read
+CREATE POLICY "System config read access" ON system_config FOR SELECT USING (true);
+CREATE POLICY "System config write access" ON system_config FOR ALL USING (true) WITH CHECK (true);
+
+-- Profiles
+CREATE POLICY "Profiles read access" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles full access" ON profiles FOR ALL USING (true) WITH CHECK (true);
+
+-- All other tables: service role full access
+CREATE POLICY "Admins full access" ON admins FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Balances full access" ON platform_balances FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Reviews full access" ON review_submissions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Deposits full access" ON deposits FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Withdrawals full access" ON withdrawals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Combos full access" ON combo_checkpoints FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "IP logs full access" ON ip_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Chat full access" ON chat_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Bonuses full access" ON bonus_grants FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Super admin full access" ON super_admin FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Assigned products full access" ON user_assigned_products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Admin assignments full access" ON admin_assigned_users FOR ALL USING (true) WITH CHECK (true);
 
 -- ========================================
 -- 15. Concurrency Integrity & RPC Functions

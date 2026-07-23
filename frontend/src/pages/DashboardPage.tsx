@@ -368,38 +368,32 @@ export default function DashboardPage({
 
       // Update balances state
       if (userData.balances) {
-        setPlatformsData({
+        setPlatformsData(prev => ({
           Amazon: {
-            walletBalance: userData.balances.Amazon?.walletBalance || 0,
-            completedOrders: userData.balances.Amazon?.completedReviewsCount || 0,
-            pendingReviews: 0,
-            profitEarned: 0,
-            lastResetAt: userData.balances.Amazon?.lastResetAt,
-            isComboBlocked: !!userData.balances.Amazon?.isComboBlocked,
-            comboDetails: userData.balances.Amazon?.comboDetails || null,
-            orders: []
+            ...prev.Amazon,
+            walletBalance: userData.balances.Amazon?.walletBalance ?? prev.Amazon.walletBalance,
+            completedOrders: userData.balances.Amazon?.completedReviewsCount ?? prev.Amazon.completedOrders,
+            lastResetAt: userData.balances.Amazon?.lastResetAt ?? prev.Amazon.lastResetAt,
+            isComboBlocked: userData.balances.Amazon?.isComboBlocked ?? prev.Amazon.isComboBlocked,
+            comboDetails: userData.balances.Amazon?.comboDetails ?? prev.Amazon.comboDetails,
           },
           Alibaba: {
-            walletBalance: userData.balances.Alibaba?.walletBalance || 0,
-            completedOrders: userData.balances.Alibaba?.completedReviewsCount || 0,
-            pendingReviews: 0,
-            profitEarned: 0,
-            lastResetAt: userData.balances.Alibaba?.lastResetAt,
-            isComboBlocked: !!userData.balances.Alibaba?.isComboBlocked,
-            comboDetails: userData.balances.Alibaba?.comboDetails || null,
-            orders: []
+            ...prev.Alibaba,
+            walletBalance: userData.balances.Alibaba?.walletBalance ?? prev.Alibaba.walletBalance,
+            completedOrders: userData.balances.Alibaba?.completedReviewsCount ?? prev.Alibaba.completedOrders,
+            lastResetAt: userData.balances.Alibaba?.lastResetAt ?? prev.Alibaba.lastResetAt,
+            isComboBlocked: userData.balances.Alibaba?.isComboBlocked ?? prev.Alibaba.isComboBlocked,
+            comboDetails: userData.balances.Alibaba?.comboDetails ?? prev.Alibaba.comboDetails,
           },
           Shopify: {
-            walletBalance: userData.balances.Shopify?.walletBalance || 0,
-            completedOrders: userData.balances.Shopify?.completedReviewsCount || 0,
-            pendingReviews: 0,
-            profitEarned: 0,
-            lastResetAt: userData.balances.Shopify?.lastResetAt,
-            isComboBlocked: !!userData.balances.Shopify?.isComboBlocked,
-            comboDetails: userData.balances.Shopify?.comboDetails || null,
-            orders: []
+            ...prev.Shopify,
+            walletBalance: userData.balances.Shopify?.walletBalance ?? prev.Shopify.walletBalance,
+            completedOrders: userData.balances.Shopify?.completedReviewsCount ?? prev.Shopify.completedOrders,
+            lastResetAt: userData.balances.Shopify?.lastResetAt ?? prev.Shopify.lastResetAt,
+            isComboBlocked: userData.balances.Shopify?.isComboBlocked ?? prev.Shopify.isComboBlocked,
+            comboDetails: userData.balances.Shopify?.comboDetails ?? prev.Shopify.comboDetails,
           }
-        });
+        }));
 
         // Resolve workspace locks dynamically
         const unlocked = userData.unlockedPlatforms || [];
@@ -2488,13 +2482,16 @@ export default function DashboardPage({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] text-gray-505 uppercase font-black">Remark (optional)</label>
+                        <label className="text-[10px] text-gray-505 uppercase font-black">
+                          {isComboDeposit ? 'Combo Payment Identifier (Locked)' : 'Remark (optional)'}
+                        </label>
                         <input
                           type="text"
-                          placeholder="Add a note or sender wallet details..."
+                          placeholder={isComboDeposit ? "Auto-assigned combo identifier" : "Add a note or sender wallet details..."}
                           value={newDepositRemark}
                           onChange={(e) => setNewDepositRemark(e.target.value)}
-                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800"
+                          disabled={isComboDeposit}
+                          className={`w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amazon-gold font-medium text-gray-800 ${isComboDeposit ? 'bg-gray-100 cursor-not-allowed opacity-80' : ''}`}
                         />
                       </div>
 

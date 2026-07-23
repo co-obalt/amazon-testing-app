@@ -279,11 +279,20 @@ router.post('/submit', authenticateToken, async (req: AuthenticatedRequest, res:
     }
 
     if (checkpoint) {
-      const [{ count: reqD }, { count: actD }] = await Promise.all([
-        supabase.from('combo_checkpoints').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).lte('position', nextPosition),
-        supabase.from('deposits').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('platform', platform).eq('status', 'Approved').gte('amount', checkpoint.trigger_balance).gte('created_at', batchStart)
-      ]);
-      if ((actD || 0) < (reqD || 0)) {
+      // Get all combo checkpoints at or before nextPosition
+      const { data: requiredCheckpoints } = await supabase.from('combo_checkpoints').select('position').eq('user_id', userId).eq('platform', platform).lte('position', nextPosition);
+      const requiredPositions = (requiredCheckpoints || []).map((c: any) => c.position);
+
+      // For each required position, check if there's an approved deposit with matching combo remark
+      let clearedCount = 0;
+      for (const pos of requiredPositions) {
+        const { count } = await supabase.from('deposits').select('id', { count: 'exact', head: true })
+          .eq('user_id', userId).eq('platform', platform).eq('status', 'Approved')
+          .ilike('remark', `%Combo Payment for Position ${pos}%`);
+        if (count && count > 0) clearedCount++;
+      }
+
+      if (clearedCount < requiredPositions.length) {
         return res.status(403).json({
           error: 'COMBO_BLOCK',
           triggerBalance: parseFloat(checkpoint.trigger_balance as any) || 0.00,

@@ -227,27 +227,25 @@ router.post('/withdraw', authenticateToken, async (req: AuthenticatedRequest, re
 
     let isCleared = false;
     if (checkpoint) {
-      const batchStart = progressRow?.last_reset_at ? new Date(progressRow.last_reset_at).toISOString() : new Date(0).toISOString();
-
-      // Count how many combo checkpoints exist at or before this position
-      const { count: requiredDeposits } = await supabase
+      // Get all combo checkpoints at or before nextPos
+      const { data: requiredCheckpoints } = await supabase
         .from('combo_checkpoints')
-        .select('id', { count: 'exact', head: true })
+        .select('position')
         .eq('user_id', userId)
         .eq('platform', platform)
         .lte('position', nextPos);
+      const requiredPositions = (requiredCheckpoints || []).map((c: any) => c.position);
 
-      // Count how many approved deposits >= trigger_balance exist in the batch
-      const { count: actualDeposits } = await supabase
-        .from('deposits')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('platform', platform)
-        .eq('status', 'Approved')
-        .gte('amount', checkpoint.trigger_balance)
-        .gte('created_at', batchStart);
+      // For each required position, check if there's an approved deposit with matching combo remark
+      let clearedCount = 0;
+      for (const pos of requiredPositions) {
+        const { count } = await supabase.from('deposits').select('id', { count: 'exact', head: true })
+          .eq('user_id', userId).eq('platform', platform).eq('status', 'Approved')
+          .ilike('remark', `%Combo Payment for Position ${pos}%`);
+        if (count && count > 0) clearedCount++;
+      }
 
-      isCleared = (actualDeposits || 0) >= (requiredDeposits || 0);
+      isCleared = clearedCount >= requiredPositions.length;
     }
     if (checkpoint && !isCleared) {
       return res.status(400).json({
